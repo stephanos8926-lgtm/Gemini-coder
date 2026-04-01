@@ -21,6 +21,16 @@
 - [x] Restart dev server.
 - [x] Verify that GIDE can now see and edit its own source code.
 - [x] Test file creation, deletion, and renaming on the real filesystem.
+- [x] Implement workspace isolation (restricting access to `./workspaces`).
+- [x] Fix header UI layout and file size display.
+- [x] Implement sub-workspace management with debounced header input.
+- [x] Add Workspace Browser modal to view and select existing workspaces.
+- [x] Implement comprehensive Configuration Page with multiple settings.
+- [x] Update model configuration to include 2.5 Flash, 2.5 Flash Lite, and 2.5 Pro, defaulting to Flash Lite.
+- [x] Implement AI-Powered Code Actions (Explain, Refactor, Fix) with contextual toolbar.
+- [x] Implement Global Search & Replace with dedicated sidebar panel.
+- [x] Implement Command Palette (Ctrl + K) for quick navigation and actions.
+- [x] Implement Git-Style Visual Diff for reviewing AI-suggested changes.
 
 ## Phase 4: Deployment Preparation
 - [ ] Update `package.json` with a `start` script.

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
-import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download } from 'lucide-react';
+import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Message, streamGemini } from './lib/gemini';
 import { FileStore, extractFiles } from './lib/fileStore';
 import { Project, getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId } from './lib/projectStore';
 import { filesystemService } from './lib/filesystemService';
+import { settingsStore, Settings } from './lib/settingsStore';
+
+import { profileStore, Profile } from './lib/profileStore';
 
 // Lazy load heavy components
 const ApiKeyModal = lazy(() => import('./components/ApiKeyModal').then(m => ({ default: m.ApiKeyModal })));
@@ -13,6 +16,14 @@ const CodeEditor = lazy(() => import('./components/CodeEditor').then(m => ({ def
 const FileTree = lazy(() => import('./components/FileTree').then(m => ({ default: m.FileTree })));
 const BottomPanel = lazy(() => import('./components/BottomPanel').then(m => ({ default: m.BottomPanel })));
 const ProjectModal = lazy(() => import('./components/ProjectModal').then(m => ({ default: m.ProjectModal })));
+const WorkspaceModal = lazy(() => import('./components/WorkspaceModal').then(m => ({ default: m.WorkspaceModal })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const SearchPanel = lazy(() => import('./components/SearchPanel').then(m => ({ default: m.SearchPanel })));
+const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const DiffViewer = lazy(() => import('./components/DiffViewer').then(m => ({ default: m.DiffViewer })));
+const MobileSidebar = lazy(() => import('./components/MobileSidebar').then(m => ({ default: m.MobileSidebar })));
+const ProfileSelector = lazy(() => import('./components/ProfileSelector').then(m => ({ default: m.ProfileSelector })));
+const ToolsPanel = lazy(() => import('./components/ToolsPanel').then(m => ({ default: m.ToolsPanel })));
 
 const PanelLoader = () => (
   <div className="flex-1 flex items-center justify-center h-full bg-[#1e1e1e] text-[#858585]">
@@ -22,7 +33,7 @@ const PanelLoader = () => (
 
 const SYSTEM_INSTRUCTION = `You are GIDE (Gemini Interactive Development Environment), a browser-based AI software engineering agent. You help users build real multi-file software projects.
 
-FILESYSTEM MODE: You are currently running in Filesystem Mode. This means you have direct access to the project's files on the server. Your code outputs will be saved directly to the real filesystem.
+WORKSPACE MODE: You are currently running in Workspace Mode. You have direct access to a isolated 'workspaces' folder on the server. All your file operations are restricted to this folder for security. You cannot access the IDE's own source code.
 
 TONE: Terse and technical by default. Switch to verbose/explanatory mode only when the user asks.
 
@@ -39,6 +50,14 @@ Steps   : 1. ... 2. ...
 Proceed? [y/n/edit]
 
 Wait for the user to confirm before coding. Do NOT ask "Proceed?" after outputting code or ZIP manifests.
+
+TOOLS: You have access to project tools via the Tools Panel. You can ask the user to run commands like:
+- \`npm run lint\`: Check for code quality issues.
+- \`npm test\`: Run project tests.
+- \`npx tsc --noEmit\`: Type check TypeScript files.
+- \`ls -R\`: List all files recursively.
+- \`grep -r "pattern" .\`: Search for text in files.
+You can also suggest custom commands using allowed tools: npm, npx, node, ls, pwd, grep, cat, find.
 
 CODE OUTPUT: You MUST wrap all code in Markdown fenced code blocks. The very first word after the triple backticks MUST be the exact file path. Do NOT use language names like 'bash' or 'javascript'.
 - First time creating a file:
@@ -68,35 +87,48 @@ ZIP: When ready, output a ZIP MANIFEST listing all files. The app will handle th
 SLASH COMMANDS: Respond to /plan /persona /full /zip /files /reset /verbose /terse /help /preview.`;
 
 export default function App() {
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
+  const [apiKey, setApiKey] = useState<string | null>(activeProfile?.apiKey || null);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [model, setModel] = useState('gemini-2.5-flash');
+  const [model, setModel] = useState('gemini-2.5-flash-lite');
   const [messages, setMessages] = useState<Message[]>([]);
   const [fileStore, setFileStore] = useState<FileStore>({});
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [bottomTab, setBottomTab] = useState<'preview' | 'tree'>('preview');
+  const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
   const [isStreaming, setIsStreaming] = useState(false);
   const [systemModifier, setSystemModifier] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
+  const [targetLine, setTargetLine] = useState<number | undefined>(undefined);
 
   // Project Management State
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectIdState, setCurrentProjectIdState] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<{ filename: string; original: string; modified: string } | null>(null);
+  const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
   const [isFilesystemMode, setIsFilesystemMode] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaces, setWorkspaces] = useState<string[]>([]);
+  const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
 
   // Check for filesystem mode and load files
   useEffect(() => {
     const initFilesystem = async () => {
       try {
-        const store = await filesystemService.loadAllFiles();
+        filesystemService.setWorkspace(workspaceName);
+        const store = await filesystemService.loadRootFiles();
         setFileStore(store);
         setIsFilesystemMode(true);
         setIsProjectsLoaded(true);
       } catch (e) {
         console.log('Filesystem API not available, falling back to local storage mode.');
+        setIsFilesystemMode(false);
         
         // Fallback to local storage projects
         const loadedProjects = getProjects();
@@ -115,8 +147,40 @@ export default function App() {
         setIsProjectsLoaded(true);
       }
     };
-    initFilesystem();
-  }, []);
+    
+    const timeout = setTimeout(initFilesystem, workspaceName ? 500 : 0);
+    return () => clearTimeout(timeout);
+  }, [workspaceName]);
+
+  const handleFolderExpand = async (path: string) => {
+    if (!isFilesystemMode) return;
+    
+    // Check if we already have children for this folder
+    const hasChildren = Object.keys(fileStore).some(p => p.startsWith(path) && p !== path);
+    if (hasChildren) return;
+
+    try {
+      const subFiles = await filesystemService.listFiles(path, false);
+      setFileStore(prev => {
+        const newStore = { ...prev };
+        subFiles.forEach(file => {
+          const cleanPath = file.isDir ? file.path.slice(0, -1) : file.path;
+          if (!newStore[cleanPath]) {
+            newStore[cleanPath] = {
+              content: '',
+              isNew: false,
+              isModified: false,
+              size: file.size,
+              isDir: file.isDir
+            };
+          }
+        });
+        return newStore;
+      });
+    } catch (e) {
+      console.error('Failed to load folder contents', e);
+    }
+  };
 
   // Save projects to localStorage whenever they change (only in non-filesystem mode)
   useEffect(() => {
@@ -214,7 +278,42 @@ export default function App() {
     if (storedModel) setModel(storedModel);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      try {
+        const data = await filesystemService.listWorkspaces();
+        setWorkspaces(data);
+      } catch (e) {
+        console.error('Failed to fetch workspaces', e);
+      }
+    };
+    fetchWorkspaces();
+  }, []);
+
+  const handleProfileSelect = (profile: Profile) => {
+    profileStore.setActiveProfileId(profile.id);
+    setActiveProfile(profile);
+    setApiKey(profile.apiKey);
+    setSettings(profile.settings);
+    setShowKeyModal(false);
+  };
+
   const handleSaveKey = (key: string) => {
+    if (activeProfile) {
+      profileStore.updateProfile(activeProfile.id, { apiKey: key });
+      setActiveProfile({ ...activeProfile, apiKey: key });
+    }
     localStorage.setItem('gide_api_key', key);
     setApiKey(key);
     setShowKeyModal(false);
@@ -532,6 +631,29 @@ export default function App() {
     return false;
   };
 
+  const handleAiAction = (type: 'explain' | 'refactor' | 'fix', code?: string) => {
+    const finalCode = code || (selectedFile ? fileStore[selectedFile]?.content : '');
+    if (!finalCode) return;
+
+    let prompt = '';
+    const fileLabel = selectedFile ? ` in ${selectedFile}` : '';
+    
+    switch (type) {
+      case 'explain':
+        prompt = `Explain this code${fileLabel}:\n\n\`\`\`\n${finalCode}\n\`\`\``;
+        break;
+      case 'refactor':
+        prompt = `Refactor this code${fileLabel} to be more efficient, clean, and modern. Provide the full refactored version:\n\n\`\`\`\n${finalCode}\n\`\`\``;
+        break;
+      case 'fix':
+        prompt = `Find and fix any bugs, potential issues, or performance bottlenecks in this code${fileLabel}:\n\n\`\`\`\n${finalCode}\n\`\`\``;
+        break;
+    }
+    
+    if (mobileView !== 'chat') setMobileView('chat');
+    handleSendMessage(prompt);
+  };
+
   const handleSendMessage = async (content: string) => {
     if (processSlashCommand(content)) return;
     if (!apiKey) {
@@ -553,7 +675,7 @@ export default function App() {
         newMessages,
         model,
         apiKey,
-        SYSTEM_INSTRUCTION + systemModifier,
+        SYSTEM_INSTRUCTION + (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + systemModifier,
         (chunk) => {
           fullResponse += chunk;
           setMessages(prev => {
@@ -562,7 +684,8 @@ export default function App() {
             return updated;
           });
           setFileStore(extractFiles(fullResponse, initialFileStore));
-        }
+        },
+        settings.temperature
       );
     } catch (error: any) {
       setMessages(prev => {
@@ -601,7 +724,7 @@ export default function App() {
           } catch (e) {
             console.error('Failed to auto-save to filesystem', e);
           }
-        }, 1000); // 1 second debounce
+        }, settings.autoSaveInterval);
       }
     }
   };
@@ -609,7 +732,10 @@ export default function App() {
   const totalTokens = messages.reduce((acc, m) => acc + m.content.length, 0) / 4;
 
   return (
-    <div className="flex flex-col h-screen bg-[#1e1e1e] text-[#d4d4d4] font-sans overflow-hidden">
+    <div className={`flex flex-col h-screen bg-[#1e1e1e] text-[#d4d4d4] font-sans overflow-hidden ${
+      settings.appTheme === 'light' ? 'bg-white text-gray-900' : 
+      settings.appTheme === 'high-contrast' ? 'bg-black text-yellow-400' : ''
+    } ${settings.compactMode ? 'text-xs' : ''}`}>
       <AnimatePresence>
         {showProjectModal && (
           <Suspense fallback={null}>
@@ -635,76 +761,144 @@ export default function App() {
             />
           </Suspense>
         )}
+
+        {showWorkspaceModal && (
+          <Suspense fallback={null}>
+            <WorkspaceModal
+              onClose={() => setShowWorkspaceModal(false)}
+              onSelect={(name) => {
+                setWorkspaceName(name);
+                setShowWorkspaceModal(false);
+              }}
+              currentWorkspace={workspaceName}
+            />
+          </Suspense>
+        )}
+
+        {showSettingsModal && (
+          <Suspense fallback={null}>
+            <SettingsModal
+              onClose={() => setShowSettingsModal(false)}
+              onSave={(newSettings) => setSettings(newSettings)}
+              initialSettings={settings}
+            />
+          </Suspense>
+        )}
       </AnimatePresence>
 
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-[#252526] border-b border-[#3c3c3c] shrink-0 shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-1.5 bg-[#1e1e1e] rounded-md border border-[#3c3c3c] shadow-inner">
-            <Terminal className="w-5 h-5 text-[#007acc]" />
+      <header className="flex items-center justify-between px-3 sm:px-4 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 shadow-sm z-10 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-fit">
+          <div className="p-1 bg-[#1e1e1e] rounded border border-[#3c3c3c] shadow-inner">
+            <Terminal className="w-4 h-4 text-[#007acc]" />
           </div>
-          <h1 className="font-semibold tracking-wide hidden sm:block text-[#e5e5e5]">GIDE</h1>
+          <h1 className="font-semibold tracking-wide hidden md:block text-[#e5e5e5] text-sm">GIDE</h1>
           {isFilesystemMode && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-900/30 border border-blue-500/30 rounded text-[10px] text-blue-400 font-bold uppercase tracking-widest ml-2">
-              <Terminal className="w-3 h-3" />
-              Filesystem
+            <button 
+              onClick={() => setShowWorkspaceInput(!showWorkspaceInput)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showWorkspaceInput ? 'bg-blue-500 text-white border-blue-400' : 'bg-blue-900/30 border-blue-500/30 text-blue-400'}`}
+              title="Toggle Workspace Path"
+            >
+              <FolderOpen className="w-2.5 h-2.5" />
+              <span className="hidden xs:inline">WS</span>
+            </button>
+          )}
+          
+          {(showWorkspaceInput || !isFilesystemMode) && (
+            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1">
+              <FolderOpen className="w-3 h-3 text-[#858585] mr-1.5" />
+              <input
+                type="text"
+                value={workspaceName}
+                onChange={(e) => setWorkspaceName(e.target.value)}
+                placeholder="Workspace path..."
+                className="bg-transparent text-[10px] focus:outline-none w-24 sm:w-32 text-[#d4d4d4]"
+              />
+              <button
+                onClick={() => setShowWorkspaceModal(true)}
+                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1"
+                title="Browse Workspaces"
+              >
+                <Search className="w-3 h-3" />
+              </button>
             </div>
           )}
         </div>
         
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-1.5 sm:gap-3 ml-auto">
           {!isFilesystemMode && (
             <button
               onClick={() => setShowProjectModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
               title="Projects"
             >
-              <FolderOpen className="w-4 h-4 text-[#007acc]" />
-              <span className="hidden sm:inline">Projects</span>
+              <FolderOpen className="w-3.5 h-3.5 text-[#007acc]" />
+              <span className="hidden lg:inline">Projects</span>
             </button>
           )}
           
-          <select
-            value={model}
-            onChange={handleModelChange}
-            className="bg-[#3c3c3c] border border-[#3c3c3c] rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-[#007acc] transition-colors cursor-pointer"
-          >
-            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-          </select>
+          <div className="flex items-center bg-[#3c3c3c] rounded px-2 py-0.5 border border-[#454545]">
+            <select
+              value={model}
+              onChange={handleModelChange}
+              className="bg-transparent text-xs focus:outline-none cursor-pointer pr-1"
+            >
+              <option value="gemini-2.5-flash-lite">Lite</option>
+              <option value="gemini-2.5-flash">Flash</option>
+              <option value="gemini-2.5-pro">Pro</option>
+            </select>
+          </div>
           
           <button
             onClick={handleSaveAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
             title="Save All"
           >
-            <Download className="w-4 h-4 text-green-500 rotate-180" />
-            <span className="hidden sm:inline">Save All</span>
+            <Download className="w-3.5 h-3.5 text-green-500 rotate-180" />
+            <span className="hidden lg:inline">Save</span>
           </button>
 
           <button
             onClick={() => { setMessages([]); setFileStore({}); setSelectedFile(null); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
             title="New Session"
           >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">New</span>
           </button>
 
           <button
             onClick={() => setShowKeyModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
             title="API Key"
           >
-            <Key className="w-4 h-4 text-[#007acc]" />
-            <span className="hidden sm:inline">Key</span>
+            <Key className="w-3.5 h-3.5 text-[#007acc]" />
+            <span className="hidden lg:inline">Key</span>
           </button>
 
           <button
-            className="sm:hidden p-2 hover:bg-[#3c3c3c] rounded-md transition-colors"
+            onClick={() => setShowCommandPalette(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+            title="Command Palette (Ctrl+K)"
+          >
+            <Search className="w-3.5 h-3.5 text-[#007acc]" />
+            <span className="hidden lg:inline">Search</span>
+          </button>
+
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+            title="Settings"
+          >
+            <SettingsIcon className="w-3.5 h-3.5 text-[#858585]" />
+            <span className="hidden lg:inline">Settings</span>
+          </button>
+
+          <button
+            className="sm:hidden p-1.5 hover:bg-[#3c3c3c] rounded transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
         </div>
       </header>
@@ -737,7 +931,18 @@ export default function App() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col sm:flex-row overflow-hidden relative bg-[#1e1e1e]">
+      <div className={`flex-1 flex flex-col sm:flex-row overflow-hidden relative bg-[#1e1e1e] ${
+        settings.sidebarPosition === 'right' ? 'sm:flex-row-reverse' : ''
+      }`}>
+        
+        {/* Profile Selector */}
+        <AnimatePresence>
+          {!activeProfile && (
+            <Suspense fallback={null}>
+              <ProfileSelector onSelect={handleProfileSelect} />
+            </Suspense>
+          )}
+        </AnimatePresence>
         
         {/* Chat Panel */}
         <div className={`w-full sm:w-[40%] flex flex-col h-full ${mobileView !== 'chat' ? 'hidden sm:flex' : 'flex'}`}>
@@ -745,7 +950,12 @@ export default function App() {
             <ChatPanel
               messages={messages}
               onSendMessage={handleSendMessage}
+              onReviewChange={(filename, content) => {
+                const original = fileStore[filename]?.content || '';
+                setPendingDiff({ filename, original, modified: content });
+              }}
               isStreaming={isStreaming}
+              settings={settings}
             />
           </Suspense>
         </div>
@@ -758,67 +968,97 @@ export default function App() {
               filename={selectedFile || ''}
               onOpenFiles={() => setIsMobileMenuOpen(true)}
               onChange={handleFileChange}
+              onAiAction={handleAiAction}
+              targetLine={targetLine}
+              onLineRevealed={() => setTargetLine(undefined)}
+              settings={settings}
             />
           </Suspense>
         </div>
 
         {/* File Tree Panel (Desktop only) */}
-        <div className={`hidden sm:flex sm:w-[20%] flex-col h-full ${isMobileMenuOpen ? 'block absolute inset-0 z-40 bg-[#1e1e1e]' : ''}`}>
-          <Suspense fallback={<PanelLoader />}>
-            <FileTree
-              files={fileStore}
-              selectedFile={selectedFile}
-              onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
-              onDownload={handleDownloadFile}
-              onDownloadZip={handleDownloadZip}
-              onDelete={handleDeleteFile}
-              onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
-              onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
-              showDetails={true}
-            />
-          </Suspense>
+        <div className={`hidden sm:flex sm:w-[20%] flex-col h-full border-l border-[#3c3c3c] ${isMobileMenuOpen ? 'block absolute inset-0 z-40 bg-[#1e1e1e]' : ''}`}>
+          <div className="flex items-center bg-[#252526] border-b border-[#3c3c3c] px-2">
+            <button
+              onClick={() => setSidebarTab('files')}
+              className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                sidebarTab === 'files' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+              }`}
+            >
+              Files
+            </button>
+            <button
+              onClick={() => setSidebarTab('search')}
+              className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                sidebarTab === 'search' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+              }`}
+            >
+              Search
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-hidden">
+            <Suspense fallback={<PanelLoader />}>
+              {sidebarTab === 'files' ? (
+                <FileTree
+                  files={fileStore}
+                  selectedFile={selectedFile}
+                  onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
+                  onDownload={handleDownloadFile}
+                  onDownloadZip={handleDownloadZip}
+                  onDelete={handleDeleteFile}
+                  onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
+                  onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+                  onFolderExpand={handleFolderExpand}
+                  showDetails={true}
+                />
+              ) : (
+                <SearchPanel 
+                  onSelectFile={(path, line) => {
+                    setSelectedFile(path);
+                    setTargetLine(line);
+                    setIsMobileMenuOpen(false);
+                    setMobileView('editor');
+                  }} 
+                />
+              )}
+            </Suspense>
+          </div>
         </div>
 
-        {/* Mobile File Tree Overlay */}
+        {/* Mobile Sidebar Overlay */}
         <AnimatePresence>
           {isMobileMenuOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm sm:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
+            <Suspense fallback={null}>
+              <MobileSidebar
+                isOpen={isMobileMenuOpen}
+                onClose={() => setIsMobileMenuOpen(false)}
+                fileStore={fileStore}
+                selectedFile={selectedFile}
+                onSelectFile={(path, line) => {
+                  setSelectedFile(path);
+                  if (line) setTargetLine(line);
+                  setIsMobileMenuOpen(false);
+                  setMobileView('editor');
+                }}
+                onDownloadFile={handleDownloadFile}
+                onDownloadZip={handleDownloadZip}
+                onDeleteFile={handleDeleteFile}
+                onRenameFile={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
+                onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+                onFolderExpand={handleFolderExpand}
+                onSaveAll={handleSaveAll}
+                onNewSession={() => { setMessages([]); setFileStore({}); setSelectedFile(null); setIsMobileMenuOpen(false); }}
+                onShowKeyModal={() => { setShowKeyModal(true); setIsMobileMenuOpen(false); }}
+                onShowSettingsModal={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
+                onShowWorkspaceModal={() => { setShowWorkspaceModal(true); setIsMobileMenuOpen(false); }}
+                onShowCommandPalette={() => { setShowCommandPalette(true); setIsMobileMenuOpen(false); }}
+                model={model}
+                onModelChange={handleModelChange}
+                isFilesystemMode={isFilesystemMode}
+                workspaceName={workspaceName}
               />
-              <motion.div 
-                initial={{ opacity: 0, x: '-100%' }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: '-100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed inset-y-0 left-0 w-[80%] max-w-sm z-50 bg-[#1e1e1e] sm:hidden flex flex-col shadow-2xl border-r border-[#3c3c3c]"
-              >
-                <div className="p-4 border-b border-[#3c3c3c] flex justify-between items-center bg-[#252526]">
-                  <span className="font-semibold text-[#e5e5e5] text-lg">Project Files</span>
-                  <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-[#3c3c3c] rounded-md transition-colors"><X className="w-5 h-5" /></button>
-                </div>
-                <div className="flex-1 overflow-auto">
-                  <Suspense fallback={<PanelLoader />}>
-                    <FileTree
-                      files={fileStore}
-                      selectedFile={selectedFile}
-                      onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
-                      onDownload={handleDownloadFile}
-                      onDownloadZip={handleDownloadZip}
-                      onDelete={handleDeleteFile}
-                      onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); setIsMobileMenuOpen(false); }}
-                      onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); setIsMobileMenuOpen(false); }}
-                      showDetails={true}
-                    />
-                  </Suspense>
-                </div>
-              </motion.div>
-            </>
+            </Suspense>
           )}
         </AnimatePresence>
       </div>
@@ -919,6 +1159,37 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+
+        {showCommandPalette && (
+          <Suspense fallback={null}>
+            <CommandPalette
+              isOpen={showCommandPalette}
+              onClose={() => setShowCommandPalette(false)}
+              files={Object.keys(fileStore)}
+              workspaces={workspaces}
+              onSelectFile={(path) => { setSelectedFile(path); setMobileView('editor'); }}
+              onSelectWorkspace={(name) => setWorkspaceName(name)}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              onAiAction={handleAiAction}
+            />
+          </Suspense>
+        )}
+
+        {pendingDiff && (
+          <Suspense fallback={null}>
+            <DiffViewer
+              filename={pendingDiff.filename}
+              originalContent={pendingDiff.original}
+              modifiedContent={pendingDiff.modified}
+              onAccept={() => {
+                handleFileChange(pendingDiff.modified);
+                setPendingDiff(null);
+              }}
+              onDiscard={() => setPendingDiff(null)}
+              onClose={() => setPendingDiff(null)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 

@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Play, FolderTree } from 'lucide-react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { RefreshCw, Play, FolderTree, Terminal, Loader2 } from 'lucide-react';
 import { FileStore } from '../lib/fileStore';
 import { FileTree } from './FileTree';
 
+const ToolsPanel = lazy(() => import('./ToolsPanel').then(m => ({ default: m.ToolsPanel })));
+
 interface BottomPanelProps {
   files: FileStore;
-  activeTab: 'preview' | 'tree';
-  onTabChange: (tab: 'preview' | 'tree') => void;
+  activeTab: 'preview' | 'tree' | 'tools';
+  onTabChange: (tab: 'preview' | 'tree' | 'tools') => void;
   onSelectFile: (path: string) => void;
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
@@ -86,13 +88,24 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
         <button
           onClick={() => onTabChange('tree')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'tree' || (!hasPreviewableFiles && activeTab === 'preview')
+            activeTab === 'tree'
               ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
               : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
           }`}
         >
           <FolderTree className="w-4 h-4" />
           File Details
+        </button>
+        <button
+          onClick={() => onTabChange('tools')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+            activeTab === 'tools'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          Tools
         </button>
         <div className="flex-1" />
         {activeTab === 'preview' && hasPreviewableFiles && (
@@ -121,6 +134,14 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
               No HTML file found to preview. Ask GIDE to create an index.html.
             </div>
           )
+        ) : activeTab === 'tools' ? (
+          <Suspense fallback={
+            <div className="flex items-center justify-center h-full text-[#858585]">
+              <Loader2 className="w-6 h-6 animate-spin text-[#007acc]" />
+            </div>
+          }>
+            <ToolsPanel />
+          </Suspense>
         ) : (
           <FileTree
             files={files}

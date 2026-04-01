@@ -1,14 +1,37 @@
 import { FileStore } from './fileStore';
 
 export const filesystemService = {
-  async listFiles(): Promise<string[]> {
-    const res = await fetch('/api/files');
+  workspace: '',
+
+  setWorkspace(name: string) {
+    this.workspace = name;
+  },
+
+  async listWorkspaces(): Promise<string[]> {
+    const res = await fetch('/api/workspaces');
+    if (!res.ok) throw new Error('Failed to list workspaces');
+    return res.json();
+  },
+
+  async listFiles(path: string = '', recursive: boolean = false): Promise<{ path: string, isDir: boolean, size: number }[]> {
+    const url = `/api/files?workspace=${encodeURIComponent(this.workspace)}&path=${encodeURIComponent(path)}&recursive=${recursive}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to list files');
     return res.json();
   },
 
+  async runTool(command: string): Promise<{ stdout: string, stderr: string, success: boolean }> {
+    const res = await fetch('/api/tools/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, workspace: this.workspace }),
+    });
+    return res.json();
+  },
+
   async getFileContent(path: string): Promise<string> {
-    const res = await fetch(`/api/files/content?path=${encodeURIComponent(path)}`);
+    const url = `/api/files/content?path=${encodeURIComponent(path)}${this.workspace ? `&workspace=${encodeURIComponent(this.workspace)}` : ''}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Failed to read file: ${path}`);
     const data = await res.json();
     return data.content;
@@ -18,7 +41,7 @@ export const filesystemService = {
     const res = await fetch('/api/files/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, content }),
+      body: JSON.stringify({ path, content, workspace: this.workspace }),
     });
     if (!res.ok) throw new Error(`Failed to save file: ${path}`);
   },
@@ -27,7 +50,7 @@ export const filesystemService = {
     const res = await fetch('/api/files/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, isDir }),
+      body: JSON.stringify({ path, isDir, workspace: this.workspace }),
     });
     if (!res.ok) throw new Error(`Failed to create ${isDir ? 'folder' : 'file'}: ${path}`);
   },
@@ -36,7 +59,7 @@ export const filesystemService = {
     const res = await fetch('/api/files/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, workspace: this.workspace }),
     });
     if (!res.ok) throw new Error(`Failed to delete: ${path}`);
   },
@@ -45,31 +68,53 @@ export const filesystemService = {
     const res = await fetch('/api/files/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPath, newPath }),
+      body: JSON.stringify({ oldPath, newPath, workspace: this.workspace }),
     });
     if (!res.ok) throw new Error(`Failed to rename: ${oldPath} -> ${newPath}`);
   },
 
+  async search(query: string): Promise<{ path: string, line: number, content: string }[]> {
+    const url = `/api/search?query=${encodeURIComponent(query)}${this.workspace ? `&workspace=${encodeURIComponent(this.workspace)}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Search failed');
+    return res.json();
+  },
+
   /**
-   * Loads all files from the backend into a FileStore object.
-   * This is useful for initializing the app.
+   * Loads the root directory contents.
    */
-  async loadAllFiles(): Promise<FileStore> {
-    const filePaths = await this.listFiles();
+  async loadRootFiles(): Promise<FileStore> {
+    const files = await this.listFiles('', false);
     const store: FileStore = {};
     
-    // We only load content for non-directories
-    // Actually, to avoid a massive burst of requests, we might want to load content lazily.
-    // But for now, let's just load the structure.
-    for (const path of filePaths) {
-      const isDir = path.endsWith('/');
-      const cleanPath = isDir ? path.slice(0, -1) : path;
+    for (const file of files) {
+      const isDir = file.isDir;
+      const cleanPath = isDir ? file.path.slice(0, -1) : file.path;
       
       store[cleanPath] = {
-        content: '', // Load lazily or on demand
+        content: '', 
         isNew: false,
         isModified: false,
-        size: 0,
+        size: file.size,
+        isDir
+      };
+    }
+    return store;
+  },
+
+  async loadAllFiles(): Promise<FileStore> {
+    const files = await this.listFiles('', true);
+    const store: FileStore = {};
+    
+    for (const file of files) {
+      const isDir = file.isDir;
+      const cleanPath = isDir ? file.path.slice(0, -1) : file.path;
+      
+      store[cleanPath] = {
+        content: '', 
+        isNew: false,
+        isModified: false,
+        size: file.size,
         isDir
       };
     }

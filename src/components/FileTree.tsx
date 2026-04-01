@@ -12,6 +12,7 @@ interface FileTreeProps {
   onDelete?: (path: string) => void;
   onRename?: (path: string) => void;
   onCreateFile?: () => void;
+  onFolderExpand?: (path: string) => void;
   showDetails?: boolean;
 }
 
@@ -22,7 +23,7 @@ interface ContextMenuState {
   isFile: boolean;
 }
 
-export function FileTree({ files, selectedFile, onSelect, onDownload, onDownloadZip, onDelete, onRename, onCreateFile, showDetails = false }: FileTreeProps) {
+export function FileTree({ files, selectedFile, onSelect, onDownload, onDownloadZip, onDelete, onRename, onCreateFile, onFolderExpand, showDetails = false }: FileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']));
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -44,6 +45,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
       newExpanded.delete(folder);
     } else {
       newExpanded.add(folder);
+      if (onFolderExpand) onFolderExpand(folder);
     }
     setExpandedFolders(newExpanded);
   };
@@ -115,6 +117,14 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
     return false;
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
   const renderTree = (node: any, pathPrefix: string = '', depth: number = 0) => {
     const sortedKeys = Object.keys(node).sort((a, b) => {
       if (a === '_isFile' || a === 'path') return 1;
@@ -163,14 +173,14 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
                 onClick={() => onSelect(fullPath)}
                 onContextMenu={(e) => handleContextMenu(e, fullPath, true)}
               >
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex items-center gap-2 truncate flex-1">
                   {getIcon(key)}
                   <span className="truncate text-sm">{key}</span>
-                  {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-green-900/50 text-green-400 rounded">NEW</span>}
-                  {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-blue-900/50 text-blue-400 rounded">MODIFIED</span>}
+                  {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-green-900/50 text-green-400 rounded shrink-0">NEW</span>}
+                  {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-blue-900/50 text-blue-400 rounded shrink-0">MODIFIED</span>}
                 </div>
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  {showDetails && <span className="text-xs text-[#858585] mr-2">{fileData.size}B</span>}
+                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                  {showDetails && fileData.size > 0 && <span className="text-[10px] text-[#858585] mr-1 tabular-nums">{formatSize(fileData.size)}</span>}
                   <button
                     onClick={(e) => { e.stopPropagation(); onDownload(fullPath); }}
                     className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"

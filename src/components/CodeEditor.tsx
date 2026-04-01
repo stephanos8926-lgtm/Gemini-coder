@@ -1,15 +1,89 @@
-import React from 'react';
-import Editor from '@monaco-editor/react';
-import { FolderTree } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import Editor, { OnMount } from '@monaco-editor/react';
+import { FolderTree, Sparkles, MessageSquare, Wand2, Bug } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface CodeEditorProps {
   content: string;
   filename: string;
   onOpenFiles?: () => void;
   onChange?: (value: string | undefined) => void;
+  onAiAction?: (type: 'explain' | 'refactor' | 'fix', code: string) => void;
+  targetLine?: number;
+  onLineRevealed?: () => void;
+  settings: {
+    fontSize: number;
+    tabSize: number;
+    lineNumbers: boolean;
+    wordWrap: 'on' | 'off';
+    minimap: boolean;
+    fontFamily: string;
+    editorTheme: 'vs-dark' | 'light' | 'hc-black';
+    showErrorHighlighting: boolean;
+  };
 }
 
-export function CodeEditor({ content, filename, onOpenFiles, onChange }: CodeEditorProps) {
+export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiAction, targetLine, onLineRevealed, settings }: CodeEditorProps) {
+  const [selection, setSelection] = useState<{ text: string; startLine: number; endLine: number } | null>(null);
+  const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
+  const editorRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (editorRef.current && targetLine) {
+      editorRef.current.revealLineInCenter(targetLine);
+      editorRef.current.setPosition({ lineNumber: targetLine, column: 1 });
+      editorRef.current.focus();
+      onLineRevealed?.();
+    }
+  }, [targetLine, onLineRevealed]);
+
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+
+    // Configure diagnostics based on settings
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: !settings.showErrorHighlighting,
+      noSyntaxValidation: !settings.showErrorHighlighting,
+    });
+
+    editor.onDidChangeCursorSelection((e: any) => {
+      const selection = editor.getSelection();
+      const model = editor.getModel();
+      if (!selection || !model) return;
+
+      const text = model.getValueInRange(selection);
+      if (text && text.trim().length > 0) {
+        const coords = editor.getScrolledVisiblePosition(selection.getStartPosition());
+        const domNode = editor.getDomNode();
+        if (coords && domNode) {
+          const rect = domNode.getBoundingClientRect();
+          setToolbarPos({
+            x: rect.left + coords.left,
+            y: rect.top + coords.top - 40 // Show above selection
+          });
+          setSelection({
+            text,
+            startLine: selection.startLineNumber,
+            endLine: selection.endLineNumber
+          });
+        }
+      } else {
+        setSelection(null);
+        setToolbarPos(null);
+      }
+    });
+  };
+
+  // Hide toolbar on scroll or click elsewhere
+  useEffect(() => {
+    const handleScroll = () => {
+      setSelection(null);
+      setToolbarPos(null);
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, []);
+
   if (!filename) {
     return (
       <div className="flex-1 flex items-center justify-center text-[#858585] text-sm italic h-full">
@@ -56,25 +130,95 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange }: CodeEdi
         )}
         <span className="font-mono">{filename}</span>
       </div>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         <Editor
           height="100%"
           language={getLanguage(filename)}
-          theme="vs-dark"
+          theme={settings.editorTheme}
           value={content}
           onChange={onChange}
+          onMount={handleEditorDidMount}
           options={{
-            fontSize: 14,
-            minimap: { enabled: true },
+            fontSize: settings.fontSize,
+            fontFamily: settings.fontFamily,
+            minimap: { enabled: settings.minimap },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             folding: true,
-            lineNumbers: 'on',
+            lineNumbers: settings.lineNumbers ? 'on' : 'off',
             renderWhitespace: 'none',
-            wordWrap: 'on',
-            tabSize: 2,
+            wordWrap: settings.wordWrap,
+            tabSize: settings.tabSize,
+            contextmenu: true,
+            quickSuggestions: true,
+            parameterHints: { enabled: true },
+            suggestOnTriggerCharacters: true,
+            acceptSuggestionOnEnter: 'on',
+            scrollbar: {
+              vertical: 'visible',
+              horizontal: 'visible',
+              useShadows: false,
+              verticalScrollbarSize: 10,
+              horizontalScrollbarSize: 10,
+            },
           }}
         />
+
+        <AnimatePresence>
+          {toolbarPos && selection && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              style={{ 
+                position: 'fixed',
+                left: toolbarPos.x,
+                top: toolbarPos.y,
+                zIndex: 1000
+              }}
+              className="flex items-center gap-0.5 bg-[#252526] border border-[#454545] rounded-lg shadow-2xl p-1 overflow-hidden"
+            >
+              <button
+                onClick={() => {
+                  onAiAction?.('explain', selection.text);
+                  setSelection(null);
+                  setToolbarPos(null);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                title="Explain this code"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                <span>Explain</span>
+              </button>
+              <div className="w-[1px] h-4 bg-[#3c3c3c] mx-0.5" />
+              <button
+                onClick={() => {
+                  onAiAction?.('refactor', selection.text);
+                  setSelection(null);
+                  setToolbarPos(null);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                title="Refactor this code"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+                <span>Refactor</span>
+              </button>
+              <div className="w-[1px] h-4 bg-[#3c3c3c] mx-0.5" />
+              <button
+                onClick={() => {
+                  onAiAction?.('fix', selection.text);
+                  setSelection(null);
+                  setToolbarPos(null);
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                title="Fix bugs"
+              >
+                <Bug className="w-3.5 h-3.5 text-red-400" />
+                <span>Fix</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

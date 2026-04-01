@@ -8,7 +8,8 @@ export async function streamGemini(
   model: string,
   apiKey: string,
   systemInstruction: string,
-  onChunk: (text: string) => void
+  onChunk: (text: string) => void,
+  temperature: number = 0.7
 ) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   
@@ -20,6 +21,9 @@ export async function streamGemini(
   const body = {
     system_instruction: { parts: [{ text: systemInstruction }] },
     contents: formattedMessages,
+    generationConfig: {
+      temperature: temperature,
+    }
   };
 
   const response = await fetch(url, {
