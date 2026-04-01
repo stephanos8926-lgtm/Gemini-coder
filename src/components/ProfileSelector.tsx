@@ -68,10 +68,13 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                 className="grid grid-cols-1 sm:grid-cols-2 gap-4"
               >
                 {profiles.map(profile => (
-                  <button
+                  <div
                     key={profile.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelect(profile)}
-                    className="group relative flex items-center gap-4 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl hover:border-[#007acc] hover:bg-[#2d2d2d] transition-all text-left overflow-hidden"
+                    onKeyDown={(e) => e.key === 'Enter' && onSelect(profile)}
+                    className="group relative flex items-center gap-4 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl hover:border-[#007acc] hover:bg-[#2d2d2d] transition-all text-left overflow-hidden cursor-pointer"
                   >
                     <div className="w-12 h-12 rounded-lg bg-[#252526] border border-[#3c3c3c] flex items-center justify-center text-[#007acc] shrink-0 overflow-hidden">
                       {profile.avatar ? (
@@ -97,7 +100,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                     <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <LogIn className="w-4 h-4 text-[#007acc]" />
                     </div>
-                  </button>
+                  </div>
                 ))}
                 
                 <button

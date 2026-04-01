@@ -26,6 +26,12 @@ export const filesystemService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command, workspace: this.workspace }),
     });
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Command failed with status ${res.status}`);
+    }
+    
     return res.json();
   },
 
