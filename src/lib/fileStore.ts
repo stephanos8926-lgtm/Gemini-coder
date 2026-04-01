@@ -6,6 +6,7 @@ export type FileStore = {
     isNew: boolean;
     isModified: boolean;
     size: number;
+    isDir?: boolean;
   };
 };
 

@@ -1,30 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import Editor from '@monaco-editor/react';
 import { FolderTree } from 'lucide-react';
 
 interface CodeEditorProps {
   content: string;
   filename: string;
   onOpenFiles?: () => void;
+  onChange?: (value: string | undefined) => void;
 }
 
-export function CodeEditor({ content, filename, onOpenFiles }: CodeEditorProps) {
-  const codeRef = useRef<HTMLElement>(null);
-
-  useEffect(() => {
-    if (codeRef.current && window.hljs) {
-      // Remove previous highlighting classes
-      codeRef.current.className = '';
-      
-      // Try to determine language from extension
-      const ext = filename.split('.').pop() || '';
-      if (ext) {
-        codeRef.current.classList.add(`language-${ext}`);
-      }
-      
-      window.hljs.highlightElement(codeRef.current);
-    }
-  }, [content, filename]);
-
+export function CodeEditor({ content, filename, onOpenFiles, onChange }: CodeEditorProps) {
   if (!filename) {
     return (
       <div className="flex-1 flex items-center justify-center text-[#858585] text-sm italic h-full">
@@ -32,6 +17,30 @@ export function CodeEditor({ content, filename, onOpenFiles }: CodeEditorProps) 
       </div>
     );
   }
+
+  const getLanguage = (filename: string) => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    switch (ext) {
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'html':
+        return 'html';
+      case 'css':
+        return 'css';
+      case 'json':
+        return 'json';
+      case 'md':
+        return 'markdown';
+      case 'py':
+        return 'python';
+      default:
+        return 'plaintext';
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#1e1e1e] overflow-hidden">
@@ -47,20 +56,26 @@ export function CodeEditor({ content, filename, onOpenFiles }: CodeEditorProps) 
         )}
         <span className="font-mono">{filename}</span>
       </div>
-      <div className="flex-1 overflow-auto p-4">
-        <pre className="m-0">
-          <code ref={codeRef} className="font-mono text-sm leading-relaxed">
-            {content}
-          </code>
-        </pre>
+      <div className="flex-1 overflow-hidden">
+        <Editor
+          height="100%"
+          language={getLanguage(filename)}
+          theme="vs-dark"
+          value={content}
+          onChange={onChange}
+          options={{
+            fontSize: 14,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            folding: true,
+            lineNumbers: 'on',
+            renderWhitespace: 'none',
+            wordWrap: 'on',
+            tabSize: 2,
+          }}
+        />
       </div>
     </div>
   );
-}
-
-// Add type definition for global hljs
-declare global {
-  interface Window {
-    hljs: any;
-  }
 }

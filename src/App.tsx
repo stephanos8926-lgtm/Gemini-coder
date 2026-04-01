@@ -1,9 +1,10 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen } from 'lucide-react';
+import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
+import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Message, streamGemini } from './lib/gemini';
 import { FileStore, extractFiles } from './lib/fileStore';
 import { Project, getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId } from './lib/projectStore';
+import { filesystemService } from './lib/filesystemService';
 
 // Lazy load heavy components
 const ApiKeyModal = lazy(() => import('./components/ApiKeyModal').then(m => ({ default: m.ApiKeyModal })));
@@ -20,6 +21,8 @@ const PanelLoader = () => (
 );
 
 const SYSTEM_INSTRUCTION = `You are GIDE (Gemini Interactive Development Environment), a browser-based AI software engineering agent. You help users build real multi-file software projects.
+
+FILESYSTEM MODE: You are currently running in Filesystem Mode. This means you have direct access to the project's files on the server. Your code outputs will be saved directly to the real filesystem.
 
 TONE: Terse and technical by default. Switch to verbose/explanatory mode only when the user asks.
 
@@ -82,41 +85,110 @@ export default function App() {
   const [currentProjectIdState, setCurrentProjectIdState] = useState<string | null>(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
+  const [isFilesystemMode, setIsFilesystemMode] = useState(false);
 
+  // Check for filesystem mode and load files
   useEffect(() => {
-    const loadedProjects = getProjects();
-    setProjects(loadedProjects);
-    const savedProjectId = getCurrentProjectId();
-    
-    if (savedProjectId) {
-      const project = loadedProjects.find(p => p.id === savedProjectId);
-      if (project) {
-        setCurrentProjectIdState(savedProjectId);
-        setFileStore(project.files);
-      } else {
-        setCurrentProjectId(null);
+    const initFilesystem = async () => {
+      try {
+        const store = await filesystemService.loadAllFiles();
+        setFileStore(store);
+        setIsFilesystemMode(true);
+        setIsProjectsLoaded(true);
+      } catch (e) {
+        console.log('Filesystem API not available, falling back to local storage mode.');
+        
+        // Fallback to local storage projects
+        const loadedProjects = getProjects();
+        setProjects(loadedProjects);
+        const savedProjectId = getCurrentProjectId();
+        
+        if (savedProjectId) {
+          const project = loadedProjects.find(p => p.id === savedProjectId);
+          if (project) {
+            setCurrentProjectIdState(savedProjectId);
+            setFileStore(project.files);
+          } else {
+            setCurrentProjectId(null);
+          }
+        }
+        setIsProjectsLoaded(true);
       }
-    }
-    setIsProjectsLoaded(true);
+    };
+    initFilesystem();
   }, []);
 
-  // Save projects to localStorage whenever they change
+  // Save projects to localStorage whenever they change (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded) {
+    if (isProjectsLoaded && !isFilesystemMode) {
       saveProjects(projects);
     }
-  }, [projects, isProjectsLoaded]);
+  }, [projects, isProjectsLoaded, isFilesystemMode]);
 
-  // Auto-save current project files
+  // Auto-save current project files (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded && currentProjectIdState) {
+    if (isProjectsLoaded && currentProjectIdState && !isFilesystemMode) {
       setProjects(prev => prev.map(p => 
         p.id === currentProjectIdState 
           ? { ...p, files: fileStore, updatedAt: Date.now() } 
           : p
       ));
     }
-  }, [fileStore, currentProjectIdState, isProjectsLoaded]);
+  }, [fileStore, currentProjectIdState, isProjectsLoaded, isFilesystemMode]);
+
+  useEffect(() => {
+    if (isFilesystemMode && selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
+      const loadContent = async () => {
+        try {
+          const content = await filesystemService.getFileContent(selectedFile);
+          setFileStore(prev => ({
+            ...prev,
+            [selectedFile]: { ...prev[selectedFile], content, size: content.length }
+          }));
+        } catch (e) {
+          console.error('Failed to load file content', e);
+        }
+      };
+      loadContent();
+    }
+  }, [selectedFile, isFilesystemMode, fileStore]);
+
+  // Sync fileStore to backend after streaming finishes
+  useEffect(() => {
+    if (!isStreaming && isFilesystemMode) {
+      const syncFiles = async () => {
+        try {
+          // We need to know what was there before to detect deletions
+          // But for now, let's just sync what's currently in the store
+          // and assume the AI only adds/modifies.
+          // To handle deletions, we'd need to compare with the actual filesystem.
+          
+          const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew);
+          for (const [path, file] of modifiedFiles) {
+            if (!file.isDir) {
+              await filesystemService.saveFile(path, file.content);
+            } else {
+              await filesystemService.createFile(path, true);
+            }
+          }
+          
+          // Clear flags after sync
+          setFileStore(prev => {
+            const newStore = { ...prev };
+            Object.keys(newStore).forEach(p => {
+              if (newStore[p].isModified || newStore[p].isNew) {
+                newStore[p] = { ...newStore[p], isModified: false, isNew: false };
+              }
+            });
+            return newStore;
+          });
+        } catch (e) {
+          console.error('Failed to sync files after stream', e);
+        }
+      };
+      syncFiles();
+    }
+  }, [isStreaming, isFilesystemMode]);
 
   const hasPreviewableFiles = Object.keys(fileStore).some(path => 
     path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.jsx') || 
@@ -163,7 +235,38 @@ export default function App() {
     setMessages([]);
   };
 
+  const handleSaveAll = async () => {
+    if (isFilesystemMode) {
+      try {
+        const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew);
+        for (const [path, file] of modifiedFiles) {
+          if (!file.isDir) {
+            await filesystemService.saveFile(path, file.content);
+          }
+        }
+      } catch (e) {
+        alert('Failed to save some files to filesystem');
+      }
+    }
+
+    setFileStore(prev => {
+      const newStore = { ...prev };
+      Object.keys(newStore).forEach(path => {
+        newStore[path] = { ...newStore[path], isModified: false, isNew: false };
+      });
+      return newStore;
+    });
+  };
+
   const handleSwitchProject = (id: string) => {
+    const hasModifiedFiles = Object.values(fileStore).some((f: any) => f.isModified || f.isNew);
+    
+    if (hasModifiedFiles) {
+      if (!window.confirm('You have unsaved changes in the current project. Are you sure you want to switch? Changes are auto-saved to local storage, but modified flags will be lost.')) {
+        return;
+      }
+    }
+
     const project = projects.find(p => p.id === id);
     if (project) {
       setCurrentProjectIdState(id);
@@ -271,8 +374,17 @@ export default function App() {
     setFileToDelete(path);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (fileToDelete) {
+      if (isFilesystemMode) {
+        try {
+          await filesystemService.deleteFile(fileToDelete);
+        } catch (e) {
+          alert('Failed to delete file from filesystem');
+          return;
+        }
+      }
+
       setFileStore(prev => {
         const newStore = { ...prev };
         delete newStore[fileToDelete];
@@ -285,11 +397,37 @@ export default function App() {
     }
   };
 
-  const handleRenameFile = (oldPath: string, newPath: string) => {
+  const handleRenameFile = async (oldPath: string, newPath: string) => {
     if (!newPath || newPath === oldPath) return;
+
+    if (isFilesystemMode) {
+      try {
+        await filesystemService.renameFile(oldPath, newPath);
+      } catch (e) {
+        alert('Failed to rename file on filesystem');
+        return;
+      }
+    }
+
     setFileStore(prev => {
       const newStore = { ...prev };
       if (newStore[oldPath]) {
+        // Ensure new parent directories exist
+        const parts = newPath.split('/');
+        let currentPath = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath += (currentPath ? '/' : '') + parts[i];
+          if (!newStore[currentPath]) {
+            newStore[currentPath] = { 
+              content: '', 
+              isNew: true, 
+              isModified: false, 
+              size: 0, 
+              isDir: true 
+            };
+          }
+        }
+
         newStore[newPath] = { ...newStore[oldPath] };
         delete newStore[oldPath];
       }
@@ -300,14 +438,41 @@ export default function App() {
     }
   };
 
-  const handleCreateFile = (path: string) => {
+  const handleCreateFile = async (path: string) => {
     if (!path) return;
+
+    if (isFilesystemMode) {
+      try {
+        await filesystemService.createFile(path);
+      } catch (e) {
+        alert('Failed to create file on filesystem');
+        return;
+      }
+    }
+
     setFileStore(prev => {
       if (prev[path]) return prev; // Don't overwrite
-      return {
-        ...prev,
-        [path]: { content: '', isNew: true, isModified: false, size: 0 }
-      };
+      
+      const newStore = { ...prev };
+      const parts = path.split('/');
+      let currentPath = '';
+      
+      // Create parent directories
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentPath += (currentPath ? '/' : '') + parts[i];
+        if (!newStore[currentPath]) {
+          newStore[currentPath] = { 
+            content: '', 
+            isNew: true, 
+            isModified: false, 
+            size: 0, 
+            isDir: true 
+          };
+        }
+      }
+      
+      newStore[path] = { content: '', isNew: true, isModified: false, size: 0 };
+      return newStore;
     });
     setSelectedFile(path);
     if (mobileView !== 'editor') {
@@ -323,7 +488,11 @@ export default function App() {
     if (msg.startsWith('/reset')) {
       if (window.confirm('Are you sure you want to clear all chat history and files?')) {
         setMessages([]);
-        setFileStore({});
+        if (isFilesystemMode) {
+          filesystemService.loadAllFiles().then(setFileStore);
+        } else {
+          setFileStore({});
+        }
         setSelectedFile(null);
       }
       return true;
@@ -406,6 +575,37 @@ export default function App() {
     }
   };
 
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleFileChange = async (newContent: string | undefined) => {
+    if (selectedFile && newContent !== undefined) {
+      setFileStore(prev => ({
+        ...prev,
+        [selectedFile]: {
+          ...prev[selectedFile],
+          content: newContent,
+          isModified: true,
+          size: newContent.length
+        }
+      }));
+
+      if (isFilesystemMode) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(async () => {
+          try {
+            await filesystemService.saveFile(selectedFile, newContent);
+            setFileStore(prev => ({
+              ...prev,
+              [selectedFile]: { ...prev[selectedFile], isModified: false }
+            }));
+          } catch (e) {
+            console.error('Failed to auto-save to filesystem', e);
+          }
+        }, 1000); // 1 second debounce
+      }
+    }
+  };
+
   const totalTokens = messages.reduce((acc, m) => acc + m.content.length, 0) / 4;
 
   return (
@@ -444,17 +644,25 @@ export default function App() {
             <Terminal className="w-5 h-5 text-[#007acc]" />
           </div>
           <h1 className="font-semibold tracking-wide hidden sm:block text-[#e5e5e5]">GIDE</h1>
+          {isFilesystemMode && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-900/30 border border-blue-500/30 rounded text-[10px] text-blue-400 font-bold uppercase tracking-widest ml-2">
+              <Terminal className="w-3 h-3" />
+              Filesystem
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-2 sm:gap-4">
-          <button
-            onClick={() => setShowProjectModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
-            title="Projects"
-          >
-            <FolderOpen className="w-4 h-4 text-[#007acc]" />
-            <span className="hidden sm:inline">Projects</span>
-          </button>
+          {!isFilesystemMode && (
+            <button
+              onClick={() => setShowProjectModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+              title="Projects"
+            >
+              <FolderOpen className="w-4 h-4 text-[#007acc]" />
+              <span className="hidden sm:inline">Projects</span>
+            </button>
+          )}
           
           <select
             value={model}
@@ -465,6 +673,15 @@ export default function App() {
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
           </select>
           
+          <button
+            onClick={handleSaveAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
+            title="Save All"
+          >
+            <Download className="w-4 h-4 text-green-500 rotate-180" />
+            <span className="hidden sm:inline">Save All</span>
+          </button>
+
           <button
             onClick={() => { setMessages([]); setFileStore({}); setSelectedFile(null); }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm hover:bg-[#3c3c3c] rounded-md transition-colors"
@@ -540,6 +757,7 @@ export default function App() {
               content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
               filename={selectedFile || ''}
               onOpenFiles={() => setIsMobileMenuOpen(true)}
+              onChange={handleFileChange}
             />
           </Suspense>
         </div>
@@ -556,6 +774,7 @@ export default function App() {
               onDelete={handleDeleteFile}
               onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
               onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+              showDetails={true}
             />
           </Suspense>
         </div>
@@ -594,6 +813,7 @@ export default function App() {
                       onDelete={handleDeleteFile}
                       onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); setIsMobileMenuOpen(false); }}
                       onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); setIsMobileMenuOpen(false); }}
+                      showDetails={true}
                     />
                   </Suspense>
                 </div>
@@ -714,11 +934,5 @@ export default function App() {
       </footer>
     </div>
   );
-}
-
-declare global {
-  interface Window {
-    JSZip: any;
-  }
 }
 

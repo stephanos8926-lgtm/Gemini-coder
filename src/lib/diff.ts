@@ -1,4 +1,23 @@
+import { diff_match_patch } from 'diff-match-patch';
+
+const dmp = new diff_match_patch();
+
 export function applyDiff(original: string, diff: string): string {
+  try {
+    // Try to parse the diff as a patch
+    const patches = dmp.patch_fromText(diff);
+    if (patches.length > 0) {
+      const [patchedText, results] = dmp.patch_apply(patches, original);
+      // Check if all patches were applied successfully
+      if (results.every(r => r === true)) {
+        return patchedText;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to apply diff with diff-match-patch:', e);
+  }
+
+  // Fallback to basic unified diff application if dmp fails or if it's a standard unified diff
   const lines = original ? original.split('\n') : [];
   const diffLines = diff.split('\n');
   const out: string[] = [];
@@ -8,6 +27,13 @@ export function applyDiff(original: string, diff: string): string {
   // Find the first @@ line
   while (d < diffLines.length && !diffLines[d].startsWith('@@')) {
     d++;
+  }
+
+  if (d >= diffLines.length) {
+    // If no @@ lines found, it might be a full replacement or invalid diff
+    // If it's a full replacement, it wouldn't have been called here usually, 
+    // but let's be safe.
+    return original;
   }
 
   while (d < diffLines.length) {
@@ -31,7 +57,6 @@ export function applyDiff(original: string, diff: string): string {
       out.push('');
       i++;
     }
-    // Ignore any other lines (like context or comments within the diff block)
   }
   while (i < lines.length) {
     out.push(lines[i++]);
