@@ -11,25 +11,10 @@ export async function streamGemini(
   onChunk: (text: string) => void,
   temperature: number = 0.7
 ) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-  
-  const formattedMessages = messages.map(m => ({
-    role: m.role,
-    parts: [{ text: m.content }]
-  }));
-
-  const body = {
-    system_instruction: { parts: [{ text: systemInstruction }] },
-    contents: formattedMessages,
-    generationConfig: {
-      temperature: temperature,
-    }
-  };
-
-  const response = await fetch(url, {
+  const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify({ messages, model, apiKey, systemInstruction, temperature })
   });
 
   if (!response.ok) {

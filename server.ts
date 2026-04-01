@@ -238,6 +238,56 @@ async function startServer() {
     }
   });
 
+  app.post('/api/chat', async (req, res) => {
+    const { messages, model, apiKey, systemInstruction, temperature } = req.body;
+    
+    if (!apiKey) return res.status(400).json({ error: 'API key required' });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    
+    const formattedMessages = messages.map((m: any) => ({
+      role: m.role,
+      parts: [{ text: m.content }]
+    }));
+
+    const body = {
+      system_instruction: { parts: [{ text: systemInstruction }] },
+      contents: formattedMessages,
+      generationConfig: {
+        temperature: temperature,
+      }
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      if (response.body) {
+        const reader = response.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+      }
+      res.end();
+    } catch (error: any) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Vite middleware
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
