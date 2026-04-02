@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { RefreshCw, Play, FolderTree, Terminal, Loader2 } from 'lucide-react';
-import { FileStore } from '../lib/fileStore';
+import type { FileStore } from '../lib/fileStore';
 import { FileTree } from './FileTree';
 
 const ToolsPanel = lazy(() => import('./ToolsPanel').then(m => ({ default: m.ToolsPanel })));
@@ -32,12 +32,14 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
       let injectedContent = content;
       
       // Simple injection for local files referenced in HTML
-      // This is a basic implementation. A real bundler would be better.
+      const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
       const cssFiles = Object.keys(files).filter(p => p.endsWith('.css'));
       cssFiles.forEach(css => {
-        if (injectedContent.includes(css) || injectedContent.includes(css.split('/').pop()!)) {
+        const filename = css.split('/').pop() || '';
+        if (injectedContent.includes(css) || injectedContent.includes(filename)) {
           injectedContent = injectedContent.replace(
-            new RegExp(`<link.*?href=["'].*?${css.split('/').pop()}.*?["'].*?>`, 'g'),
+            new RegExp(`<link.*?href=["'].*?${escapeRegExp(filename)}.*?["'].*?>`, 'g'),
             `<style>${files[css].content}</style>`
           );
         }
@@ -45,9 +47,10 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
 
       const jsFiles = Object.keys(files).filter(p => p.endsWith('.js'));
       jsFiles.forEach(js => {
-        if (injectedContent.includes(js) || injectedContent.includes(js.split('/').pop()!)) {
+        const filename = js.split('/').pop() || '';
+        if (injectedContent.includes(js) || injectedContent.includes(filename)) {
           injectedContent = injectedContent.replace(
-            new RegExp(`<script.*?src=["'].*?${js.split('/').pop()}.*?["'].*?></script>`, 'g'),
+            new RegExp(`<script.*?src=["'].*?${escapeRegExp(filename)}.*?["'].*?></script>`, 'g'),
             `<script>${files[js].content}</script>`
           );
         }

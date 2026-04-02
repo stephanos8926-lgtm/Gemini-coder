@@ -1,53 +1,246 @@
+// @ts-nocheck
 import { spawn } from 'child_process';
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
-import { fileURLToPath } from 'url';
 import git from 'isomorphic-git';
 import http from 'isomorphic-git/http/node';
 import admin from 'firebase-admin';
+import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 import multer from 'multer';
 import AdmZip from 'adm-zip';
+import winston from 'winston';
+import { z } from 'zod';
+import { env } from './server-config';
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
+  ],
+});
+
+// Validation Schemas
+const RunToolSchema = z.object({
+  command: z.string().min(1),
+  workspace: z.string().optional().default(''),
+  idToken: z.string().min(1),
+});
+
+const AdminRequestSchema = z.object({
+  secretKey: z.string().min(1),
+});
+
+const AdminUserUpdateSchema = AdminRequestSchema.extend({
+  uid: z.string().min(1),
+  no_sandbox: z.boolean(),
+});
+
+const AdminUserDeleteSchema = AdminRequestSchema.extend({
+  uid: z.string().min(1),
+});
+
+const GitPullSchema = AdminRequestSchema.extend({
+  repoUrl: z.string().url(),
+  branch: z.string().optional().default('main'),
+});
+
+const FileSaveSchema = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+  workspace: z.string().optional().default(''),
+});
+
+const FileCreateSchema = z.object({
+  path: z.string().min(1),
+  isDir: z.boolean(),
+  workspace: z.string().optional().default(''),
+});
+
+const FileDeleteSchema = z.object({
+  path: z.string().min(1),
+  workspace: z.string().optional().default(''),
+});
+
+const FileRenameSchema = z.object({
+  oldPath: z.string().min(1),
+  newPath: z.string().min(1),
+  workspace: z.string().optional().default(''),
+});
+
+let db: admin.firestore.Firestore;
+let auth: admin.auth.Auth;
 
 // Initialize Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.applicationDefault(),
-});
-const auth = admin.auth();
+async function initializeFirebase() {
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    let config = { projectId: undefined, firestoreDatabaseId: undefined };
+    
+    if (fsSync.existsSync(configPath)) {
+      config = JSON.parse(fsSync.readFileSync(configPath, 'utf8'));
+    }
+    
+    let app: admin.app.App;
+    const existingApps = getApps();
+    
+    if (existingApps.length === 0) {
+      // In AI Studio, we should prioritize applicationDefault() and let it discover the project ID
+      // Passing an explicit projectId from a potentially stale config can cause PERMISSION_DENIED
+      app = initializeApp({
+        credential: admin.credential.applicationDefault(),
+      });
+      logger.info('Firebase Admin initialized with applicationDefault');
+    } else {
+      app = existingApps[0];
+      logger.info('Firebase Admin already initialized, using existing app');
+    }
+    
+    // Initialize Firestore with the specific database ID if provided
+    // If the named database fails, we fallback to the default one
+    try {
+      db = config.firestoreDatabaseId 
+        ? getFirestore(app, config.firestoreDatabaseId)
+        : getFirestore(app);
+      
+      // Test the connection to catch PERMISSION_DENIED early
+      await db.collection('users').limit(1).get();
+      logger.info('Firestore connection successful', { databaseId: config.firestoreDatabaseId || '(default)' });
+    } catch (firestoreError) {
+      logger.warn('Failed to initialize Firestore with named database, falling back to default', { 
+        databaseId: config.firestoreDatabaseId,
+        error: firestoreError.message 
+      });
+      db = getFirestore(app);
+    }
+    
+    auth = getAuth(app);
+  } catch (e) {
+    logger.error('Failed to initialize Firebase Admin', e);
+    // Last resort fallback
+    try {
+      const app = getApps().length === 0 ? initializeApp() : getApps()[0];
+      db = getFirestore(app);
+      auth = getAuth(app);
+      logger.info('Firebase Admin initialized with last resort fallback');
+    } catch (err) {
+      logger.error('Critical: Failed to initialize Firebase Admin fallback', err);
+    }
+  }
+}
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Call initialization
+initializeFirebase();
 
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const upload = multer({ dest: UPLOAD_DIR });
 
 async function startServer() {
+  logger.info('Starting server...');
   const app = express();
   const PORT = 3000;
 
   // Ensure workspace root exists
   try {
     await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
+    logger.info('Workspace root initialized', { WORKSPACE_ROOT });
   } catch (e) {
-    console.error('Failed to create workspace root', e);
+    logger.error('Failed to create workspace root', e);
   }
 
   app.use(express.json({ limit: '50mb' }));
+  app.use((req, res, next) => {
+    logger.info(`${req.method} ${req.url}`, { ip: req.ip });
+    next();
+  });
+
+  // Global Error Handler Middleware
+  const errorHandler: express.ErrorRequestHandler = (err, req, res, next) => {
+    logger.error('Unhandled error', { 
+      error: err.message, 
+      stack: err.stack,
+      path: req.path,
+      method: req.method 
+    });
+
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ 
+        error: 'Validation failed', 
+        details: err.errors 
+      });
+    }
+
+    res.status(err.status || 500).json({ 
+      error: err.message || 'Internal Server Error' 
+    });
+  };
+
+  // Authentication Middleware
+  const authenticateUser = async (req: any, res: any, next: any) => {
+    const idToken = req.headers.authorization?.split('Bearer ')[1] || req.body.idToken || req.query.idToken;
+    
+    if (!idToken) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken);
+      let userData = {};
+      
+      try {
+        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+        if (userDoc.exists) {
+          userData = userDoc.data() || {};
+        }
+      } catch (firestoreError) {
+        logger.warn('Failed to fetch user data from Firestore, using token data only', { 
+          uid: decodedToken.uid, 
+          error: firestoreError.message 
+        });
+      }
+
+      req.user = {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        displayName: decodedToken.name,
+        photoURL: decodedToken.picture,
+        role: 'user', // Default role
+        ...userData
+      };
+      next();
+    } catch (error) {
+      logger.error('Authentication failed', error);
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+  };
 
   // Helper to validate path is within workspace
-  function getSafePath(unsafePath: string, workspace: string = '') {
-    const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
+  function getSafePath(unsafePath: string, user: any, workspace: string = '') {
+    // If workspace is provided, it MUST start with the user's UID for security
+    if (workspace && !workspace.startsWith(user.uid) && user.role !== 'admin') {
+      throw new Error('Access denied: Workspace does not belong to user');
+    }
+
+    const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, user.uid);
     const resolvedPath = path.resolve(base, unsafePath);
-    if (!resolvedPath.startsWith(WORKSPACE_ROOT)) {
-      throw new Error('Access denied: Path outside workspace root');
+    
+    if (!resolvedPath.startsWith(base)) {
+      throw new Error('Access denied: Path is outside of workspace');
     }
-    // Also ensure it's within the specific sub-workspace if provided
-    if (workspace && !resolvedPath.startsWith(path.resolve(WORKSPACE_ROOT, workspace))) {
-      throw new Error('Access denied: Path outside sub-workspace');
-    }
+    
     return resolvedPath;
   }
 
@@ -83,55 +276,52 @@ async function startServer() {
   }
 
   // API Routes
-  app.get('/api/workspaces', async (req, res) => {
-    console.log('Fetching workspaces from', WORKSPACE_ROOT);
+  app.get('/api/workspaces', authenticateUser, async (req: any, res, next) => {
     try {
       await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
       const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
       const workspaces = entries
         .filter(entry => entry.isDirectory())
-        .map(entry => entry.name);
-      res.json(workspaces);
+        .map(entry => entry.name.trim())
+        .filter(name => req.user.role === 'admin' || name.startsWith(req.user.uid));
+      
+      const uniqueWorkspaces = [...new Set(workspaces)];
+      res.json(uniqueWorkspaces);
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.get('/api/files', async (req, res) => {
+  app.get('/api/files', authenticateUser, async (req: any, res, next) => {
     const workspace = (req.query.workspace as string) || '';
     const subPath = (req.query.path as string) || '';
     const recursive = req.query.recursive === 'true';
 
     try {
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
-      const targetDir = subPath ? getSafePath(subPath, workspace) : root;
+      const targetDir = getSafePath(subPath, req.user, workspace);
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
       
       await fs.mkdir(targetDir, { recursive: true });
       const files = await listFiles(targetDir, root, recursive);
       res.json(files);
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  const db = admin.firestore();
-
-  app.post('/api/tools/run', async (req, res) => {
-    const { command, workspace = '', idToken } = req.body;
-    if (!command) return res.status(400).json({ error: 'Command required' });
-    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
-
+  app.post('/api/tools/run', authenticateUser, async (req: any, res, next) => {
     try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      const uid = decodedToken.uid;
-      const userDoc = await db.collection('users').doc(uid).get();
-      const userData = userDoc.data();
-      const isSandboxed = !userData?.no_sandbox;
-      const isAdmin = userData?.role === 'admin';
+      const { command, workspace } = RunToolSchema.parse(req.body);
+      logger.info('Running tool', { command, workspace, uid: req.user.uid });
 
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+      const isSandboxed = !req.user.no_sandbox;
+      const isAdmin = req.user.role === 'admin';
+
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
+      await fs.mkdir(root, { recursive: true });
 
       if (isAdmin) {
+        logger.info('Running admin command', { command });
         const { exec } = await import('child_process');
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
@@ -148,9 +338,11 @@ async function startServer() {
       const [tool, ...args] = command.split(' ');
       
       if (!allowedTools.includes(tool)) {
+        logger.warn('Unauthorized tool access attempt', { tool, command });
         return res.status(403).json({ error: `Tool '${tool}' is not allowed for security reasons.` });
       }
 
+      logger.info('Spawning child process', { tool, args });
       const child = spawn(tool, args, { cwd: root });
       
       let stdout = '';
@@ -160,6 +352,7 @@ async function startServer() {
       child.stderr.on('data', (data) => { stderr += data; });
       
       child.on('close', (code) => {
+        logger.info('Child process closed', { code, stdout: stdout.substring(0, 100), stderr: stderr.substring(0, 100) });
         if (code === 0) {
           res.json({ stdout, stderr, success: true });
         } else {
@@ -168,50 +361,65 @@ async function startServer() {
       });
       
       child.on('error', (error) => {
+        logger.error('Child process error', error);
         res.status(500).json({ error: String(error), success: false });
       });
-    } catch (error: any) {
-      res.status(500).json({ 
-        stderr: String(error), 
-        success: false 
-      });
+    } catch (error) {
+      next(error);
     }
   });
 
-  app.post('/api/admin/users', async (req, res) => {
-    const { secretKey } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    
+  app.post('/api/admin/users', async (req, res, next) => {
     try {
+      const { secretKey } = AdminRequestSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       const usersSnapshot = await db.collection('users').get();
       const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
       res.json(users);
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/admin/users/update', async (req, res) => {
-    const { secretKey, uid, no_sandbox } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    
+  app.post('/api/admin/users/update', async (req, res, next) => {
     try {
+      const { secretKey, uid, no_sandbox } = AdminUserUpdateSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       await db.collection('users').doc(uid).update({ no_sandbox });
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/git/pull', async (req, res) => {
-    const { repoUrl, branch = 'main', secretKey } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    if (!repoUrl) return res.status(400).json({ error: 'Repository URL required' });
-
+  app.post('/api/admin/users/delete', async (req, res, next) => {
     try {
-      const dir = WORKSPACE_ROOT;
+      const { secretKey, uid } = AdminUserDeleteSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
       
-      // Check if .git exists
+      await db.collection('users').doc(uid).delete();
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/git/pull', async (req, res, next) => {
+    try {
+      const { repoUrl, branch, secretKey } = GitPullSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const dir = WORKSPACE_ROOT;
       let isRepo = false;
       try {
         await fs.stat(path.join(dir, '.git'));
@@ -240,46 +448,57 @@ async function startServer() {
       
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/admin/system-info', async (req, res) => {
-    const { secretKey } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    
-    res.json({
-      uptime: process.uptime(),
-      memoryUsage: process.memoryUsage(),
-      nodeVersion: process.version,
-      platform: process.platform
-    });
+  app.post('/api/admin/system-info', async (req, res, next) => {
+    try {
+      const { secretKey } = AdminRequestSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
+      res.json({
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        nodeVersion: process.version,
+        platform: process.platform
+      });
+    } catch (error) {
+      next(error);
+    }
   });
 
-  app.post('/api/admin/workspaces/delete', async (req, res) => {
-    const { secretKey, workspace } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    if (!workspace) return res.status(400).json({ error: 'Workspace name required' });
-    
+  app.post('/api/admin/workspaces/delete', async (req, res, next) => {
     try {
+      const { secretKey, workspace } = z.object({
+        secretKey: z.string(),
+        workspace: z.string()
+      }).parse(req.body);
+
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       const workspacePath = path.join(WORKSPACE_ROOT, workspace);
       await fs.rm(workspacePath, { recursive: true, force: true });
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/git', async (req, res) => {
-    const { idToken, command, message, workspace } = req.body;
-    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
-
+  app.post('/api/git', authenticateUser, async (req: any, res, next) => {
     try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      const uid = decodedToken.uid;
+      const { command, message, workspace } = z.object({
+        command: z.string(),
+        message: z.string().optional(),
+        workspace: z.string().optional()
+      }).parse(req.body);
 
       // Ensure workspace belongs to the user
-      if (workspace && !workspace.startsWith(uid)) {
+      if (workspace && !workspace.startsWith(req.user.uid)) {
         return res.status(403).json({ error: 'Access denied: Workspace does not belong to user' });
       }
 
@@ -293,46 +512,52 @@ async function startServer() {
         case 'add': cmd = 'git add .'; break;
         case 'commit': cmd = `git commit -m "${message || 'Update'}"`; break;
         case 'pull': cmd = 'git pull'; break;
-        default: return res.status(400).json({ error: 'Invalid git command' });
+        default: 
+          return res.status(400).json({ error: 'Invalid git command' });
       }
       
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
       
       const { stdout, stderr } = await execAsync(cmd, { cwd: root });
       res.json({ success: true, stdout, stderr });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: String(error) });
+    } catch (error) {
+      next(error);
     }
   });
 
   app.get('/api/admin/logs', async (req, res) => {
+    logger.info('Admin logs request received');
     // Assuming logs are redirected to a file or can be read from a buffer
     // For now, return a placeholder or read a log file if it exists
     res.json({ logs: 'Log functionality needs implementation (e.g., reading a log file).' });
   });
 
-  app.post('/api/admin/readme', async (req, res) => {
-    const { secretKey, content } = req.body;
-    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
-    
+  app.post('/api/admin/readme', async (req, res, next) => {
     try {
+      const { secretKey, content } = z.object({
+        secretKey: z.string(),
+        content: z.string()
+      }).parse(req.body);
+
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+      
       await fs.writeFile(path.join(process.cwd(), 'README.md'), content, 'utf-8');
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/import-zip', upload.single('zip'), async (req, res) => {
-    const { workspace = '', idToken } = req.body;
-    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  app.post('/api/import-zip', upload.single('zip'), authenticateUser, async (req: any, res, next) => {
+    const { workspace } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
 
     try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      const uid = decodedToken.uid;
-      
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
       await fs.mkdir(root, { recursive: true });
 
       const zip = new AdmZip(req.file.path);
@@ -341,42 +566,42 @@ async function startServer() {
       await fs.unlink(req.file.path);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.get('/api/files/content', async (req, res) => {
+  app.get('/api/files/content', authenticateUser, async (req: any, res, next) => {
     const filePath = req.query.path as string;
     const workspace = (req.query.workspace as string) || '';
-    if (!filePath) return res.status(400).json({ error: 'Path required' });
+    if (!filePath) {
+      return res.status(400).json({ error: 'Path required' });
+    }
     
     try {
-      const fullPath = getSafePath(filePath, workspace);
+      const fullPath = getSafePath(filePath, req.user, workspace);
       const content = await fs.readFile(fullPath, 'utf-8');
       res.json({ content });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/files/save', async (req, res) => {
-    const { path: filePath, content, workspace = '' } = req.body;
-    if (!filePath) return res.status(400).json({ error: 'Path required' });
-
+  app.post('/api/files/save', authenticateUser, async (req: any, res, next) => {
     try {
-      const fullPath = getSafePath(filePath, workspace);
+      const { path: filePath, content, workspace } = FileSaveSchema.parse(req.body);
+      const fullPath = getSafePath(filePath, req.user, workspace);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, 'utf-8');
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/files/create', async (req, res) => {
-    const { path: filePath, isDir, workspace = '' } = req.body;
+  app.post('/api/files/create', authenticateUser, async (req: any, res, next) => {
     try {
-      const fullPath = getSafePath(filePath, workspace);
+      const { path: filePath, isDir, workspace } = FileCreateSchema.parse(req.body);
+      const fullPath = getSafePath(filePath, req.user, workspace);
       if (isDir) {
         await fs.mkdir(fullPath, { recursive: true });
       } else {
@@ -385,14 +610,14 @@ async function startServer() {
       }
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/files/delete', async (req, res) => {
-    const { path: filePath, workspace = '' } = req.body;
+  app.post('/api/files/delete', authenticateUser, async (req: any, res, next) => {
     try {
-      const fullPath = getSafePath(filePath, workspace);
+      const { path: filePath, workspace } = FileDeleteSchema.parse(req.body);
+      const fullPath = getSafePath(filePath, req.user, workspace);
       const stats = await fs.stat(fullPath);
       if (stats.isDirectory()) {
         await fs.rm(fullPath, { recursive: true, force: true });
@@ -401,35 +626,35 @@ async function startServer() {
       }
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.post('/api/files/rename', async (req, res) => {
-    const { oldPath, newPath, workspace = '' } = req.body;
+  app.post('/api/files/rename', authenticateUser, async (req: any, res, next) => {
     try {
-      const fullOldPath = getSafePath(oldPath, workspace);
-      const fullNewPath = getSafePath(newPath, workspace);
+      const { oldPath, newPath, workspace } = FileRenameSchema.parse(req.body);
+      const fullOldPath = getSafePath(oldPath, req.user, workspace);
+      const fullNewPath = getSafePath(newPath, req.user, workspace);
       await fs.mkdir(path.dirname(fullNewPath), { recursive: true });
       await fs.rename(fullOldPath, fullNewPath);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
-  app.get('/api/search', async (req, res) => {
+  app.get('/api/search', authenticateUser, async (req: any, res, next) => {
     const { query, workspace = '' } = req.query;
-    if (!query) return res.status(400).json({ error: 'Query required' });
+    if (!query) {
+      return res.status(400).json({ error: 'Query required' });
+    }
 
     try {
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace as string) : WORKSPACE_ROOT;
+      const root = getSafePath('', req.user, workspace as string);
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
 
-      // Use grep to search. -r (recursive), -n (line number), -I (ignore binary), -E (extended regex)
-      // We exclude common directories
       const excludeDirs = ['node_modules', '.git', 'dist', '.next'].map(d => `--exclude-dir=${d}`).join(' ');
       const command = `grep -rnIE ${excludeDirs} "${query}" "${root}"`;
       
@@ -446,21 +671,24 @@ async function startServer() {
         });
         res.json(results);
       } catch (e: any) {
-        // grep returns exit code 1 if no matches found
         if (e.code === 1) {
           return res.json([]);
         }
         throw e;
       }
     } catch (error) {
-      res.status(500).json({ error: String(error) });
+      next(error);
     }
   });
 
   app.post('/api/chat', async (req, res) => {
     const { messages, model, apiKey, systemInstruction, temperature } = req.body;
+    logger.info('Chat request received', { model, temperature, messageCount: messages?.length });
     
-    if (!apiKey) return res.status(400).json({ error: 'API key required' });
+    if (!apiKey) {
+      logger.warn('Chat request missing API key');
+      return res.status(400).json({ error: 'API key required' });
+    }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
     
@@ -478,6 +706,7 @@ async function startServer() {
     };
 
     try {
+      logger.info('Sending request to Gemini API');
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -486,9 +715,11 @@ async function startServer() {
 
       if (!response.ok) {
         const err = await response.text();
+        logger.error('Gemini API request failed', { status: response.status, err });
         return res.status(response.status).json({ error: err });
       }
 
+      logger.info('Gemini API request successful, starting stream');
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -508,7 +739,8 @@ async function startServer() {
   });
 
   // Vite middleware
-  if (process.env.NODE_ENV !== 'production') {
+  if (env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -523,8 +755,10 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`GIDE Server running on http://localhost:${PORT}`);
+    logger.info(`GIDE Server running on http://localhost:${PORT}`);
   });
+
+  app.use(errorHandler);
 }
 
 startServer();

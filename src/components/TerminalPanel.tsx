@@ -30,9 +30,14 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose, workspace
       });
       const result = await response.json();
       
+      let output = result.stdout || '';
+      if (!result.success) {
+        output = result.stderr || result.stdout || result.error || 'Unknown error';
+      }
+
       setHistory(prev => [...prev, { 
         command, 
-        output: result.success ? result.stdout : result.stderr, 
+        output, 
         success: result.success 
       }]);
     } catch (error) {

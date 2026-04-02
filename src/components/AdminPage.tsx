@@ -151,6 +151,7 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <tr className="text-[#858585] text-xs uppercase">
               <th className="pb-2">Email</th>
               <th className="pb-2">Role</th>
+              <th className="pb-2">No Sandbox</th>
               <th className="pb-2">Actions</th>
             </tr>
           </thead>
@@ -159,6 +160,16 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               <tr key={u.uid} className="border-t border-[#3c3c3c]">
                 <td className="py-2">{u.email}</td>
                 <td className="py-2">{u.role}</td>
+                <td className="py-2">
+                  <input 
+                    type="checkbox" 
+                    checked={u.no_sandbox || false} 
+                    onChange={(e) => {
+                      callAdminApi('/api/admin/users/update', { uid: u.uid, no_sandbox: e.target.checked });
+                      fetchUsers();
+                    }}
+                  />
+                </td>
                 <td className="py-2">
                   <button onClick={() => deleteUser(u.uid)} className="text-[#d16969] hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                 </td>

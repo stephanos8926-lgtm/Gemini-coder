@@ -6,6 +6,14 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Settings } from '../lib/settingsStore';
 
+declare global {
+  interface Window {
+    hljs?: {
+      highlightElement: (block: Element) => void;
+    };
+  }
+}
+
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (msg: string) => void;

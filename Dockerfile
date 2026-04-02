@@ -20,15 +20,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Install tsx globally or locally to run the server
-RUN npm install -g tsx
-
-# Copy the built frontend from the builder stage
+# Copy the built frontend and server from the builder stage
 COPY --from=builder /app/dist ./dist
-
-# Copy the server code
-COPY server.ts ./
-COPY .env.example ./.env
+COPY --from=builder /app/.env.example ./.env
 
 # Expose the port GIDE runs on
 EXPOSE 3000
@@ -37,4 +31,4 @@ EXPOSE 3000
 ENV NODE_ENV=production
 
 # Start the server
-CMD ["tsx", "server.ts"]
+CMD ["node", "dist/server.cjs"]

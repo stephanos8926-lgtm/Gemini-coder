@@ -9,7 +9,7 @@ interface WorkspaceModalProps {
   currentWorkspace: string;
 }
 
-export function WorkspaceModal({ onClose, onSelect, currentWorkspace }: WorkspaceModalProps) {
+export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: WorkspaceModalProps) {
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

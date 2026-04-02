@@ -2,14 +2,17 @@ import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
 import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Message, streamGemini } from './lib/gemini';
-import { FileStore, extractFiles } from './lib/fileStore';
-import { Project, getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId } from './lib/projectStore';
+import { extractFiles, type FileStore } from './lib/fileStore';
+import { getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId, type Project } from './lib/projectStore';
 import { filesystemService } from './lib/filesystemService';
-import { settingsStore, Settings } from './lib/settingsStore';
+import { settingsStore, type Settings } from './lib/settingsStore';
 import { auth, googleProvider } from './firebase';
-import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { useFirebase } from './contexts/FirebaseContext';
+import { useWorkspaces, useFiles, useFileSystemMutations } from './hooks/useFileSystem';
+import { SYSTEM_INSTRUCTION } from './constants/systemInstruction';
 
-import { profileStore, Profile } from './lib/profileStore';
+import { profileStore, type Profile } from './lib/profileStore';
 
 // Lazy load heavy components
 const ApiKeyModal = lazy(() => import('./components/ApiKeyModal').then(m => ({ default: m.ApiKeyModal })));
@@ -18,7 +21,7 @@ const CodeEditor = lazy(() => import('./components/CodeEditor').then(m => ({ def
 const FileTree = lazy(() => import('./components/FileTree').then(m => ({ default: m.FileTree })));
 const BottomPanel = lazy(() => import('./components/BottomPanel').then(m => ({ default: m.BottomPanel })));
 const ProjectModal = lazy(() => import('./components/ProjectModal').then(m => ({ default: m.ProjectModal })));
-const WorkspaceModal = lazy(() => import('./components/WorkspaceModal').then(m => ({ default: m.WorkspaceModal })));
+const WorkspaceModal = lazy(() => import('./components/WorkspaceModal'));
 const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const SearchPanel = lazy(() => import('./components/SearchPanel').then(m => ({ default: m.SearchPanel })));
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
@@ -35,53 +38,10 @@ const PanelLoader = () => (
   </div>
 );
 
-const SYSTEM_INSTRUCTION = `You are GIDE (Gemini Interactive Development Environment), an advanced, autonomous AI software engineering agent. You help users build, maintain, and refactor real multi-file software projects.
-
-WORKSPACE MODE: You are running in a secure, isolated workspace environment. You have direct access to the filesystem via specialized tools.
-
-AVAILABLE TOOLS & CAPABILITIES:
-1. File System Operations:
-   - Read files: Use filesystemService.getFileContent(path) to read file contents.
-   - Write files: Use filesystemService.saveFile(path, content) to update files.
-   - Create files/folders: Use filesystemService.createFile(path, isDir) to create new files or directories.
-   - Delete files: Use filesystemService.deleteFile(path) to remove files.
-   - Rename files: Use filesystemService.renameFile(oldPath, newPath) to rename files.
-   - List files: Use filesystemService.listFiles(path, recursive) to explore the project structure.
-   - Search: Use filesystemService.search(query) to perform global searches across the project.
-2. Command Execution:
-   - Run tools/commands: Use filesystemService.runTool(command) to execute shell commands (e.g., 'npm test', 'npx tsc --noEmit', 'grep -r "pattern" .').
-3. Web Search:
-   - Use the 'googleSearch' tool to find information, documentation, or solutions for technical issues.
-
-OPERATIONAL GUIDELINES:
-- Be proactive: When asked to fix a bug or add a feature, first explore the codebase using listFiles and search, then read relevant files, then plan your changes, and finally execute them.
-- Tool Usage: Always prefer using the provided filesystemService tools over manual instructions.
-- Code Output: You MUST wrap all code in Markdown fenced code blocks. The very first word after the triple backticks MUST be the exact file path. Do NOT use language names like 'bash' or 'javascript'.
-- File Changes:
-  - Creating a file:
-    \`\`\`path/to/file.ext
-    <full file content>
-    \`\`\`
-  - Updating a file:
-    \`\`\`diff path/to/file.ext
-    --- path/to/file.ext
-    +++ path/to/file.ext
-    <diff content>
-    \`\`\`
-  - Deleting a file:
-    \`\`\`delete
-    path/to/file.ext
-    \`\`\`
-  - Renaming a file:
-    \`\`\`rename
-    old/path.ext
-    new/path.ext
-    \`\`\`
-
-- ZIP: When ready, output a ZIP MANIFEST listing all files. The app will handle the download. If the user says 'y' after a ZIP MANIFEST, just say "The ZIP file has been generated. Let me know if you need anything else."
-- SLASH COMMANDS: Respond to /plan /persona /full /zip /files /reset /verbose /terse /help /preview.`;
-
 export default function App() {
+  const { user, isAuthLoading } = useFirebase();
+  const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
+  
   const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
   const [apiKey, setApiKey] = useState<string | null>(activeProfile?.apiKey || null);
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -112,46 +72,48 @@ export default function App() {
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaces, setWorkspaces] = useState<string[]>([]);
+  const { data: workspacesData } = useWorkspaces();
+  
+  useEffect(() => {
+    if (workspacesData) {
+      setWorkspaces(workspacesData);
+    }
+  }, [workspacesData]);
+
   const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
+  // Sync profile name to user email
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setIsAuthLoading(false);
-      if (user && user.email) {
-        const activeProfile = profileStore.getActiveProfile();
-        if (activeProfile && activeProfile.name === 'User') {
-          profileStore.updateProfile(activeProfile.id, { name: user.email });
-          setActiveProfile({ ...activeProfile, name: user.email });
-        }
+    if (user && user.email) {
+      const activeProfile = profileStore.getActiveProfile();
+      if (activeProfile && activeProfile.name === 'User') {
+        profileStore.updateProfile(activeProfile.id, { name: user.email });
+        setActiveProfile({ ...activeProfile, name: user.email });
       }
-    });
-    return unsubscribe;
-  }, []);
+    }
+  }, [user]);
 
-  // Check for filesystem mode and load files
+  const { data: rootFiles } = useFiles(workspaceName, '', false);
+  
   useEffect(() => {
-    const initFilesystem = async () => {
-      try {
-        filesystemService.setWorkspace(workspaceName);
-        const store = await filesystemService.loadRootFiles();
-        setFileStore(store);
-        setIsProjectsLoaded(true);
-      } catch (e) {
-        console.error('Failed to initialize filesystem', e);
-        setIsProjectsLoaded(true);
-      }
-    };
-    
-    const timeout = setTimeout(initFilesystem, workspaceName ? 500 : 0);
-    return () => clearTimeout(timeout);
-  }, [workspaceName]);
+    if (rootFiles) {
+      const store: FileStore = {};
+      rootFiles.forEach(file => {
+        const cleanPath = file.isDir ? file.path.slice(0, -1) : file.path;
+        store[cleanPath] = {
+          content: '',
+          isNew: false,
+          isModified: false,
+          size: file.size,
+          isDir: file.isDir
+        };
+      });
+      setFileStore(store);
+      setIsProjectsLoaded(true);
+    }
+  }, [rootFiles]);
 
   const handleFolderExpand = async (path: string) => {
-    // Removed isFilesystemMode check
-    
     // Check if we already have children for this folder
     const hasChildren = Object.keys(fileStore).some(p => p.startsWith(path) && p !== path);
     if (hasChildren) return;
@@ -336,7 +298,7 @@ export default function App() {
         const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew);
         for (const [path, file] of modifiedFiles) {
           if (!file.isDir) {
-            await filesystemService.saveFile(path, file.content);
+            await saveFileMutation.mutateAsync({ workspace: workspaceName, path, content: file.content });
           }
         }
       } catch (e) {
@@ -400,9 +362,8 @@ export default function App() {
       );
       
       // Save to /api/admin/readme
-      const response = await fetch('/api/admin/readme', {
+      const response = await filesystemService.fetch('/api/admin/readme', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secretKey, content: readmeContent }),
       });
       
@@ -561,7 +522,7 @@ export default function App() {
   const confirmDelete = async () => {
     if (fileToDelete) {
       try {
-        await filesystemService.deleteFile(fileToDelete);
+        await deleteFileMutation.mutateAsync({ workspace: workspaceName, path: fileToDelete });
       } catch (e) {
         alert('Failed to delete file from filesystem');
         return;
@@ -583,7 +544,7 @@ export default function App() {
     if (!newPath || newPath === oldPath) return;
 
     try {
-      await filesystemService.renameFile(oldPath, newPath);
+      await renameFileMutation.mutateAsync({ workspace: workspaceName, oldPath, newPath });
     } catch (e) {
       alert('Failed to rename file on filesystem');
       return;
@@ -622,7 +583,7 @@ export default function App() {
     if (!path) return;
 
     try {
-      await filesystemService.createFile(path);
+      await createFileMutation.mutateAsync({ workspace: workspaceName, path });
     } catch (e) {
       alert('Failed to create file on filesystem');
       return;
@@ -660,7 +621,7 @@ export default function App() {
 
   const processSlashCommand = (msg: string): boolean => {
     if (msg.startsWith('/help')) {
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: '**Available Commands:**\n- `/help` : Show this message\n- `/reset` : Clear chat and files\n- `/files` : Print file tree\n- `/zip` : Download project as ZIP\n- `/preview` : Switch to Preview tab\n- `/persona <name>` : Switch persona\n- `/verbose` : Toggle verbose mode\n- `/terse` : Toggle terse mode' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: '**Available Commands:**\n- `/help` : Show this message\n- `/reset` : Clear chat and files\n- `/files` : Print file tree\n- `/zip` : Download project as ZIP\n- `/preview` : Switch to Preview tab\n- `/persona <name>` : Switch persona\n- `/verbose` : Toggle verbose mode\n- `/terse` : Toggle terse mode' }]);
       return true;
     }
     if (msg.startsWith('/reset')) {
@@ -673,34 +634,34 @@ export default function App() {
     }
     if (msg.startsWith('/files')) {
       const tree = Object.keys(fileStore).map(p => `- ${p}`).join('\n');
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: `**Current Files:**\n${tree || 'No files yet.'}` }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: `**Current Files:**\n${tree || 'No files yet.'}` }]);
       return true;
     }
     if (msg.startsWith('/zip')) {
       handleDownloadZip();
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: 'Triggered ZIP download.' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Triggered ZIP download.' }]);
       return true;
     }
     if (msg.startsWith('/preview')) {
       setBottomTab('preview');
       setMobileView('preview');
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: 'Switched to Preview tab.' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Switched to Preview tab.' }]);
       return true;
     }
     if (msg.startsWith('/persona ')) {
       const persona = msg.split(' ')[1];
       setSystemModifier(`\n\n[CURRENT PERSONA: ${persona.toUpperCase()}]`);
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: `[→ ${persona.toUpperCase()}] Persona activated.` }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: `[→ ${persona.toUpperCase()}] Persona activated.` }]);
       return true;
     }
     if (msg.startsWith('/verbose')) {
       setSystemModifier('\n\n[MODE: VERBOSE AND EXPLANATORY]');
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: 'Verbose mode enabled.' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Verbose mode enabled.' }]);
       return true;
     }
     if (msg.startsWith('/terse')) {
       setSystemModifier('\n\n[MODE: TERSE AND TECHNICAL]');
-      setMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'model', content: 'Terse mode enabled.' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Terse mode enabled.' }]);
       return true;
     }
     return false;
@@ -790,7 +751,7 @@ export default function App() {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {
           try {
-            await filesystemService.saveFile(selectedFile, newContent);
+            await saveFileMutation.mutateAsync({ workspace: workspaceName, path: selectedFile, content: newContent });
             setFileStore(prev => ({
               ...prev,
               [selectedFile]: { ...prev[selectedFile], isModified: false }
@@ -942,6 +903,26 @@ export default function App() {
             <SettingsIcon className="w-3.5 h-3.5 text-[#858585]" />
             <span className="hidden lg:inline">Settings</span>
           </button>
+
+          {user ? (
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+              title="Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5 text-[#858585]" />
+              <span className="hidden lg:inline">Sign Out</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleSignIn}
+              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+              title="Sign In"
+            >
+              <LogIn className="w-3.5 h-3.5 text-[#858585]" />
+              <span className="hidden lg:inline">Sign In</span>
+            </button>
+          )}
 
           <button
             className="sm:hidden p-1.5 hover:bg-[#3c3c3c] rounded transition-colors"

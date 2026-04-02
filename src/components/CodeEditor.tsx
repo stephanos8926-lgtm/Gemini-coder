@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import { FolderTree, Sparkles, MessageSquare, Wand2, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as monaco from 'monaco-editor';
 
 interface CodeEditorProps {
   content: string;
@@ -26,7 +27,7 @@ interface CodeEditorProps {
 export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiAction, targetLine, onLineRevealed, settings }: CodeEditorProps) {
   const [selection, setSelection] = useState<{ text: string; startLine: number; endLine: number } | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
-  const editorRef = useRef<any>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     if (editorRef.current && targetLine) {
@@ -37,16 +38,16 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
     }
   }, [targetLine, onLineRevealed]);
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
+  const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
 
     // Configure diagnostics based on settings
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    monacoInstance.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: !settings.showErrorHighlighting,
       noSyntaxValidation: !settings.showErrorHighlighting,
     });
 
-    editor.onDidChangeCursorSelection((e: any) => {
+    editor.onDidChangeCursorSelection((e: monaco.editor.ICursorSelectionChangedEvent) => {
       const selection = editor.getSelection();
       const model = editor.getModel();
       if (!selection || !model) return;
