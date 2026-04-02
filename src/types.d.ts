@@ -2,7 +2,9 @@ export {};
 
 declare global {
   interface Window {
-    hljs: any;
+    hljs?: {
+      highlightElement: (block: Element) => void;
+    };
     JSZip: any;
   }
 }

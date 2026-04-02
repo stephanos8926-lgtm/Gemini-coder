@@ -101,6 +101,7 @@ export function MobileSidebar({
               <FileTree
                 files={fileStore}
                 selectedFile={selectedFile}
+                workspaceName={workspaceName}
                 onSelect={onSelectFile}
                 onDownload={onDownloadFile}
                 onDownloadZip={onDownloadZip}
@@ -119,7 +120,7 @@ export function MobileSidebar({
         <button onClick={onShowCommandPalette} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Search className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Global Search</span>
         </button>
-        <button onClick={onSaveAll} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
+        <button onClick={onShowCommandPalette} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Zap className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Quick Actions</span>
         </button>
         <button onClick={onShowSettingsModal} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">

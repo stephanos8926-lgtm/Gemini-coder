@@ -1,12 +1,14 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { File, Folder, FolderOpen, Download, Upload, FileJson, FileCode2, FileImage, FileText, Trash2, Edit2, FilePlus, Search, X, Copy } from 'lucide-react';
+import { File, Folder, FolderOpen, Download, Upload, Trash2, Edit2, FilePlus, Search, X, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FileStore } from '../lib/fileStore';
+import { FileIcon } from './FileIcon';
 
 interface FileTreeProps {
   files: FileStore;
   selectedFile: string | null;
+  workspaceName?: string;
   onSelect: (path: string) => void;
   onDownload: (path: string) => void;
   onDownloadZip: () => void;
@@ -25,11 +27,36 @@ interface ContextMenuState {
   isFile: boolean;
 }
 
-export function FileTree({ files, selectedFile, onSelect, onDownload, onDownloadZip, onImportZip, onDelete, onRename, onCreateFile, onFolderExpand, showDetails = false }: FileTreeProps) {
+export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownload, onDownloadZip, onImportZip, onDelete, onRename, onCreateFile, onFolderExpand, showDetails = false }: FileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']));
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Persistence for expanded folders
+  useEffect(() => {
+    if (workspaceName) {
+      const saved = localStorage.getItem(`expanded_folders_${workspaceName}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setExpandedFolders(new Set(parsed));
+          }
+        } catch (e) {
+          console.error('Failed to load expanded folders', e);
+        }
+      } else {
+        setExpandedFolders(new Set(['/']));
+      }
+    }
+  }, [workspaceName]);
+
+  useEffect(() => {
+    if (workspaceName && expandedFolders.size > 0) {
+      localStorage.setItem(`expanded_folders_${workspaceName}`, JSON.stringify(Array.from(expandedFolders)));
+    }
+  }, [expandedFolders, workspaceName]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -52,18 +79,6 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
     setExpandedFolders(newExpanded);
   };
 
-  const getIcon = (filename: string) => {
-    const ext = filename.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'json': return <FileJson className="w-4 h-4 text-yellow-400" />;
-      case 'js': case 'ts': case 'jsx': case 'tsx': return <FileCode2 className="w-4 h-4 text-blue-400" />;
-      case 'html': case 'css': return <FileCode2 className="w-4 h-4 text-orange-400" />;
-      case 'png': case 'jpg': case 'jpeg': case 'svg': return <FileImage className="w-4 h-4 text-purple-400" />;
-      case 'md': case 'txt': return <FileText className="w-4 h-4 text-gray-400" />;
-      default: return <File className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
   const handleContextMenu = (e: React.MouseEvent, path: string, isFile: boolean) => {
     e.preventDefault();
     setContextMenu({
@@ -82,18 +97,19 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
   // Build tree
   const tree: any = {};
   Object.keys(files).forEach(path => {
-    const parts = path.split('/');
+    if (!path || path === '/') return;
+    const parts = path.split('/').filter(Boolean);
     let current = tree;
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       if (i === parts.length - 1) {
         if (files[path].isDir) {
-          if (!current[part]) current[part] = {};
+          if (!current[part]) current[part] = { _isDir: true };
         } else {
           current[part] = { _isFile: true, path };
         }
       } else {
-        if (!current[part]) current[part] = {};
+        if (!current[part]) current[part] = { _isDir: true };
         current = current[part];
       }
     }
@@ -109,7 +125,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
     // If it's a folder, check if any of its children match
     if (!isFile) {
       return Object.keys(node).some(key => {
-        if (key === '_isFile' || key === 'path') return false;
+        if (key.startsWith('_') || key === 'path') return false;
         const childIsFile = node[key]._isFile;
         const childPath = childIsFile ? node[key].path : `${path}${key}/`;
         return matchesSearch(key, childPath, childIsFile, node[key]);
@@ -129,8 +145,8 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
 
   const renderTree = (node: any, pathPrefix: string = '', depth: number = 0) => {
     const sortedKeys = Object.keys(node).sort((a, b) => {
-      if (a === '_isFile' || a === 'path') return 1;
-      if (b === '_isFile' || b === 'path') return -1;
+      if (a.startsWith('_') || a === 'path') return 1;
+      if (b.startsWith('_') || b === 'path') return -1;
       
       const aIsFile = node[a]._isFile;
       const bIsFile = node[b]._isFile;
@@ -138,7 +154,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
       if (!aIsFile && bIsFile) return -1;
       return a.localeCompare(b);
     }).filter(key => {
-      if (key === '_isFile' || key === 'path') return false;
+      if (key.startsWith('_') || key === 'path') return false;
       const isFile = node[key]._isFile;
       const fullPath = isFile ? node[key].path : `${pathPrefix}${key}/`;
       return matchesSearch(key, fullPath, isFile, node[key]);
@@ -176,7 +192,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
                 onContextMenu={(e) => handleContextMenu(e, fullPath, true)}
               >
                 <div className="flex items-center gap-2 truncate flex-1">
-                  {getIcon(key)}
+                  <FileIcon filename={key} className="w-4 h-4" />
                   <span className="truncate text-sm">{key}</span>
                   {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-green-900/50 text-green-400 rounded shrink-0">NEW</span>}
                   {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-blue-900/50 text-blue-400 rounded shrink-0">MODIFIED</span>}
@@ -215,7 +231,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
             );
           } else {
             return (
-              <motion.div layout key={fullPath} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
+              <motion.div layout key={`folder-${fullPath}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
                 <div
                   className="flex items-center gap-2 cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 text-[#cccccc]"
                   style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -329,7 +345,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
               onClick={() => { onSelect(contextMenu.path); setContextMenu(null); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
             >
-              <FileText className="w-4 h-4" />
+              <FileIcon filename={contextMenu.path} className="w-4 h-4" />
               Open
             </button>
             <button

@@ -1,7 +1,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import {defineConfig, loadEnv} from 'vite';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
@@ -12,15 +16,16 @@ export default defineConfig(({mode}) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(__dirname, './src'),
       },
     },
     build: {
       rollupOptions: {
         output: {
           manualChunks: {
-            vendor: ['react', 'react-dom', 'lucide-react'],
-            monaco: ['monaco-editor'],
+            'react-vendor': ['react', 'react-dom'],
+            'ui-vendor': ['lucide-react', 'motion'],
+            'firebase-vendor': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           },
         },
       },

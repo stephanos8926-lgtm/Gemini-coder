@@ -5,16 +5,20 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/node';
+import { Server } from 'socket.io';
+import http from 'http';
+import chokidar from 'chokidar';
 import admin from 'firebase-admin';
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import AdmZip from 'adm-zip';
 import winston from 'winston';
 import { z } from 'zod';
 import { env } from './server-config';
+// @ts-ignore — no types needed for rate-limit config
 
 const logger = winston.createLogger({
   level: 'info',
@@ -29,6 +33,8 @@ const logger = winston.createLogger({
         winston.format.simple()
       ),
     }),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' }),
   ],
 });
 
@@ -36,7 +42,6 @@ const logger = winston.createLogger({
 const RunToolSchema = z.object({
   command: z.string().min(1),
   workspace: z.string().optional().default(''),
-  idToken: z.string().min(1),
 });
 
 const AdminRequestSchema = z.object({
@@ -97,12 +102,13 @@ async function initializeFirebase() {
     const existingApps = getApps();
     
     if (existingApps.length === 0) {
-      // In AI Studio, we should prioritize applicationDefault() and let it discover the project ID
-      // Passing an explicit projectId from a potentially stale config can cause PERMISSION_DENIED
+      // Explicitly set the projectId from the config to match the client-side audience claim.
+      // This prevents the "aud" claim mismatch error.
       app = initializeApp({
         credential: admin.credential.applicationDefault(),
+        projectId: config.projectId,
       });
-      logger.info('Firebase Admin initialized with applicationDefault');
+      logger.info('Firebase Admin initialized with applicationDefault', { projectId: config.projectId });
     } else {
       app = existingApps[0];
       logger.info('Firebase Admin already initialized, using existing app');
@@ -162,8 +168,29 @@ async function startServer() {
   }
 
   app.use(express.json({ limit: '50mb' }));
+
+  const adminLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: { error: 'Too many requests, please try again later.' },
+  });
+  app.use('/api/admin', adminLimiter);
   app.use((req, res, next) => {
-    logger.info(`${req.method} ${req.url}`, { ip: req.ip });
+    // Filter out noisy static asset requests from logs
+    const isStaticAsset = req.url.includes('/src/') || 
+                          req.url.includes('/node_modules/') || 
+                          req.url.endsWith('.js') || 
+                          req.url.endsWith('.css') || 
+                          req.url.endsWith('.svg') || 
+                          req.url.endsWith('.png') || 
+                          req.url.endsWith('.jpg') || 
+                          req.url.endsWith('.json') ||
+                          req.url.includes('@vite') ||
+                          req.url.includes('__vite');
+
+    if (!isStaticAsset) {
+      logger.info(`${req.method} ${req.url}`, { ip: req.ip });
+    }
     next();
   });
 
@@ -179,7 +206,7 @@ async function startServer() {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ 
         error: 'Validation failed', 
-        details: err.errors 
+        details: err.issues 
       });
     }
 
@@ -206,10 +233,13 @@ async function startServer() {
           userData = userDoc.data() || {};
         }
       } catch (firestoreError) {
-        logger.warn('Failed to fetch user data from Firestore, using token data only', { 
-          uid: decodedToken.uid, 
-          error: firestoreError.message 
-        });
+        // Only log as warning if it's not a simple NOT_FOUND error
+        if (!firestoreError.message?.includes('NOT_FOUND')) {
+          logger.warn('Failed to fetch user data from Firestore, using token data only', { 
+            uid: decodedToken.uid, 
+            error: firestoreError.message 
+          });
+        }
       }
 
       req.user = {
@@ -229,17 +259,38 @@ async function startServer() {
 
   // Helper to validate path is within workspace
   function getSafePath(unsafePath: string, user: any, workspace: string = '') {
-    // If workspace is provided, it MUST start with the user's UID for security
-    if (workspace && !workspace.startsWith(user.uid) && user.role !== 'admin') {
-      throw new Error('Access denied: Workspace does not belong to user');
+    if (user.role === 'admin') {
+      const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
+      const resolvedPath = path.resolve(base, unsafePath);
+      if (!resolvedPath.startsWith(WORKSPACE_ROOT)) {
+        throw new Error('Access denied: Path is outside of workspace root');
+      }
+      return resolvedPath;
     }
 
-    const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, user.uid);
+    // For regular users, workspace MUST be provided and MUST be in the format "uid/workspace-name"
+    if (!workspace) {
+      throw new Error('Access denied: Workspace name is required');
+    }
+
+    // Ensure the workspace starts with the user's UID and has a sub-folder component
+    // Format: <uid>/<project-name>
+    const parts = workspace.split(path.sep).filter(Boolean);
+    if (parts[0] !== user.uid || parts.length < 2) {
+      throw new Error('Access denied: Invalid workspace. You must work within a named project folder.');
+    }
+
+    const base = path.join(WORKSPACE_ROOT, workspace);
     const resolvedPath = path.resolve(base, unsafePath);
     
     if (!resolvedPath.startsWith(base)) {
-      throw new Error('Access denied: Path is outside of workspace');
+      throw new Error('Access denied: Path is outside of your project workspace');
     }
+
+    // Prevent writing directly to the project root if it's too shallow (optional but safer)
+    // The user said: "They should not be able to write to their own parent workspace folder either."
+    // This usually means they shouldn't write to workspaces/uid/
+    // Our check `parts.length < 2` already ensures they are at least in workspaces/uid/something/
     
     return resolvedPath;
   }
@@ -278,15 +329,15 @@ async function startServer() {
   // API Routes
   app.get('/api/workspaces', authenticateUser, async (req: any, res, next) => {
     try {
-      await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
-      const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
+      const userRoot = path.join(WORKSPACE_ROOT, req.user.uid);
+      await fs.mkdir(userRoot, { recursive: true });
+      
+      const entries = await fs.readdir(userRoot, { withFileTypes: true });
       const workspaces = entries
         .filter(entry => entry.isDirectory())
-        .map(entry => entry.name.trim())
-        .filter(name => req.user.role === 'admin' || name.startsWith(req.user.uid));
+        .map(entry => `${req.user.uid}/${entry.name}`);
       
-      const uniqueWorkspaces = [...new Set(workspaces)];
-      res.json(uniqueWorkspaces);
+      res.json(workspaces);
     } catch (error) {
       next(error);
     }
@@ -373,13 +424,22 @@ async function startServer() {
     try {
       const { secretKey } = AdminRequestSchema.parse(req.body);
       if (secretKey !== env.ADMIN_SECRET_KEY) {
+        logger.warn('Unauthorized admin users access attempt');
         return res.status(403).json({ error: 'Unauthorized' });
       }
       
+      if (!db) {
+        logger.error('Firestore not initialized');
+        return res.status(500).json({ error: 'Firestore not initialized' });
+      }
+
+      logger.info('Fetching users from Firestore');
       const usersSnapshot = await db.collection('users').get();
       const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      logger.info(`Found ${users.length} users`);
       res.json(users);
     } catch (error) {
+      logger.error('Failed to fetch users', error);
       next(error);
     }
   });
@@ -459,9 +519,24 @@ async function startServer() {
         return res.status(403).json({ error: 'Unauthorized' });
       }
       
+      // Simple CPU usage estimation
+      const startUsage = process.cpuUsage();
+      const startTime = Date.now();
+      
+      // Wait a tiny bit to get a delta
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const endUsage = process.cpuUsage(startUsage);
+      const endTime = Date.now();
+      
+      const totalUsage = (endUsage.user + endUsage.system) / 1000; // ms
+      const elapsedTime = endTime - startTime; // ms
+      const cpuPercent = Math.min(100, Math.round((totalUsage / elapsedTime) * 100));
+
       res.json({
         uptime: process.uptime(),
         memoryUsage: process.memoryUsage(),
+        cpuUsage: cpuPercent,
         nodeVersion: process.version,
         platform: process.platform
       });
@@ -510,7 +585,7 @@ async function startServer() {
       switch (command) {
         case 'init': cmd = 'git init'; break;
         case 'add': cmd = 'git add .'; break;
-        case 'commit': cmd = `git commit -m "${message || 'Update'}"`; break;
+        case 'commit': cmd = `git commit -m ${JSON.stringify(message || 'Update')}`; break;
         case 'pull': cmd = 'git pull'; break;
         default: 
           return res.status(400).json({ error: 'Invalid git command' });
@@ -525,11 +600,27 @@ async function startServer() {
     }
   });
 
-  app.get('/api/admin/logs', async (req, res) => {
-    logger.info('Admin logs request received');
-    // Assuming logs are redirected to a file or can be read from a buffer
-    // For now, return a placeholder or read a log file if it exists
-    res.json({ logs: 'Log functionality needs implementation (e.g., reading a log file).' });
+  app.post('/api/admin/logs', async (req, res) => {
+    try {
+      const { secretKey } = AdminRequestSchema.parse(req.body);
+      if (secretKey !== env.ADMIN_SECRET_KEY) {
+        logger.warn('Unauthorized admin logs access attempt');
+        return res.status(403).json({ error: 'Unauthorized' });
+      }
+
+      const logPath = path.join(process.cwd(), 'combined.log');
+      if (fsSync.existsSync(logPath)) {
+        const logs = await fs.readFile(logPath, 'utf-8');
+        // Return last 100 lines
+        const lines = logs.trim().split('\n').slice(-100).join('\n');
+        res.json({ logs: lines });
+      } else {
+        res.json({ logs: 'No logs found yet.' });
+      }
+    } catch (error) {
+      logger.error('Failed to read logs', error);
+      res.status(500).json({ error: 'Failed to read logs' });
+    }
   });
 
   app.post('/api/admin/readme', async (req, res, next) => {
@@ -648,6 +739,9 @@ async function startServer() {
     if (!query) {
       return res.status(400).json({ error: 'Query required' });
     }
+    if (/[`$\\|;&<>(){}]/.test(query as string)) {
+      return res.status(400).json({ error: 'Invalid characters in search query' });
+    }
 
     try {
       const root = getSafePath('', req.user, workspace as string);
@@ -754,11 +848,38 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`GIDE Server running on http://localhost:${PORT}`);
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+    }
+  });
+
+  // File system watcher
+  const watcher = chokidar.watch('workspaces', {
+    ignored: /(^|[\/\\])\../, // ignore dotfiles
+    persistent: true,
+    ignoreInitial: true
+  });
+
+  watcher.on('all', (event, filePath) => {
+    logger.info(`File system event: ${event} on ${filePath}`);
+    io.emit('fs-event', { event, path: filePath });
+  });
+
+  io.on('connection', (socket) => {
+    logger.info('Client connected to WebSocket');
+    socket.on('disconnect', () => {
+      logger.info('Client disconnected from WebSocket');
+    });
   });
 
   app.use(errorHandler);
+
+  server.listen(PORT, '0.0.0.0', () => {
+    logger.info(`GIDE Server running on http://localhost:${PORT}`);
+  });
 }
 
 startServer();

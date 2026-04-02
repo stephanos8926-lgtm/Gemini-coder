@@ -77,7 +77,11 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   };
 
   const fetchLogs = async () => {
-    const response = await fetch('/api/admin/logs');
+    const response = await fetch('/api/admin/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secretKey }),
+    });
     if (response.ok) {
       const data = await response.json();
       setLogs(data.logs);
@@ -116,7 +120,8 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           <h3 className="font-bold mb-3 flex items-center gap-2"><Server className="w-4 h-4" /> System Metrics</h3>
           {systemInfo && (
             <div className="text-xs space-y-1 text-[#cccccc]">
-              <p>Memory: {Math.round(systemInfo.memoryUsage / 1024 / 1024)} MB</p>
+              <p>Memory (RSS): {Math.round(systemInfo.memoryUsage.rss / 1024 / 1024)} MB</p>
+              <p>Heap Used: {Math.round(systemInfo.memoryUsage.heapUsed / 1024 / 1024)} MB</p>
               <p>CPU: {systemInfo.cpuUsage}%</p>
               <p>Uptime: {Math.round(systemInfo.uptime / 60)} mins</p>
             </div>
@@ -156,8 +161,13 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
-              <tr key={u.uid} className="border-t border-[#3c3c3c]">
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-8 text-center italic text-[#858585]">No users found.</td>
+              </tr>
+            ) : (
+              users.map((u, index) => (
+                <tr key={u.uid || `user-${index}`} className="border-t border-[#3c3c3c]">
                 <td className="py-2">{u.email}</td>
                 <td className="py-2">{u.role}</td>
                 <td className="py-2">
@@ -174,8 +184,9 @@ const AdminPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <button onClick={() => deleteUser(u.uid)} className="text-[#d16969] hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                 </td>
               </tr>
-            ))}
-          </tbody>
+            ))
+          )}
+        </tbody>
         </table>
       </div>
 

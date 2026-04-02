@@ -96,7 +96,7 @@ export const filesystemService = {
     
     for (const file of files) {
       const isDir = file.isDir;
-      const cleanPath = isDir ? file.path.slice(0, -1) : file.path;
+      const cleanPath = (isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
       
       store[cleanPath] = {
         content: '', 
@@ -115,7 +115,7 @@ export const filesystemService = {
     
     for (const file of files) {
       const isDir = file.isDir;
-      const cleanPath = isDir ? file.path.slice(0, -1) : file.path;
+      const cleanPath = (isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
       
       store[cleanPath] = {
         content: '', 

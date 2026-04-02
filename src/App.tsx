@@ -1,6 +1,9 @@
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
 import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { Toaster, toast } from 'sonner';
+import { useAppStore } from './store/useAppStore';
 import { Message, streamGemini } from './lib/gemini';
 import { extractFiles, type FileStore } from './lib/fileStore';
 import { getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId, type Project } from './lib/projectStore';
@@ -10,6 +13,8 @@ import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { useFirebase } from './contexts/FirebaseContext';
 import { useWorkspaces, useFiles, useFileSystemMutations } from './hooks/useFileSystem';
+import { useSocket } from './hooks/useSocket';
+import { useQueryClient } from '@tanstack/react-query';
 import { SYSTEM_INSTRUCTION } from './constants/systemInstruction';
 
 import { profileStore, type Profile } from './lib/profileStore';
@@ -40,7 +45,21 @@ const PanelLoader = () => (
 
 export default function App() {
   const { user, isAuthLoading } = useFirebase();
+  const queryClient = useQueryClient();
   const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
+
+  // Socket for real-time updates
+  useSocket((data) => {
+    if (workspaceName && data.path.includes(workspaceName)) {
+      // Invalidate file queries for this workspace
+      queryClient.invalidateQueries({ queryKey: ['files', workspaceName] });
+      
+      // If the selected file was changed, invalidate its content query
+      if (selectedFile && data.path.endsWith(selectedFile)) {
+        queryClient.invalidateQueries({ queryKey: ['fileContent', workspaceName, selectedFile] });
+      }
+    }
+  });
   
   const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
   const [apiKey, setApiKey] = useState<string | null>(activeProfile?.apiKey || null);
@@ -82,6 +101,31 @@ export default function App() {
 
   const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
 
+  // Persistence for chat messages
+  useEffect(() => {
+    if (workspaceName) {
+      const saved = localStorage.getItem(`chat_messages_${workspaceName}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setMessages(parsed);
+          }
+        } catch (e) {
+          console.error('Failed to load chat messages', e);
+        }
+      } else {
+        setMessages([]);
+      }
+    }
+  }, [workspaceName]);
+
+  useEffect(() => {
+    if (workspaceName && messages.length > 0) {
+      localStorage.setItem(`chat_messages_${workspaceName}`, JSON.stringify(messages));
+    }
+  }, [messages, workspaceName]);
+
   // Sync profile name to user email
   useEffect(() => {
     if (user && user.email) {
@@ -99,7 +143,7 @@ export default function App() {
     if (rootFiles) {
       const store: FileStore = {};
       rootFiles.forEach(file => {
-        const cleanPath = file.isDir ? file.path.slice(0, -1) : file.path;
+        const cleanPath = (file.isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
         store[cleanPath] = {
           content: '',
           isNew: false,
@@ -123,7 +167,7 @@ export default function App() {
       setFileStore(prev => {
         const newStore = { ...prev };
         subFiles.forEach(file => {
-          const cleanPath = file.isDir ? file.path.slice(0, -1) : file.path;
+          const cleanPath = (file.isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
           if (!newStore[cleanPath]) {
             newStore[cleanPath] = {
               content: '',
@@ -250,15 +294,19 @@ export default function App() {
 
   useEffect(() => {
     const fetchWorkspaces = async () => {
+      if (!user) return;
       try {
         const data = await filesystemService.listWorkspaces();
         setWorkspaces(data);
       } catch (e: any) {
-        console.error('Failed to fetch workspaces', e.message);
+        // Suppress console error on initial load if it's just a timing issue
+        if (e.message !== 'Unauthorized: No token provided') {
+          console.error('Failed to fetch workspaces', e.message);
+        }
       }
     };
     fetchWorkspaces();
-  }, []);
+  }, [user]);
 
   const handleProfileSelect = (profile: Profile) => {
     profileStore.setActiveProfileId(profile.id);
@@ -723,7 +771,10 @@ export default function App() {
         },
         settings.temperature
       );
+      toast.success('Response received');
     } catch (error: any) {
+      console.error('Error streaming Gemini:', error);
+      toast.error('Failed to send message: ' + error.message);
       setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1].content += `\n\n**Error:** ${error.message}`;
@@ -767,9 +818,10 @@ export default function App() {
 
   return (
     <div className={`flex flex-col h-screen bg-[#1e1e1e] text-[#d4d4d4] font-sans overflow-hidden ${
-      settings.appTheme === 'light' ? 'bg-white text-gray-900' : 
-      settings.appTheme === 'high-contrast' ? 'bg-black text-yellow-400' : ''
+      settings.theme === 'light' ? 'bg-white text-gray-900' : 
+      settings.theme === 'high-contrast' ? 'bg-black text-yellow-400' : ''
     } ${settings.compactMode ? 'text-xs' : ''}`}>
+      <Toaster position="top-right" richColors closeButton />
       <AnimatePresence>
         {showProjectModal && (
           <Suspense fallback={null}>
@@ -849,22 +901,21 @@ export default function App() {
             <span className="hidden xs:inline">TERM</span>
           </button>
           
-          <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1">
-            <input
-              type="text"
-              value={workspaceName}
-              onChange={(e) => setWorkspaceName(e.target.value)}
-              placeholder="Workspace path..."
-              className="bg-transparent text-[10px] focus:outline-none w-24 sm:w-32 text-[#d4d4d4]"
-            />
-            <button
-              onClick={() => setShowWorkspaceModal(true)}
-              className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1"
-              title="Browse Workspaces"
-            >
-              <Search className="w-3 h-3" />
-            </button>
-          </div>
+          {workspaceName && (
+            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1 max-w-[150px] sm:max-w-[200px]">
+              <FolderOpen className="w-3 h-3 text-[#858585] mr-1.5 shrink-0" />
+              <span className="text-[10px] text-[#d4d4d4] truncate" title={workspaceName}>
+                {workspaceName.split('/').pop()}
+              </span>
+              <button
+                onClick={() => setShowWorkspaceModal(true)}
+                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1 shrink-0"
+                title="Switch Workspace"
+              >
+                <Search className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-1.5 sm:gap-3 ml-auto">
@@ -965,6 +1016,76 @@ export default function App() {
         settings.sidebarPosition === 'right' ? 'sm:flex-row-reverse' : ''
       }`}>
         
+        {/* Auth and Workspace Guard */}
+        {!user && !isAuthLoading && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-[#007acc]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <LogIn className="w-8 h-8 text-[#007acc]" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Welcome to GIDE</h2>
+              <p className="text-[#858585] mb-8">Please sign in with your Google account to access your secure development workspaces.</p>
+              <button 
+                onClick={handleSignIn}
+                className="w-full py-3 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20"
+              >
+                <LogIn className="w-5 h-5" />
+                Sign In with Google
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {user && !isAuthLoading && workspaces.length === 0 && !showWorkspaceModal && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Plus className="w-8 h-8 text-green-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">No Workspaces Found</h2>
+              <p className="text-[#858585] mb-8">You need to create your first workspace to start coding. Each workspace is a secure, isolated environment for your projects.</p>
+              <button 
+                onClick={() => setShowWorkspaceModal(true)}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+              >
+                <Plus className="w-5 h-5" />
+                Create First Workspace
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {user && !isAuthLoading && workspaces.length > 0 && !workspaceName && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-[#007acc]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <FolderOpen className="w-8 h-8 text-[#007acc]" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Select a Workspace</h2>
+              <p className="text-[#858585] mb-8">Choose an existing workspace or create a new one to continue your work.</p>
+              <button 
+                onClick={() => setShowWorkspaceModal(true)}
+                className="w-full py-3 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20"
+              >
+                <Search className="w-5 h-5" />
+                Open Workspace Selector
+              </button>
+            </motion.div>
+          </div>
+        )}
+
         {/* Profile Selector */}
         <AnimatePresence>
           {!activeProfile && (
@@ -974,88 +1095,138 @@ export default function App() {
           )}
         </AnimatePresence>
         
-        {/* Chat Panel */}
-        <div className={`w-full sm:w-[40%] flex flex-col h-full ${mobileView !== 'chat' ? 'hidden sm:flex' : 'flex'}`}>
-          <Suspense fallback={<PanelLoader />}>
-            <ChatPanel
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              onReviewChange={(filename, content) => {
-                const original = fileStore[filename]?.content || '';
-                setPendingDiff({ filename, original, modified: content });
-              }}
-              isStreaming={isStreaming}
-              settings={settings}
-            />
-          </Suspense>
-        </div>
+        {/* Main Content Area */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* Desktop Resizable Layout */}
+          <div className="hidden sm:flex flex-1 h-full">
+            <PanelGroup orientation="horizontal">
+              {/* Chat Panel */}
+              <Panel defaultSize={30} minSize={20}>
+                <Suspense fallback={<PanelLoader />}>
+                  <ChatPanel
+                    messages={messages}
+                    onSendMessage={handleSendMessage}
+                    onReviewChange={(filename, content) => {
+                      const original = fileStore[filename]?.content || '';
+                      setPendingDiff({ filename, original, modified: content });
+                    }}
+                    isStreaming={isStreaming}
+                    settings={settings}
+                  />
+                </Suspense>
+              </Panel>
 
-        {/* Editor Panel */}
-        <div className={`w-full sm:w-[40%] flex flex-col h-full border-r border-[#3c3c3c] ${mobileView !== 'editor' ? 'hidden sm:flex' : 'flex'}`}>
-          <Suspense fallback={<PanelLoader />}>
-            <CodeEditor
-              content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
-              filename={selectedFile || ''}
-              onOpenFiles={() => setIsMobileMenuOpen(true)}
-              onChange={handleFileChange}
-              onAiAction={handleAiAction}
-              targetLine={targetLine}
-              onLineRevealed={() => setTargetLine(undefined)}
-              settings={settings}
-            />
-          </Suspense>
-        </div>
+              <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
 
-        {/* File Tree Panel (Desktop only) */}
-        <div className="hidden sm:flex sm:w-[20%] flex-col h-full border-l border-[#3c3c3c]">
-          <div className="flex items-center bg-[#252526] border-b border-[#3c3c3c] px-2">
-            <button
-              onClick={() => setSidebarTab('files')}
-              className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                sidebarTab === 'files' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
-              }`}
-            >
-              Files
-            </button>
-            <button
-              onClick={() => setSidebarTab('search')}
-              className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-                sidebarTab === 'search' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
-              }`}
-            >
-              Search
-            </button>
+              {/* Editor Panel */}
+              <Panel defaultSize={50} minSize={30}>
+                <Suspense fallback={<PanelLoader />}>
+                  <CodeEditor
+                    content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
+                    filename={selectedFile || ''}
+                    onOpenFiles={() => setIsMobileMenuOpen(true)}
+                    onChange={handleFileChange}
+                    onAiAction={handleAiAction}
+                    targetLine={targetLine}
+                    onLineRevealed={() => setTargetLine(undefined)}
+                    settings={settings}
+                  />
+                </Suspense>
+              </Panel>
+
+              <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
+
+              {/* File Tree Panel */}
+              <Panel defaultSize={20} minSize={15}>
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center bg-[#252526] border-b border-[#3c3c3c] px-2">
+                    <button
+                      onClick={() => setSidebarTab('files')}
+                      className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        sidebarTab === 'files' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+                      }`}
+                    >
+                      Files
+                    </button>
+                    <button
+                      onClick={() => setSidebarTab('search')}
+                      className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        sidebarTab === 'search' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+                      }`}
+                    >
+                      Search
+                    </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-hidden">
+                    <Suspense fallback={<PanelLoader />}>
+                      {sidebarTab === 'files' ? (
+                        <FileTree
+                          files={fileStore}
+                          selectedFile={selectedFile}
+                          workspaceName={workspaceName}
+                          onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
+                          onDownload={handleDownloadFile}
+                          onDownloadZip={handleDownloadZip}
+                          onImportZip={handleImportZip}
+                          onDelete={handleDeleteFile}
+                          onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
+                          onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+                          onFolderExpand={handleFolderExpand}
+                          showDetails={true}
+                        />
+                      ) : (
+                        <SearchPanel 
+                          onSelectFile={(path, line) => {
+                            setSelectedFile(path);
+                            setTargetLine(line);
+                            setIsMobileMenuOpen(false);
+                            setMobileView('editor');
+                          }} 
+                        />
+                      )}
+                    </Suspense>
+                  </div>
+                </div>
+              </Panel>
+            </PanelGroup>
           </div>
-          
-          <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<PanelLoader />}>
-              {sidebarTab === 'files' ? (
-                <FileTree
-                  files={fileStore}
-                  selectedFile={selectedFile}
-                  onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
-                  onDownload={handleDownloadFile}
-                  onDownloadZip={handleDownloadZip}
-                  onImportZip={handleImportZip}
-                  onDelete={handleDeleteFile}
-                  onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
-                  onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
-                  onFolderExpand={handleFolderExpand}
-                  showDetails={true}
-                />
-              ) : (
-                <SearchPanel 
-                  onSelectFile={(path, line) => {
-                    setSelectedFile(path);
-                    setTargetLine(line);
-                    setIsMobileMenuOpen(false);
-                    setMobileView('editor');
-                  }} 
-                />
-              )}
-            </Suspense>
+
+          {/* Mobile View (Non-resizable) */}
+          <div className="sm:hidden flex flex-1 h-full">
+            {mobileView === 'chat' && (
+              <div className="w-full h-full">
+                <Suspense fallback={<PanelLoader />}>
+                  <ChatPanel
+                    messages={messages}
+                    onSendMessage={handleSendMessage}
+                    onReviewChange={(filename, content) => {
+                      const original = fileStore[filename]?.content || '';
+                      setPendingDiff({ filename, original, modified: content });
+                    }}
+                    isStreaming={isStreaming}
+                    settings={settings}
+                  />
+                </Suspense>
+              </div>
+            )}
+            {mobileView === 'editor' && (
+              <div className="w-full h-full">
+                <Suspense fallback={<PanelLoader />}>
+                  <CodeEditor
+                    content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
+                    filename={selectedFile || ''}
+                    onOpenFiles={() => setIsMobileMenuOpen(true)}
+                    onChange={handleFileChange}
+                    onAiAction={handleAiAction}
+                    targetLine={targetLine}
+                    onLineRevealed={() => setTargetLine(undefined)}
+                    settings={settings}
+                  />
+                </Suspense>
+              </div>
+            )}
           </div>
-        </div>
 
         {/* Mobile Sidebar Drawer */}
         <AnimatePresence>
@@ -1246,6 +1417,7 @@ export default function App() {
           ~{Math.round(totalTokens)} tokens
         </div>
       </footer>
+    </div>
     </div>
   );
 }

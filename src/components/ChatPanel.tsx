@@ -6,14 +6,6 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Settings } from '../lib/settingsStore';
 
-declare global {
-  interface Window {
-    hljs?: {
-      highlightElement: (block: Element) => void;
-    };
-  }
-}
-
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (msg: string) => void;
@@ -33,10 +25,11 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
 
   useEffect(() => {
     scrollToBottom();
-    if (window.hljs) {
+    const hljs = window.hljs;
+    if (hljs) {
       setTimeout(() => {
         document.querySelectorAll('.prose pre code').forEach((block) => {
-          window.hljs.highlightElement(block);
+          hljs.highlightElement(block);
         });
       }, 100);
     }
