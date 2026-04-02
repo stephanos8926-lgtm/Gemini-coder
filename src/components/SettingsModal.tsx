@@ -78,7 +78,7 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
           {/* Content */}
           <div className="flex-1 bg-[#1e1e1e] p-4 sm:p-8 overflow-y-auto space-y-6 sm:space-y-8 custom-scrollbar">
             {activeTab === 'admin' ? (
-              <AdminPage onBack={() => setActiveTab('profile')} />
+              <AdminPage />
             ) : (
               <>
                 {activeTab === 'profile' && (

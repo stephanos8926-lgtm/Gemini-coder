@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
 import express from 'express';
 import path from 'path';
@@ -17,6 +19,7 @@ import rateLimit from 'express-rate-limit';
 import AdmZip from 'adm-zip';
 import winston from 'winston';
 import { z } from 'zod';
+import { FileSaveSchema, FileCreateSchema } from './src/lib/schemas';
 import { env } from './server-config';
 // @ts-ignore — no types needed for rate-limit config
 
@@ -62,17 +65,6 @@ const GitPullSchema = AdminRequestSchema.extend({
   branch: z.string().optional().default('main'),
 });
 
-const FileSaveSchema = z.object({
-  path: z.string().min(1),
-  content: z.string(),
-  workspace: z.string().optional().default(''),
-});
-
-const FileCreateSchema = z.object({
-  path: z.string().min(1),
-  isDir: z.boolean(),
-  workspace: z.string().optional().default(''),
-});
 
 const FileDeleteSchema = z.object({
   path: z.string().min(1),
@@ -147,14 +139,34 @@ async function initializeFirebase() {
   }
 }
 
-// Call initialization
-initializeFirebase();
+// MCP Client Skeleton
+async function connectToMCP(serverPath: string, args: string[], workspaceRoot: string) {
+  const transport = new StdioClientTransport({
+    command: serverPath,
+    args: args,
+    env: {
+      ...process.env,
+      CWD: workspaceRoot,
+    },
+  });
+  const client = new Client({
+    name: "gide-mcp-client",
+    version: "1.0.0",
+  }, {
+    capabilities: {},
+  });
+  await client.connect(transport);
+  return client;
+}
+
+
 
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const upload = multer({ dest: UPLOAD_DIR });
 
 async function startServer() {
+  await initializeFirebase();
   logger.info('Starting server...');
   const app = express();
   const PORT = 3000;
@@ -168,6 +180,74 @@ async function startServer() {
   }
 
   app.use(express.json({ limit: '50mb' }));
+
+  // MCP Tool Registry
+  const getEnabledTools = async () => {
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      return Object.entries(config.tools)
+        .filter(([_, tool]: any) => tool.enabled)
+        .map(([name, tool]: any) => ({ name, ...tool }));
+    } catch (error) {
+      console.error('Error reading mcp-config.json:', error);
+      return [];
+    }
+  };
+
+  // Endpoint for GIDE to call tools
+  app.post('/api/mcp/call', async (req: any, res, next) => {
+    const { serverName, toolName, args } = req.body;
+    
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      const serverDef = config.tools[serverName];
+      
+      if (!serverDef) {
+        return res.status(404).json({ error: 'Server not found' });
+      }
+      
+      // Connect to MCP server
+      const client = await connectToMCP(serverDef.command, serverDef.args, WORKSPACE_ROOT);
+      
+      // Call tool
+      const result = await client.callTool({
+        name: toolName,
+        arguments: args,
+      });
+      
+      // Disconnect
+      await client.close();
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error calling MCP tool:', error);
+      res.status(500).json({ error: 'Failed to call tool' });
+    }
+  });
+
+  app.get('/api/admin/mcp/tools', async (req, res, next) => {
+    const tools = await getEnabledTools();
+    res.json(tools);
+  });
+
+  app.post('/api/admin/mcp/tools/:name', async (req: any, res, next) => {
+    const { name } = req.params;
+    const { enabled } = req.body;
+    
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      if (config.tools[name]) {
+        config.tools[name].enabled = enabled;
+        await fs.writeFile('./mcp-config.json', JSON.stringify(config, null, 2));
+        res.json({ status: 'updated' });
+      } else {
+        res.status(404).json({ error: 'Tool not found' });
+      }
+    } catch (error) {
+      console.error('Error updating mcp-config.json:', error);
+      res.status(500).json({ error: 'Failed to update tool' });
+    }
+  });
 
   const adminLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,

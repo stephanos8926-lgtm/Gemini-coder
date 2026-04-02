@@ -1,4 +1,6 @@
+import ky from 'ky';
 import { FileStore } from './fileStore';
+import { FileSaveSchema, FileCreateSchema } from './schemas';
 
 export const filesystemService = {
   workspace: '',
@@ -12,79 +14,85 @@ export const filesystemService = {
     this.idToken = token;
   },
 
-  async fetch(url: string, options: RequestInit = {}) {
-    const headers = {
-      ...options.headers,
-      'Content-Type': 'application/json',
-      ...(this.idToken ? { 'Authorization': `Bearer ${this.idToken}` } : {}),
-    };
-
-    const res = await fetch(url, { ...options, headers });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed with status ${res.status}`);
-    }
-    return res;
+  get client() {
+    return ky.create({
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.idToken ? { 'Authorization': `Bearer ${this.idToken}` } : {}),
+      },
+      hooks: {
+        afterResponse: [
+          async (_request, _options, response) => {
+            if (!response.ok) {
+              const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+              throw new Error(errorData.error || `Request failed with status ${response.status}`);
+            }
+          }
+        ]
+      }
+    });
   },
 
   async listWorkspaces(): Promise<string[]> {
-    const res = await this.fetch('/api/workspaces');
-    return res.json();
+    return this.client.get('/api/workspaces').json();
   },
 
   async listFiles(path: string = '', recursive: boolean = false): Promise<{ path: string, isDir: boolean, size: number }[]> {
-    const url = `/api/files?workspace=${encodeURIComponent(this.workspace)}&path=${encodeURIComponent(path)}&recursive=${recursive}`;
-    const res = await this.fetch(url);
-    return res.json();
+    const searchParams = new URLSearchParams({
+      workspace: this.workspace,
+      path,
+      recursive: recursive.toString()
+    });
+    return this.client.get(`/api/files?${searchParams}`).json();
   },
 
   async runTool(command: string): Promise<{ stdout: string, stderr: string, success: boolean }> {
-    const res = await this.fetch('/api/tools/run', {
-      method: 'POST',
-      body: JSON.stringify({ command, workspace: this.workspace }),
-    });
-    return res.json();
+    return this.client.post('/api/tools/run', {
+      json: { command, workspace: this.workspace },
+    }).json();
   },
 
   async getFileContent(path: string): Promise<string> {
-    const url = `/api/files/content?path=${encodeURIComponent(path)}${this.workspace ? `&workspace=${encodeURIComponent(this.workspace)}` : ''}`;
-    const res = await this.fetch(url);
-    const data = await res.json();
+    const searchParams = new URLSearchParams({
+      path,
+      ...(this.workspace ? { workspace: this.workspace } : {})
+    });
+    const data: { content: string } = await this.client.get(`/api/files/content?${searchParams}`).json();
     return data.content;
   },
 
   async saveFile(path: string, content: string): Promise<void> {
-    await this.fetch('/api/files/save', {
-      method: 'POST',
-      body: JSON.stringify({ path, content, workspace: this.workspace }),
+    const body = FileSaveSchema.parse({ path, content, workspace: this.workspace });
+    await this.client.post('/api/files/save', {
+      json: body,
     });
   },
 
   async createFile(path: string, isDir: boolean = false): Promise<void> {
-    await this.fetch('/api/files/create', {
-      method: 'POST',
-      body: JSON.stringify({ path, isDir, workspace: this.workspace }),
+    const body = FileCreateSchema.parse({ path, isDir, workspace: this.workspace });
+    await this.client.post('/api/files/create', {
+      json: body,
     });
   },
 
   async deleteFile(path: string): Promise<void> {
-    await this.fetch('/api/files/delete', {
-      method: 'POST',
-      body: JSON.stringify({ path, workspace: this.workspace }),
+    await this.client.post('/api/files/delete', {
+      json: { path, workspace: this.workspace },
     });
   },
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
-    await this.fetch('/api/files/rename', {
-      method: 'POST',
-      body: JSON.stringify({ oldPath, newPath, workspace: this.workspace }),
+    await this.client.post('/api/files/rename', {
+      json: { oldPath, newPath, workspace: this.workspace },
     });
   },
 
   async search(query: string): Promise<{ path: string, line: number, content: string }[]> {
-    const url = `/api/search?query=${encodeURIComponent(query)}${this.workspace ? `&workspace=${encodeURIComponent(this.workspace)}` : ''}`;
-    const res = await this.fetch(url);
-    return res.json();
+    const searchParams = new URLSearchParams({
+      query,
+      ...(this.workspace ? { workspace: this.workspace } : {})
+    });
+    return this.client.get(`/api/search?${searchParams}`).json();
   },
 
   /**

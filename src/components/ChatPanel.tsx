@@ -147,7 +147,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
                 )}
 
                 {/* Main Message Bubble */}
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group ${
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group break-words max-w-full ${
                   isUser 
                     ? 'bg-[#007acc] text-white rounded-tr-none' 
                     : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'

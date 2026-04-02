@@ -13,9 +13,11 @@ import { auth, googleProvider } from './firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { useFirebase } from './contexts/FirebaseContext';
 import { useWorkspaces, useFiles, useFileSystemMutations } from './hooks/useFileSystem';
+import { useProjects } from './hooks/useProjects';
+import { useWorkspacePersistence } from './hooks/useWorkspacePersistence';
 import { useSocket } from './hooks/useSocket';
 import { useQueryClient } from '@tanstack/react-query';
-import { SYSTEM_INSTRUCTION } from './constants/systemInstruction';
+import { getSystemInstruction } from './constants/systemInstruction';
 
 import { profileStore, type Profile } from './lib/profileStore';
 
@@ -26,8 +28,7 @@ const CodeEditor = lazy(() => import('./components/CodeEditor').then(m => ({ def
 const FileTree = lazy(() => import('./components/FileTree').then(m => ({ default: m.FileTree })));
 const BottomPanel = lazy(() => import('./components/BottomPanel').then(m => ({ default: m.BottomPanel })));
 const ProjectModal = lazy(() => import('./components/ProjectModal').then(m => ({ default: m.ProjectModal })));
-const WorkspaceModal = lazy(() => import('./components/WorkspaceModal'));
-const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
+import { ModalsContainer } from './components/modals/ModalsContainer';
 const SearchPanel = lazy(() => import('./components/SearchPanel').then(m => ({ default: m.SearchPanel })));
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const GitPanel = lazy(() => import('./components/GitPanel').then(m => ({ default: m.GitPanel })));
@@ -44,7 +45,7 @@ const PanelLoader = () => (
 );
 
 export default function App() {
-  const { user, isAuthLoading } = useFirebase();
+  const { user, isAuthLoading, idToken } = useFirebase();
   const queryClient = useQueryClient();
   const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
 
@@ -64,10 +65,10 @@ export default function App() {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
   const [apiKey, setApiKey] = useState<string | null>(activeProfile?.apiKey || null);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [model, setModel] = useState('gemini-2.5-flash-lite');
+  const { model, setModel } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [fileStore, setFileStore] = useState<FileStore>({});
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const { selectedFile, setSelectedFile } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -75,11 +76,25 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
   const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
+  const [showMcpModal, setShowMcpModal] = useState(false);
   const [targetLine, setTargetLine] = useState<number | undefined>(undefined);
+  const [enabledTools, setEnabledTools] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchTools = async () => {
+      try {
+        const response = await fetch('/api/admin/mcp/tools');
+        const data = await response.json();
+        setEnabledTools(data);
+      } catch (e) {
+        console.error('Failed to fetch MCP tools', e);
+      }
+    };
+    fetchTools();
+  }, []);
 
   // Project Management State
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProjectIdState, setCurrentProjectIdState] = useState<string | null>(null);
+  const { projects, setProjects, currentProjectId, setCurrentProjectId, createProject, deleteProject } = useProjects();
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -89,42 +104,20 @@ export default function App() {
   const [pendingDiff, setPendingDiff] = useState<{ filename: string; original: string; modified: string } | null>(null);
   const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [workspaces, setWorkspaces] = useState<string[]>([]);
-  const { data: workspacesData } = useWorkspaces();
+  const { workspaceName, setWorkspaceName, workspaces, setWorkspaces } = useAppStore();
+  const { data: workspacesData, isLoading: isWorkspacesLoading } = useWorkspaces();
   
+  console.log('App rendering', { workspaceName, workspaces, isWorkspacesLoading, workspacesData });
+
   useEffect(() => {
-    if (workspacesData) {
+    if (workspacesData && Array.isArray(workspacesData)) {
       setWorkspaces(workspacesData);
     }
   }, [workspacesData]);
 
   const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
-
-  // Persistence for chat messages
-  useEffect(() => {
-    if (workspaceName) {
-      const saved = localStorage.getItem(`chat_messages_${workspaceName}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setMessages(parsed);
-          }
-        } catch (e) {
-          console.error('Failed to load chat messages', e);
-        }
-      } else {
-        setMessages([]);
-      }
-    }
-  }, [workspaceName]);
-
-  useEffect(() => {
-    if (workspaceName && messages.length > 0) {
-      localStorage.setItem(`chat_messages_${workspaceName}`, JSON.stringify(messages));
-    }
-  }, [messages, workspaceName]);
+  
+  useWorkspacePersistence(workspaceName, messages, setMessages);
 
   // Sync profile name to user email
   useEffect(() => {
@@ -194,14 +187,14 @@ export default function App() {
 
   // Auto-save current project files (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded && currentProjectIdState) {
-      setProjects(prev => prev.map(p => 
-        p.id === currentProjectIdState 
+    if (isProjectsLoaded && currentProjectId) {
+      setProjects(prev => prev.map((p: Project) => 
+        p.id === currentProjectId 
           ? { ...p, files: fileStore, updatedAt: Date.now() } 
           : p
       ));
     }
-  }, [fileStore, currentProjectIdState, isProjectsLoaded]);
+  }, [fileStore, currentProjectId, isProjectsLoaded]);
 
   useEffect(() => {
     if (selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
@@ -327,15 +320,7 @@ export default function App() {
   };
 
   const handleCreateProject = (name: string) => {
-    const newProject: Project = {
-      id: generateId(),
-      name,
-      files: {},
-      updatedAt: Date.now()
-    };
-    setProjects(prev => [newProject, ...prev]);
-    setCurrentProjectIdState(newProject.id);
-    setCurrentProjectId(newProject.id);
+    createProject(name);
     setFileStore({});
     setSelectedFile(null);
     setMessages([]);
@@ -373,7 +358,6 @@ export default function App() {
 
     const project = projects.find(p => p.id === id);
     if (project) {
-      setCurrentProjectIdState(id);
       setCurrentProjectId(id);
       setFileStore(project.files);
       setSelectedFile(null);
@@ -410,9 +394,8 @@ export default function App() {
       );
       
       // Save to /api/admin/readme
-      const response = await filesystemService.fetch('/api/admin/readme', {
-        method: 'POST',
-        body: JSON.stringify({ secretKey, content: readmeContent }),
+      const response = await filesystemService.client.post('/api/admin/readme', {
+        json: { secretKey, content: readmeContent },
       });
       
       if (response.ok) {
@@ -427,10 +410,8 @@ export default function App() {
 
   const handleDeleteProject = (id: string) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
-      setProjects(prev => prev.filter(p => p.id !== id));
-      if (currentProjectIdState === id) {
-        setCurrentProjectIdState(null);
-        setCurrentProjectId(null);
+      deleteProject(id);
+      if (currentProjectId === id) {
         setFileStore({});
         setSelectedFile(null);
         setMessages([]);
@@ -466,7 +447,6 @@ export default function App() {
       };
       
       setProjects(prev => [newProject, ...prev]);
-      setCurrentProjectIdState(newProject.id);
       setCurrentProjectId(newProject.id);
       setFileStore(newFiles);
       setSelectedFile(null);
@@ -759,7 +739,7 @@ export default function App() {
         newMessages,
         model,
         apiKey,
-        SYSTEM_INSTRUCTION + (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + systemModifier,
+        getSystemInstruction(enabledTools) + (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + systemModifier,
         (chunk) => {
           fullResponse += chunk;
           setMessages(prev => {
@@ -822,55 +802,31 @@ export default function App() {
       settings.theme === 'high-contrast' ? 'bg-black text-yellow-400' : ''
     } ${settings.compactMode ? 'text-xs' : ''}`}>
       <Toaster position="top-right" richColors closeButton />
-      <AnimatePresence>
-        {showProjectModal && (
-          <Suspense fallback={null}>
-            <ProjectModal
-              projects={projects}
-              currentProjectId={currentProjectIdState}
-              onClose={() => setShowProjectModal(false)}
-              onSwitchProject={handleSwitchProject}
-              onCreateProject={handleCreateProject}
-              onDeleteProject={handleDeleteProject}
-              onImportProject={handleImportProject}
-            />
-          </Suspense>
-        )}
-
-        {showKeyModal && (
-          <Suspense fallback={null}>
-            <ApiKeyModal
-              onSave={handleSaveKey}
-              onClose={() => setShowKeyModal(false)}
-              initialKey={apiKey || ''}
-              canClose={!!apiKey}
-            />
-          </Suspense>
-        )}
-
-        {showWorkspaceModal && (
-          <Suspense fallback={null}>
-            <WorkspaceModal
-              onClose={() => setShowWorkspaceModal(false)}
-              onSelect={(name) => {
-                const finalName = (user && name.startsWith(`${user.uid}/`)) ? name : (user ? `${user.uid}/${name.replace(/\//g, '-')}` : name);
-                setWorkspaceName(finalName);
-                setShowWorkspaceModal(false);
-              }}
-              currentWorkspace={workspaceName}
-            />
-          </Suspense>
-        )}
-
-        {showSettingsModal && (
-          <Suspense fallback={null}>
-            <SettingsModal
-              onClose={() => setShowSettingsModal(false)}
-              onSave={(newSettings) => setSettings(newSettings)}
-              initialSettings={settings}
-            />
-          </Suspense>
-        )}
+      <ModalsContainer
+          showProjectModal={showProjectModal}
+          setShowProjectModal={setShowProjectModal}
+          showKeyModal={showKeyModal}
+          setShowKeyModal={setShowKeyModal}
+          showWorkspaceModal={showWorkspaceModal}
+          setShowWorkspaceModal={setShowWorkspaceModal}
+          showSettingsModal={showSettingsModal}
+          setShowSettingsModal={setShowSettingsModal}
+          showMcpModal={showMcpModal}
+          setShowMcpModal={setShowMcpModal}
+          projects={projects}
+          currentProjectId={currentProjectId}
+          handleSwitchProject={handleSwitchProject}
+          handleCreateProject={handleCreateProject}
+          handleDeleteProject={handleDeleteProject}
+          handleImportProject={handleImportProject}
+          handleSaveKey={handleSaveKey}
+          apiKey={apiKey}
+          user={user}
+          setWorkspaceName={setWorkspaceName}
+          workspaceName={workspaceName}
+          settings={settings}
+          setSettings={setSettings}
+        />
 
         {showGitPanel && (
           <Suspense fallback={null}>
@@ -883,7 +839,6 @@ export default function App() {
             <TerminalPanel onClose={() => setShowTerminal(false)} workspace={workspaceName} />
           </Suspense>
         )}
-      </AnimatePresence>
 
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-4 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 shadow-sm z-10 overflow-x-auto no-scrollbar">
@@ -900,6 +855,15 @@ export default function App() {
           >
             <TerminalIcon className="w-2.5 h-2.5" />
             <span className="hidden xs:inline">TERM</span>
+          </button>
+
+          <button 
+            onClick={() => setShowMcpModal(!showMcpModal)}
+            className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showMcpModal ? 'bg-blue-500 text-white border-blue-400' : 'bg-blue-900/30 border-blue-500/30 text-blue-400'}`}
+            title="MCP Settings"
+          >
+            <SettingsIcon className="w-2.5 h-2.5" />
+            <span className="hidden xs:inline">MCP</span>
           </button>
           
           {workspaceName && (
@@ -1041,7 +1005,7 @@ export default function App() {
           </div>
         )}
 
-        {user && !isAuthLoading && workspaces.length === 0 && !showWorkspaceModal && (
+        {user && !isAuthLoading && !isWorkspacesLoading && idToken && workspaces.length === 0 && !showWorkspaceModal && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -1064,7 +1028,7 @@ export default function App() {
           </div>
         )}
 
-        {user && !isAuthLoading && workspaces.length > 0 && !workspaceName && (
+        {user && !isAuthLoading && !isWorkspacesLoading && idToken && workspaces.length > 0 && !workspaceName && !showWorkspaceModal && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -1098,9 +1062,10 @@ export default function App() {
         
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden relative">
-          {/* Desktop Resizable Layout */}
-          <div className="hidden sm:flex flex-1 h-full">
-            <PanelGroup orientation="horizontal">
+          <>
+            {/* Desktop Resizable Layout */}
+            <div className="hidden sm:flex flex-1 h-full">
+                <PanelGroup orientation="horizontal">
               {/* Chat Panel */}
               <Panel defaultSize={30} minSize={20}>
                 <Suspense fallback={<PanelLoader />}>
@@ -1272,7 +1237,8 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </>
+    </div>
 
       {/* Bottom Panel (Desktop) / Preview (Mobile) */}
       <div className={`h-[30%] sm:h-[30%] shrink-0 ${mobileView !== 'preview' ? 'hidden sm:flex' : 'flex'} flex-col shadow-[0_-4px_10px_rgba(0,0,0,0.2)] z-10`}>
@@ -1418,7 +1384,7 @@ export default function App() {
           ~{Math.round(totalTokens)} tokens
         </div>
       </footer>
-    </div>
+      </div>
     </div>
   );
 }

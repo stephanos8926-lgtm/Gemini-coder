@@ -112,7 +112,11 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
                 filtered.map(name => (
                   <button
                     key={name}
-                    onClick={() => onSelect(name)}
+                    onClick={() => {
+                      console.log('Workspace selected:', name);
+                      onSelect(name);
+                      onClose();
+                    }}
                     className={`w-full flex items-center justify-between group px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg transition-all ${
                       currentWorkspace === name 
                         ? 'bg-[#094771] text-white border border-[#007acc]' 
