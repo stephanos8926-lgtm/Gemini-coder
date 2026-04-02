@@ -9,7 +9,7 @@ export const filesystemService = {
 
   async listWorkspaces(): Promise<string[]> {
     const res = await fetch('/api/workspaces');
-    if (!res.ok) throw new Error('Failed to list workspaces');
+    if (!res.ok) throw new Error(`Failed to list workspaces: ${res.status} ${res.statusText}`);
     return res.json();
   },
 

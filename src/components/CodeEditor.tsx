@@ -94,26 +94,31 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
 
   const getLanguage = (filename: string) => {
     const ext = filename.split('.').pop()?.toLowerCase() || '';
-    switch (ext) {
-      case 'js':
-      case 'jsx':
-        return 'javascript';
-      case 'ts':
-      case 'tsx':
-        return 'typescript';
-      case 'html':
-        return 'html';
-      case 'css':
-        return 'css';
-      case 'json':
-        return 'json';
-      case 'md':
-        return 'markdown';
-      case 'py':
-        return 'python';
-      default:
-        return 'plaintext';
-    }
+    const languageMap: Record<string, string> = {
+      js: 'javascript',
+      jsx: 'javascript',
+      ts: 'typescript',
+      tsx: 'typescript',
+      html: 'html',
+      css: 'css',
+      json: 'json',
+      md: 'markdown',
+      py: 'python',
+      java: 'java',
+      cpp: 'cpp',
+      c: 'c',
+      cs: 'csharp',
+      go: 'go',
+      rs: 'rust',
+      php: 'php',
+      rb: 'ruby',
+      sql: 'sql',
+      sh: 'shell',
+      yaml: 'yaml',
+      yml: 'yaml',
+      xml: 'xml',
+    };
+    return languageMap[ext] || 'plaintext';
   };
 
   return (
@@ -141,7 +146,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
           options={{
             fontSize: settings.fontSize,
             fontFamily: settings.fontFamily,
-            minimap: { enabled: settings.minimap },
+            minimap: { enabled: window.innerWidth > 640 && settings.minimap },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             folding: true,
@@ -184,7 +189,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                   setSelection(null);
                   setToolbarPos(null);
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Explain this code"
               >
                 <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
@@ -197,7 +202,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                   setSelection(null);
                   setToolbarPos(null);
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Refactor this code"
               >
                 <Wand2 className="w-3.5 h-3.5 text-purple-400" />
@@ -210,7 +215,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                   setSelection(null);
                   setToolbarPos(null);
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
+                className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Fix bugs"
               >
                 <Bug className="w-3.5 h-3.5 text-red-400" />

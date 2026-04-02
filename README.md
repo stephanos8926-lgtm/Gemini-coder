@@ -1,20 +1,28 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# GIDE - AI-Powered IDE
 
-# Run and deploy your AI Studio app
+GIDE is a full-stack, AI-powered Integrated Development Environment (IDE) designed for modern web development. It integrates directly with the local filesystem, providing real-time code editing, AI-assisted coding, and robust workspace management.
 
-This contains everything you need to run your app locally.
+## Key Features
 
-View your app in AI Studio: https://ai.studio/apps/49b64be2-427f-4903-b8de-98c4951f4c43
+- **Real-Time Filesystem Access**: Direct interaction with the local filesystem for seamless development.
+- **AI-Assisted Coding**: Context-aware AI code explanations, refactoring, and bug fixing.
+- **Workspace Management**: Easily manage and switch between multiple project workspaces.
+- **Global Search**: Powerful global search and replace functionality.
+- **Command Palette**: Quick access to commands and navigation (Ctrl+K).
+- **Visual Diff**: Git-style visual diff for reviewing AI-suggested changes.
+- **Customizable Settings**: Extensive editor and AI configuration options.
 
-## Run Locally
+## Getting Started
 
-**Prerequisites:**  Node.js
+1. **Prerequisites**: Ensure you have Node.js installed.
+2. **Installation**: `npm install`
+3. **Development**: `npm run dev`
+4. **Build**: `npm run build`
+5. **Start**: `npm start`
 
+## Architecture
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+GIDE uses a full-stack architecture with:
+- **Frontend**: React, Vite, Tailwind CSS, and Monaco Editor.
+- **Backend**: Express.js server for filesystem operations and API proxying.
+- **AI**: Integration with Google Gemini models for code assistance.

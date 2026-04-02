@@ -5,6 +5,6 @@
 - **Debounced Auto-Save:** To prevent excessive disk I/O, I implemented a 1-second debounce for saving file changes from the editor.
 - **Lazy Loading Content:** To keep the initial load fast, file contents are only fetched when a file is selected in the UI.
 
-## 2026-04-01 18:37:15
-- **Multi-Stage Docker Build:** I chose a multi-stage Docker build to keep the final production image small by excluding build-time dependencies and source files not needed for runtime.
-- **Production Runner:** I'm using `tsx` in the production image for simplicity, as it handles TypeScript files directly without a separate compilation step for the server.
+## 2026-04-02 02:20:00
+- **Direct Filesystem Enforcement**: Removed the non-filesystem fallback mode to simplify the codebase and ensure consistent behavior, as the direct filesystem approach is now stable.
+- **Build Artifact Inclusion**: Included the backend `server.ts` in the `dist/` directory during build to ensure that the production environment has all necessary files to run the full-stack application.

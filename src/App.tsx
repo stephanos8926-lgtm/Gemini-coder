@@ -1,11 +1,13 @@
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
-import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon } from 'lucide-react';
+import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Message, streamGemini } from './lib/gemini';
 import { FileStore, extractFiles } from './lib/fileStore';
 import { Project, getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId } from './lib/projectStore';
 import { filesystemService } from './lib/filesystemService';
 import { settingsStore, Settings } from './lib/settingsStore';
+import { auth, googleProvider } from './firebase';
+import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 
 import { profileStore, Profile } from './lib/profileStore';
 
@@ -20,6 +22,8 @@ const WorkspaceModal = lazy(() => import('./components/WorkspaceModal').then(m =
 const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const SearchPanel = lazy(() => import('./components/SearchPanel').then(m => ({ default: m.SearchPanel })));
 const CommandPalette = lazy(() => import('./components/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const GitPanel = lazy(() => import('./components/GitPanel').then(m => ({ default: m.GitPanel })));
+const TerminalPanel = lazy(() => import('./components/TerminalPanel').then(m => ({ default: m.TerminalPanel })));
 const DiffViewer = lazy(() => import('./components/DiffViewer').then(m => ({ default: m.DiffViewer })));
 const MobileSidebar = lazy(() => import('./components/MobileSidebar').then(m => ({ default: m.MobileSidebar })));
 const ProfileSelector = lazy(() => import('./components/ProfileSelector').then(m => ({ default: m.ProfileSelector })));
@@ -31,60 +35,51 @@ const PanelLoader = () => (
   </div>
 );
 
-const SYSTEM_INSTRUCTION = `You are GIDE (Gemini Interactive Development Environment), a browser-based AI software engineering agent. You help users build real multi-file software projects.
+const SYSTEM_INSTRUCTION = `You are GIDE (Gemini Interactive Development Environment), an advanced, autonomous AI software engineering agent. You help users build, maintain, and refactor real multi-file software projects.
 
-WORKSPACE MODE: You are currently running in Workspace Mode. You have direct access to a isolated 'workspaces' folder on the server. All your file operations are restricted to this folder for security. You cannot access the IDE's own source code.
+WORKSPACE MODE: You are running in a secure, isolated workspace environment. You have direct access to the filesystem via specialized tools.
 
-TONE: Terse and technical by default. Switch to verbose/explanatory mode only when the user asks.
+AVAILABLE TOOLS & CAPABILITIES:
+1. File System Operations:
+   - Read files: Use filesystemService.getFileContent(path) to read file contents.
+   - Write files: Use filesystemService.saveFile(path, content) to update files.
+   - Create files/folders: Use filesystemService.createFile(path, isDir) to create new files or directories.
+   - Delete files: Use filesystemService.deleteFile(path) to remove files.
+   - Rename files: Use filesystemService.renameFile(oldPath, newPath) to rename files.
+   - List files: Use filesystemService.listFiles(path, recursive) to explore the project structure.
+   - Search: Use filesystemService.search(query) to perform global searches across the project.
+2. Command Execution:
+   - Run tools/commands: Use filesystemService.runTool(command) to execute shell commands (e.g., 'npm test', 'npx tsc --noEmit', 'grep -r "pattern" .').
+3. Web Search:
+   - Use the 'googleSearch' tool to find information, documentation, or solutions for technical issues.
 
-PERSONAS: You can act as one of: architect, coder, debugger, reviewer, tester, docs, security. Announce switches as [→ PERSONA NAME].
+OPERATIONAL GUIDELINES:
+- Be proactive: When asked to fix a bug or add a feature, first explore the codebase using listFiles and search, then read relevant files, then plan your changes, and finally execute them.
+- Tool Usage: Always prefer using the provided filesystemService tools over manual instructions.
+- Code Output: You MUST wrap all code in Markdown fenced code blocks. The very first word after the triple backticks MUST be the exact file path. Do NOT use language names like 'bash' or 'javascript'.
+- File Changes:
+  - Creating a file:
+    \`\`\`path/to/file.ext
+    <full file content>
+    \`\`\`
+  - Updating a file:
+    \`\`\`diff path/to/file.ext
+    --- path/to/file.ext
+    +++ path/to/file.ext
+    <diff content>
+    \`\`\`
+  - Deleting a file:
+    \`\`\`delete
+    path/to/file.ext
+    \`\`\`
+  - Renaming a file:
+    \`\`\`rename
+    old/path.ext
+    new/path.ext
+    \`\`\`
 
-PLANNING: Before writing any code, always output a PLAN block:
-PLAN ───────────────────────────────
-Goal    : <one line>
-Persona : <active>
-Files   :
-  - path/file.ext  [CREATE|EDIT] — purpose
-Steps   : 1. ... 2. ...
-────────────────────────────────────
-Proceed? [y/n/edit]
-
-Wait for the user to confirm before coding. Do NOT ask "Proceed?" after outputting code or ZIP manifests.
-
-TOOLS: You have access to project tools via the Tools Panel. You can ask the user to run commands like:
-- \`npm run lint\`: Check for code quality issues.
-- \`npm test\`: Run project tests.
-- \`npx tsc --noEmit\`: Type check TypeScript files.
-- \`ls -R\`: List all files recursively.
-- \`grep -r "pattern" .\`: Search for text in files.
-You can also suggest custom commands using allowed tools: npm, npx, node, ls, pwd, grep, cat, find.
-
-CODE OUTPUT: You MUST wrap all code in Markdown fenced code blocks. The very first word after the triple backticks MUST be the exact file path. Do NOT use language names like 'bash' or 'javascript'.
-- First time creating a file:
-\`\`\`path/to/file.ext
-<full file content>
-\`\`\`
-- Subsequent edits (unified diff):
-\`\`\`diff path/to/file.ext
---- path/to/file.ext
-+++ path/to/file.ext
-@@ -1,3 +1,3 @@
-...
-\`\`\`
-- Deleting a file:
-\`\`\`delete
-path/to/file.ext
-\`\`\`
-- Renaming a file:
-\`\`\`rename
-old/path.ext
-new/path.ext
-\`\`\`
-Never re-output a full file unless the user runs /full <filename>.
-
-ZIP: When ready, output a ZIP MANIFEST listing all files. The app will handle the download. If the user says 'y' after a ZIP MANIFEST, just say "The ZIP file has been generated. Let me know if you need anything else."
-
-SLASH COMMANDS: Respond to /plan /persona /full /zip /files /reset /verbose /terse /help /preview.`;
+- ZIP: When ready, output a ZIP MANIFEST listing all files. The app will handle the download. If the user says 'y' after a ZIP MANIFEST, just say "The ZIP file has been generated. Let me know if you need anything else."
+- SLASH COMMANDS: Respond to /plan /persona /full /zip /files /reset /verbose /terse /help /preview.`;
 
 export default function App() {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
@@ -94,6 +89,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [fileStore, setFileStore] = useState<FileStore>({});
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
   const [isStreaming, setIsStreaming] = useState(false);
   const [systemModifier, setSystemModifier] = useState('');
@@ -108,14 +104,32 @@ export default function App() {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showGitPanel, setShowGitPanel] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [pendingDiff, setPendingDiff] = useState<{ filename: string; original: string; modified: string } | null>(null);
   const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
-  const [isFilesystemMode, setIsFilesystemMode] = useState(false);
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setIsAuthLoading(false);
+      if (user && user.email) {
+        const activeProfile = profileStore.getActiveProfile();
+        if (activeProfile && activeProfile.name === 'User') {
+          profileStore.updateProfile(activeProfile.id, { name: user.email });
+          setActiveProfile({ ...activeProfile, name: user.email });
+        }
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   // Check for filesystem mode and load files
   useEffect(() => {
@@ -124,26 +138,9 @@ export default function App() {
         filesystemService.setWorkspace(workspaceName);
         const store = await filesystemService.loadRootFiles();
         setFileStore(store);
-        setIsFilesystemMode(true);
         setIsProjectsLoaded(true);
       } catch (e) {
-        console.log('Filesystem API not available, falling back to local storage mode.');
-        setIsFilesystemMode(false);
-        
-        // Fallback to local storage projects
-        const loadedProjects = getProjects();
-        setProjects(loadedProjects);
-        const savedProjectId = getCurrentProjectId();
-        
-        if (savedProjectId) {
-          const project = loadedProjects.find(p => p.id === savedProjectId);
-          if (project) {
-            setCurrentProjectIdState(savedProjectId);
-            setFileStore(project.files);
-          } else {
-            setCurrentProjectId(null);
-          }
-        }
+        console.error('Failed to initialize filesystem', e);
         setIsProjectsLoaded(true);
       }
     };
@@ -153,7 +150,7 @@ export default function App() {
   }, [workspaceName]);
 
   const handleFolderExpand = async (path: string) => {
-    if (!isFilesystemMode) return;
+    // Removed isFilesystemMode check
     
     // Check if we already have children for this folder
     const hasChildren = Object.keys(fileStore).some(p => p.startsWith(path) && p !== path);
@@ -184,24 +181,24 @@ export default function App() {
 
   // Save projects to localStorage whenever they change (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded && !isFilesystemMode) {
+    if (isProjectsLoaded) {
       saveProjects(projects);
     }
-  }, [projects, isProjectsLoaded, isFilesystemMode]);
+  }, [projects, isProjectsLoaded]);
 
   // Auto-save current project files (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded && currentProjectIdState && !isFilesystemMode) {
+    if (isProjectsLoaded && currentProjectIdState) {
       setProjects(prev => prev.map(p => 
         p.id === currentProjectIdState 
           ? { ...p, files: fileStore, updatedAt: Date.now() } 
           : p
       ));
     }
-  }, [fileStore, currentProjectIdState, isProjectsLoaded, isFilesystemMode]);
+  }, [fileStore, currentProjectIdState, isProjectsLoaded]);
 
   useEffect(() => {
-    if (isFilesystemMode && selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
+    if (selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
       const loadContent = async () => {
         try {
           const content = await filesystemService.getFileContent(selectedFile);
@@ -215,11 +212,11 @@ export default function App() {
       };
       loadContent();
     }
-  }, [selectedFile, isFilesystemMode, fileStore]);
+  }, [selectedFile, fileStore]);
 
   // Sync fileStore to backend after streaming finishes
   useEffect(() => {
-    if (!isStreaming && isFilesystemMode) {
+    if (!isStreaming) {
       const syncFiles = async () => {
         try {
           // We need to know what was there before to detect deletions
@@ -252,7 +249,7 @@ export default function App() {
       };
       syncFiles();
     }
-  }, [isStreaming, isFilesystemMode]);
+  }, [isStreaming]);
 
   const hasPreviewableFiles = Object.keys(fileStore).some(path => 
     path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.jsx') || 
@@ -294,8 +291,8 @@ export default function App() {
       try {
         const data = await filesystemService.listWorkspaces();
         setWorkspaces(data);
-      } catch (e) {
-        console.error('Failed to fetch workspaces', e);
+      } catch (e: any) {
+        console.error('Failed to fetch workspaces', e.message);
       }
     };
     fetchWorkspaces();
@@ -335,8 +332,7 @@ export default function App() {
   };
 
   const handleSaveAll = async () => {
-    if (isFilesystemMode) {
-      try {
+    try {
         const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew);
         for (const [path, file] of modifiedFiles) {
           if (!file.isDir) {
@@ -346,7 +342,6 @@ export default function App() {
       } catch (e) {
         alert('Failed to save some files to filesystem');
       }
-    }
 
     setFileStore(prev => {
       const newStore = { ...prev };
@@ -374,6 +369,50 @@ export default function App() {
       setSelectedFile(null);
       setMessages([]);
       setShowProjectModal(false);
+    }
+  };
+
+  const handleGenerateReadme = async () => {
+    const secretKey = prompt('Enter admin secret key:');
+    if (!secretKey) return;
+
+    if (!apiKey) {
+      alert('API key required');
+      return;
+    }
+    
+    const fileSummary = Object.keys(fileStore).map(path => `${path}: ${fileStore[path].content.substring(0, 500)}...`).join('\n');
+    const promptText = `Summarize the application and generate a README.md file with usage instructions based on these files:\n${fileSummary}`;
+    
+    // Call AI
+    const messages = [{ role: 'user', content: promptText }];
+    let readmeContent = '';
+    
+    try {
+      await streamGemini(
+        messages as Message[],
+        'gemini-3-flash-preview',
+        apiKey,
+        'You are a helpful assistant that generates README.md files.',
+        (chunk) => {
+          readmeContent += chunk;
+        }
+      );
+      
+      // Save to /api/admin/readme
+      const response = await fetch('/api/admin/readme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secretKey, content: readmeContent }),
+      });
+      
+      if (response.ok) {
+        alert('README.md generated successfully');
+      } else {
+        alert('Failed to save README.md');
+      }
+    } catch (e) {
+      alert('Failed to generate README.md');
     }
   };
 
@@ -430,6 +469,22 @@ export default function App() {
     }
   };
 
+  const handleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Failed to sign in', error);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Failed to sign out', error);
+    }
+  };
+
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newModel = e.target.value;
     setModel(newModel);
@@ -449,6 +504,36 @@ export default function App() {
     a.download = 'gide-project.zip';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleImportZip = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleZipFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('zip', file);
+    formData.append('workspace', workspaceName);
+    formData.append('idToken', await auth.currentUser!.getIdToken());
+
+    try {
+      const response = await fetch('/api/import-zip', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        alert('ZIP imported successfully');
+        window.location.reload();
+      } else {
+        alert('Failed to import ZIP');
+      }
+    } catch (e) {
+      alert('Failed to import ZIP');
+    }
   };
 
   const handleDownloadFile = (path: string) => {
@@ -475,13 +560,11 @@ export default function App() {
 
   const confirmDelete = async () => {
     if (fileToDelete) {
-      if (isFilesystemMode) {
-        try {
-          await filesystemService.deleteFile(fileToDelete);
-        } catch (e) {
-          alert('Failed to delete file from filesystem');
-          return;
-        }
+      try {
+        await filesystemService.deleteFile(fileToDelete);
+      } catch (e) {
+        alert('Failed to delete file from filesystem');
+        return;
       }
 
       setFileStore(prev => {
@@ -499,13 +582,11 @@ export default function App() {
   const handleRenameFile = async (oldPath: string, newPath: string) => {
     if (!newPath || newPath === oldPath) return;
 
-    if (isFilesystemMode) {
-      try {
-        await filesystemService.renameFile(oldPath, newPath);
-      } catch (e) {
-        alert('Failed to rename file on filesystem');
-        return;
-      }
+    try {
+      await filesystemService.renameFile(oldPath, newPath);
+    } catch (e) {
+      alert('Failed to rename file on filesystem');
+      return;
     }
 
     setFileStore(prev => {
@@ -540,13 +621,11 @@ export default function App() {
   const handleCreateFile = async (path: string) => {
     if (!path) return;
 
-    if (isFilesystemMode) {
-      try {
-        await filesystemService.createFile(path);
-      } catch (e) {
-        alert('Failed to create file on filesystem');
-        return;
-      }
+    try {
+      await filesystemService.createFile(path);
+    } catch (e) {
+      alert('Failed to create file on filesystem');
+      return;
     }
 
     setFileStore(prev => {
@@ -587,11 +666,7 @@ export default function App() {
     if (msg.startsWith('/reset')) {
       if (window.confirm('Are you sure you want to clear all chat history and files?')) {
         setMessages([]);
-        if (isFilesystemMode) {
-          filesystemService.loadAllFiles().then(setFileStore);
-        } else {
-          setFileStore({});
-        }
+        filesystemService.loadAllFiles().then(setFileStore);
         setSelectedFile(null);
       }
       return true;
@@ -661,8 +736,8 @@ export default function App() {
       return;
     }
 
-    const newMessages: Message[] = [...messages, { role: 'user', content }];
-    setMessages([...newMessages, { role: 'model', content: '' }]);
+    const newMessages: Message[] = [...messages, { id: Date.now().toString(), role: 'user', content }];
+    setMessages([...newMessages, { id: (Date.now() + 1).toString(), role: 'model', content: '' }]);
     setIsStreaming(true);
 
     // Capture the initial file store state before streaming begins
@@ -712,7 +787,6 @@ export default function App() {
         }
       }));
 
-      if (isFilesystemMode) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(async () => {
           try {
@@ -725,7 +799,6 @@ export default function App() {
             console.error('Failed to auto-save to filesystem', e);
           }
         }, settings.autoSaveInterval);
-      }
     }
   };
 
@@ -784,6 +857,18 @@ export default function App() {
             />
           </Suspense>
         )}
+
+        {showGitPanel && (
+          <Suspense fallback={null}>
+            <GitPanel onClose={() => setShowGitPanel(false)} workspace={workspaceName} />
+          </Suspense>
+        )}
+
+        {showTerminal && (
+          <Suspense fallback={null}>
+            <TerminalPanel onClose={() => setShowTerminal(false)} workspace={workspaceName} />
+          </Suspense>
+        )}
       </AnimatePresence>
 
       {/* Header */}
@@ -793,62 +878,35 @@ export default function App() {
             <Terminal className="w-4 h-4 text-[#007acc]" />
           </div>
           <h1 className="font-semibold tracking-wide hidden md:block text-[#e5e5e5] text-sm">GIDE</h1>
-          {isFilesystemMode && (
-            <button 
-              onClick={() => setShowWorkspaceInput(!showWorkspaceInput)}
-              className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showWorkspaceInput ? 'bg-blue-500 text-white border-blue-400' : 'bg-blue-900/30 border-blue-500/30 text-blue-400'}`}
-              title="Toggle Workspace Path"
-            >
-              <FolderOpen className="w-2.5 h-2.5" />
-              <span className="hidden xs:inline">WS</span>
-            </button>
-          )}
           
-          {(showWorkspaceInput || !isFilesystemMode) && (
-            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1">
-              <FolderOpen className="w-3 h-3 text-[#858585] mr-1.5" />
-              <input
-                type="text"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                placeholder="Workspace path..."
-                className="bg-transparent text-[10px] focus:outline-none w-24 sm:w-32 text-[#d4d4d4]"
-              />
-              <button
-                onClick={() => setShowWorkspaceModal(true)}
-                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1"
-                title="Browse Workspaces"
-              >
-                <Search className="w-3 h-3" />
-              </button>
-            </div>
-          )}
+          <button 
+            onClick={() => setShowTerminal(!showTerminal)}
+            className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showTerminal ? 'bg-green-500 text-white border-green-400' : 'bg-green-900/30 border-green-500/30 text-green-400'}`}
+            title="Toggle Terminal"
+          >
+            <TerminalIcon className="w-2.5 h-2.5" />
+            <span className="hidden xs:inline">TERM</span>
+          </button>
+          
+          <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1">
+            <input
+              type="text"
+              value={workspaceName}
+              onChange={(e) => setWorkspaceName(e.target.value)}
+              placeholder="Workspace path..."
+              className="bg-transparent text-[10px] focus:outline-none w-24 sm:w-32 text-[#d4d4d4]"
+            />
+            <button
+              onClick={() => setShowWorkspaceModal(true)}
+              className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1"
+              title="Browse Workspaces"
+            >
+              <Search className="w-3 h-3" />
+            </button>
+          </div>
         </div>
         
         <div className="flex items-center gap-1.5 sm:gap-3 ml-auto">
-          {!isFilesystemMode && (
-            <button
-              onClick={() => setShowProjectModal(true)}
-              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-              title="Projects"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-[#007acc]" />
-              <span className="hidden lg:inline">Projects</span>
-            </button>
-          )}
-          
-          <div className="flex items-center bg-[#3c3c3c] rounded px-2 py-0.5 border border-[#454545]">
-            <select
-              value={model}
-              onChange={handleModelChange}
-              className="bg-transparent text-xs focus:outline-none cursor-pointer pr-1"
-            >
-              <option value="gemini-2.5-flash-lite">Lite</option>
-              <option value="gemini-2.5-flash">Flash</option>
-              <option value="gemini-2.5-pro">Pro</option>
-            </select>
-          </div>
-          
           <button
             onClick={handleSaveAll}
             className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
@@ -859,30 +917,21 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => { setMessages([]); setFileStore({}); setSelectedFile(null); }}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="New Session"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">New</span>
-          </button>
-
-          <button
-            onClick={() => setShowKeyModal(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="API Key"
-          >
-            <Key className="w-3.5 h-3.5 text-[#007acc]" />
-            <span className="hidden lg:inline">Key</span>
-          </button>
-
-          <button
             onClick={() => setShowCommandPalette(true)}
             className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
             title="Command Palette (Ctrl+K)"
           >
             <Search className="w-3.5 h-3.5 text-[#007acc]" />
             <span className="hidden lg:inline">Search</span>
+          </button>
+          
+          <button
+            onClick={() => setShowGitPanel(true)}
+            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+            title="Git Operations"
+          >
+            <GitBranch className="w-3.5 h-3.5 text-[#858585]" />
+            <span className="hidden lg:inline">Git</span>
           </button>
 
           <button
@@ -977,7 +1026,7 @@ export default function App() {
         </div>
 
         {/* File Tree Panel (Desktop only) */}
-        <div className={`hidden sm:flex sm:w-[20%] flex-col h-full border-l border-[#3c3c3c] ${isMobileMenuOpen ? 'block absolute inset-0 z-40 bg-[#1e1e1e]' : ''}`}>
+        <div className="hidden sm:flex sm:w-[20%] flex-col h-full border-l border-[#3c3c3c]">
           <div className="flex items-center bg-[#252526] border-b border-[#3c3c3c] px-2">
             <button
               onClick={() => setSidebarTab('files')}
@@ -1006,6 +1055,7 @@ export default function App() {
                   onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
                   onDownload={handleDownloadFile}
                   onDownloadZip={handleDownloadZip}
+                  onImportZip={handleImportZip}
                   onDelete={handleDeleteFile}
                   onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
                   onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
@@ -1026,39 +1076,47 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile Sidebar Overlay */}
+        {/* Mobile Sidebar Drawer */}
         <AnimatePresence>
           {isMobileMenuOpen && (
-            <Suspense fallback={null}>
-              <MobileSidebar
-                isOpen={isMobileMenuOpen}
-                onClose={() => setIsMobileMenuOpen(false)}
-                fileStore={fileStore}
-                selectedFile={selectedFile}
-                onSelectFile={(path, line) => {
-                  setSelectedFile(path);
-                  if (line) setTargetLine(line);
-                  setIsMobileMenuOpen(false);
-                  setMobileView('editor');
-                }}
-                onDownloadFile={handleDownloadFile}
-                onDownloadZip={handleDownloadZip}
-                onDeleteFile={handleDeleteFile}
-                onRenameFile={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
-                onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
-                onFolderExpand={handleFolderExpand}
-                onSaveAll={handleSaveAll}
-                onNewSession={() => { setMessages([]); setFileStore({}); setSelectedFile(null); setIsMobileMenuOpen(false); }}
-                onShowKeyModal={() => { setShowKeyModal(true); setIsMobileMenuOpen(false); }}
-                onShowSettingsModal={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
-                onShowWorkspaceModal={() => { setShowWorkspaceModal(true); setIsMobileMenuOpen(false); }}
-                onShowCommandPalette={() => { setShowCommandPalette(true); setIsMobileMenuOpen(false); }}
-                model={model}
-                onModelChange={handleModelChange}
-                isFilesystemMode={isFilesystemMode}
-                workspaceName={workspaceName}
-              />
-            </Suspense>
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="sm:hidden absolute inset-y-0 left-0 z-40 w-[80%] bg-[#1e1e1e] border-r border-[#3c3c3c] shadow-2xl flex flex-col"
+            >
+              <Suspense fallback={null}>
+                <MobileSidebar
+                  isOpen={isMobileMenuOpen}
+                  onClose={() => setIsMobileMenuOpen(false)}
+                  fileStore={fileStore}
+                  selectedFile={selectedFile}
+                  onSelectFile={(path, line) => {
+                    setSelectedFile(path);
+                    if (line) setTargetLine(line);
+                    setIsMobileMenuOpen(false);
+                    setMobileView('editor');
+                  }}
+                  onDownloadFile={handleDownloadFile}
+                  onDownloadZip={handleDownloadZip}
+                  onImportZip={handleImportZip}
+                  onDeleteFile={handleDeleteFile}
+                  onRenameFile={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
+                  onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+                  onFolderExpand={handleFolderExpand}
+                  onSaveAll={handleSaveAll}
+                  onNewSession={() => { setMessages([]); setFileStore({}); setSelectedFile(null); setIsMobileMenuOpen(false); }}
+                  onShowKeyModal={() => { setShowKeyModal(true); setIsMobileMenuOpen(false); }}
+                  onShowSettingsModal={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
+                  onShowWorkspaceModal={() => { setShowWorkspaceModal(true); setIsMobileMenuOpen(false); }}
+                  onShowCommandPalette={() => { setShowCommandPalette(true); setIsMobileMenuOpen(false); }}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  workspaceName={workspaceName}
+                />
+              </Suspense>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -1073,6 +1131,7 @@ export default function App() {
             onSelectFile={setSelectedFile}
             onDownloadFile={handleDownloadFile}
             onDownloadZip={handleDownloadZip}
+            onImportZip={handleImportZip}
             onDeleteFile={handleDeleteFile}
             hasPreviewableFiles={hasPreviewableFiles}
           />
@@ -1172,9 +1231,11 @@ export default function App() {
               onSelectWorkspace={(name) => setWorkspaceName(name)}
               onOpenSettings={() => setShowSettingsModal(true)}
               onAiAction={handleAiAction}
+              onGenerateReadme={handleGenerateReadme}
             />
           </Suspense>
         )}
+        <input type="file" ref={fileInputRef} onChange={handleZipFileChange} className="hidden" accept=".zip" />
 
         {pendingDiff && (
           <Suspense fallback={null}>
@@ -1194,6 +1255,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Footer */}
+      <input type="file" ref={fileInputRef} onChange={handleZipFileChange} className="hidden" accept=".zip" />
       <footer className="flex items-center justify-between px-4 py-1 bg-[#007acc] text-white text-xs shrink-0">
         <div className="flex items-center gap-4">
           <span>GIDE v1.0</span>

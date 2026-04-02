@@ -1,13 +1,28 @@
+import { spawn } from 'child_process';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import { fileURLToPath } from 'url';
+import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/node';
+import admin from 'firebase-admin';
+import multer from 'multer';
+import AdmZip from 'adm-zip';
+
+// Initialize Firebase Admin
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
+});
+const auth = admin.auth();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+const upload = multer({ dest: UPLOAD_DIR });
 
 async function startServer() {
   const app = express();
@@ -69,7 +84,9 @@ async function startServer() {
 
   // API Routes
   app.get('/api/workspaces', async (req, res) => {
+    console.log('Fetching workspaces from', WORKSPACE_ROOT);
     try {
+      await fs.mkdir(WORKSPACE_ROOT, { recursive: true });
       const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
       const workspaces = entries
         .filter(entry => entry.isDirectory())
@@ -97,32 +114,234 @@ async function startServer() {
     }
   });
 
+  const db = admin.firestore();
+
   app.post('/api/tools/run', async (req, res) => {
-    const { command, workspace = '' } = req.body;
+    const { command, workspace = '', idToken } = req.body;
     if (!command) return res.status(400).json({ error: 'Command required' });
+    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
 
     try {
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+      const userDoc = await db.collection('users').doc(uid).get();
+      const userData = userDoc.data();
+      const isSandboxed = !userData?.no_sandbox;
+      const isAdmin = userData?.role === 'admin';
+
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+
+      if (isAdmin) {
+        const { exec } = await import('child_process');
+        const { promisify } = await import('util');
+        const execAsync = promisify(exec);
+        const { stdout, stderr } = await execAsync(command, { cwd: root });
+        return res.json({ stdout, stderr, success: true });
+      }
 
       // Sanitize command: only allow certain tools for safety
-      const allowedTools = ['npm', 'npx', 'node', 'ls', 'pwd', 'grep', 'cat', 'find'];
-      const tool = command.split(' ')[0];
+      let allowedTools = ['npm', 'npx', 'node', 'ls', 'pwd', 'grep', 'cat', 'find', 'git', 'head', 'tail', 'diff', 'du', 'df'];
+      if (!isSandboxed) {
+        allowedTools = [...allowedTools, 'rm', 'mv', 'cp', 'mkdir', 'tar', 'zip', 'curl', 'wget'];
+      }
+      
+      const [tool, ...args] = command.split(' ');
       
       if (!allowedTools.includes(tool)) {
         return res.status(403).json({ error: `Tool '${tool}' is not allowed for security reasons.` });
       }
 
-      const { stdout, stderr } = await execAsync(command, { cwd: root });
-      res.json({ stdout, stderr, success: true });
+      const child = spawn(tool, args, { cwd: root });
+      
+      let stdout = '';
+      let stderr = '';
+      
+      child.stdout.on('data', (data) => { stdout += data; });
+      child.stderr.on('data', (data) => { stderr += data; });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          res.json({ stdout, stderr, success: true });
+        } else {
+          res.json({ stdout, stderr, success: false });
+        }
+      });
+      
+      child.on('error', (error) => {
+        res.status(500).json({ error: String(error), success: false });
+      });
     } catch (error: any) {
       res.status(500).json({ 
-        stdout: error.stdout || '', 
-        stderr: error.stderr || String(error), 
+        stderr: String(error), 
         success: false 
       });
+    }
+  });
+
+  app.post('/api/admin/users', async (req, res) => {
+    const { secretKey } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    
+    try {
+      const usersSnapshot = await db.collection('users').get();
+      const users = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/admin/users/update', async (req, res) => {
+    const { secretKey, uid, no_sandbox } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    
+    try {
+      await db.collection('users').doc(uid).update({ no_sandbox });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/git/pull', async (req, res) => {
+    const { repoUrl, branch = 'main', secretKey } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    if (!repoUrl) return res.status(400).json({ error: 'Repository URL required' });
+
+    try {
+      const dir = WORKSPACE_ROOT;
+      
+      // Check if .git exists
+      let isRepo = false;
+      try {
+        await fs.stat(path.join(dir, '.git'));
+        isRepo = true;
+      } catch (e) {
+        isRepo = false;
+      }
+
+      if (isRepo) {
+        await git.pull({
+          fs: fsSync,
+          http,
+          dir,
+          author: { name: 'AI Studio', email: 'ai@studio.build' },
+          singleBranch: true
+        });
+      } else {
+        await git.clone({
+          fs: fsSync,
+          http,
+          dir,
+          url: repoUrl,
+          singleBranch: true
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/admin/system-info', async (req, res) => {
+    const { secretKey } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    
+    res.json({
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      nodeVersion: process.version,
+      platform: process.platform
+    });
+  });
+
+  app.post('/api/admin/workspaces/delete', async (req, res) => {
+    const { secretKey, workspace } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    if (!workspace) return res.status(400).json({ error: 'Workspace name required' });
+    
+    try {
+      const workspacePath = path.join(WORKSPACE_ROOT, workspace);
+      await fs.rm(workspacePath, { recursive: true, force: true });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/git', async (req, res) => {
+    const { idToken, command, message, workspace } = req.body;
+    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
+
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+
+      // Ensure workspace belongs to the user
+      if (workspace && !workspace.startsWith(uid)) {
+        return res.status(403).json({ error: 'Access denied: Workspace does not belong to user' });
+      }
+
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      let cmd = '';
+      switch (command) {
+        case 'init': cmd = 'git init'; break;
+        case 'add': cmd = 'git add .'; break;
+        case 'commit': cmd = `git commit -m "${message || 'Update'}"`; break;
+        case 'pull': cmd = 'git pull'; break;
+        default: return res.status(400).json({ error: 'Invalid git command' });
+      }
+      
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+      
+      const { stdout, stderr } = await execAsync(cmd, { cwd: root });
+      res.json({ success: true, stdout, stderr });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: String(error) });
+    }
+  });
+
+  app.get('/api/admin/logs', async (req, res) => {
+    // Assuming logs are redirected to a file or can be read from a buffer
+    // For now, return a placeholder or read a log file if it exists
+    res.json({ logs: 'Log functionality needs implementation (e.g., reading a log file).' });
+  });
+
+  app.post('/api/admin/readme', async (req, res) => {
+    const { secretKey, content } = req.body;
+    if (secretKey !== process.env.ADMIN_SECRET_KEY) return res.status(403).json({ error: 'Unauthorized' });
+    
+    try {
+      await fs.writeFile(path.join(process.cwd(), 'README.md'), content, 'utf-8');
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/import-zip', upload.single('zip'), async (req, res) => {
+    const { workspace = '', idToken } = req.body;
+    if (!idToken) return res.status(401).json({ error: 'Unauthorized' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken);
+      const uid = decodedToken.uid;
+      
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, uid);
+      await fs.mkdir(root, { recursive: true });
+
+      const zip = new AdmZip(req.file.path);
+      zip.extractAllTo(root, true);
+
+      await fs.unlink(req.file.path);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
     }
   });
 

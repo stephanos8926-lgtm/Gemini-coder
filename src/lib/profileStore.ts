@@ -41,7 +41,7 @@ export const profileStore = {
     const profiles = this.getProfiles();
     const newProfile: Profile = {
       id: Math.random().toString(36).substring(2, 11),
-      name,
+      name: name || 'User', // This will be updated to email in App.tsx
       apiKey,
       avatar,
       settings: { ...DEFAULT_SETTINGS },

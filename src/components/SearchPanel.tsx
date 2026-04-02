@@ -81,7 +81,7 @@ export function SearchPanel({ onSelectFile }: SearchPanelProps) {
             <div className="ml-6 space-y-0.5">
               {fileResults.map((res: SearchResult, i: number) => (
                 <button
-                  key={i}
+                  key={`${path}-${res.line}-${i}`}
                   onClick={() => onSelectFile(path, res.line)}
                   className="w-full text-left px-2 py-1 hover:bg-[#2d2d2d] rounded transition-colors text-xs text-[#858585] hover:text-[#cccccc] flex gap-3"
                 >

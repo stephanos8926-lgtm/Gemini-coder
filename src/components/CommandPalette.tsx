@@ -20,6 +20,7 @@ interface CommandPaletteProps {
   onSelectWorkspace: (name: string) => void;
   onOpenSettings: () => void;
   onAiAction: (type: 'explain' | 'refactor' | 'fix', code?: string) => void;
+  onGenerateReadme: () => void;
 }
 
 export function CommandPalette({
@@ -30,7 +31,8 @@ export function CommandPalette({
   onSelectFile,
   onSelectWorkspace,
   onOpenSettings,
-  onAiAction
+  onAiAction,
+  onGenerateReadme
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -46,15 +48,15 @@ export function CommandPalette({
   }, [isOpen]);
 
   const items: CommandItem[] = [
-    ...files.map(f => ({
-      id: `file-${f}`,
+    ...files.map((f, i) => ({
+      id: `file-${f}-${i}`,
       icon: <File className="w-4 h-4 text-[#007acc]" />,
       label: f,
       category: 'Files' as const,
       action: () => onSelectFile(f)
     })),
-    ...workspaces.map(w => ({
-      id: `ws-${w}`,
+    ...workspaces.map((w, i) => ({
+      id: `ws-${w}-${i}`,
       icon: <FolderOpen className="w-4 h-4 text-amber-500" />,
       label: w,
       category: 'Workspaces' as const,
@@ -73,6 +75,13 @@ export function CommandPalette({
       label: 'AI: Refactor Current File',
       category: 'Actions' as const,
       action: () => onAiAction('refactor')
+    },
+    {
+      id: 'generate-readme',
+      icon: <Sparkles className="w-4 h-4 text-yellow-400" />,
+      label: 'Generate README.md',
+      category: 'Actions' as const,
+      action: onGenerateReadme
     },
     {
       id: 'settings',

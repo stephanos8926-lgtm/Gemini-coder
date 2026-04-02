@@ -112,7 +112,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
 
           return (
             <motion.div
-              key={i}
+              key={msg.id || `${msg.role}-${i}-${msg.content.substring(0, 10)}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}

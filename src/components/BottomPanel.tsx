@@ -12,11 +12,12 @@ interface BottomPanelProps {
   onSelectFile: (path: string) => void;
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
+  onImportZip: () => void;
   onDeleteFile?: (path: string) => void;
   hasPreviewableFiles?: boolean;
 }
 
-export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDownloadFile, onDownloadZip, onDeleteFile, hasPreviewableFiles = true }: BottomPanelProps) {
+export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDownloadFile, onDownloadZip, onImportZip, onDeleteFile, hasPreviewableFiles = true }: BottomPanelProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -149,6 +150,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
             onSelect={onSelectFile}
             onDownload={onDownloadFile}
             onDownloadZip={onDownloadZip}
+            onImportZip={onImportZip}
             onDelete={onDeleteFile}
             showDetails={true}
           />

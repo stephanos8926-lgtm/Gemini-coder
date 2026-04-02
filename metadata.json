@@ -1,5 +1,5 @@
 {
-  "name": "",
-  "description": "",
-  "requestFramePermissions": []
+  "name": "GIDE - AI-Powered IDE",
+  "description": "A full-stack AI-powered IDE with real-time filesystem access, AI code assistance, and workspace management.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"]
 }

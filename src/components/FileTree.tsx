@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { File, Folder, FolderOpen, Download, FileJson, FileCode2, FileImage, FileText, Trash2, Edit2, FilePlus, Search, X, Copy } from 'lucide-react';
+import { File, Folder, FolderOpen, Download, Upload, FileJson, FileCode2, FileImage, FileText, Trash2, Edit2, FilePlus, Search, X, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileStore } from '../lib/fileStore';
 
@@ -9,6 +9,7 @@ interface FileTreeProps {
   onSelect: (path: string) => void;
   onDownload: (path: string) => void;
   onDownloadZip: () => void;
+  onImportZip: () => void;
   onDelete?: (path: string) => void;
   onRename?: (path: string) => void;
   onCreateFile?: () => void;
@@ -23,7 +24,7 @@ interface ContextMenuState {
   isFile: boolean;
 }
 
-export function FileTree({ files, selectedFile, onSelect, onDownload, onDownloadZip, onDelete, onRename, onCreateFile, onFolderExpand, showDetails = false }: FileTreeProps) {
+export function FileTree({ files, selectedFile, onSelect, onDownload, onDownloadZip, onImportZip, onDelete, onRename, onCreateFile, onFolderExpand, showDetails = false }: FileTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']));
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -167,7 +168,7 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
                 }}
                 exit={{ opacity: 0, scale: 0.95, backgroundColor: 'rgba(248, 113, 113, 0.2)' }}
                 transition={{ duration: 0.5 }}
-                key={fullPath}
+                key={`file-${fullPath}`}
                 className={`flex items-center justify-between group cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 ${selectedFile === fullPath ? 'bg-[#37373d] text-white' : 'text-[#cccccc]'}`}
                 style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={() => onSelect(fullPath)}
@@ -179,33 +180,35 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
                   {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-green-900/50 text-green-400 rounded shrink-0">NEW</span>}
                   {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-blue-900/50 text-blue-400 rounded shrink-0">MODIFIED</span>}
                 </div>
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-                  {showDetails && fileData.size > 0 && <span className="text-[10px] text-[#858585] mr-1 tabular-nums">{formatSize(fileData.size)}</span>}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onDownload(fullPath); }}
-                    className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
-                    title="Download file"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
-                  {onRename && (
+                <div className="flex items-center gap-4 shrink-0">
+                  {showDetails && <span className="text-[10px] text-[#858585] w-16 text-right tabular-nums">{formatSize(fileData.size || 0)}</span>}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={(e) => { e.stopPropagation(); onRename(fullPath); }}
+                      onClick={(e) => { e.stopPropagation(); onDownload(fullPath); }}
                       className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
-                      title="Rename file"
+                      title="Download file"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Download className="w-3.5 h-3.5" />
                     </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onDelete(fullPath); }}
-                      className="p-1 hover:bg-red-900/50 rounded text-red-400 hover:text-red-300"
-                      title="Delete file"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
+                    {onRename && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRename(fullPath); }}
+                        className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
+                        title="Rename file"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(fullPath); }}
+                        className="p-1 hover:bg-red-900/50 rounded text-red-400 hover:text-red-300"
+                        title="Delete file"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             );
@@ -248,6 +251,13 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
         <div className="flex items-center justify-between px-4 py-2">
           <span className="text-xs font-semibold text-[#cccccc] uppercase tracking-wider">Explorer</span>
           <div className="flex items-center gap-1">
+            <button
+              onClick={onImportZip}
+              className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+              title="Import ZIP"
+            >
+              <Upload className="w-4 h-4" />
+            </button>
             {onCreateFile && (
               <button
                 onClick={onCreateFile}
@@ -287,6 +297,10 @@ export function FileTree({ files, selectedFile, onSelect, onDownload, onDownload
               </button>
             )}
           </div>
+        </div>
+        <div className="flex items-center px-4 py-1 text-[10px] text-[#858585] border-b border-[#3c3c3c]">
+          <span className="flex-1">Name</span>
+          <span className="w-16 text-right">Size</span>
         </div>
       </div>
 

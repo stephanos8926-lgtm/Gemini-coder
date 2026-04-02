@@ -68,3 +68,11 @@
     - Created a `DiffViewer` component using Monaco's `DiffEditor`.
     - Added "Review Changes" buttons to AI-generated code blocks in the chat.
     - Enabled side-by-side comparison and one-click merging of AI suggestions.
+
+## 2026-04-02 02:20:00
+- Removed **non-filesystem fallback mode** to enforce direct filesystem usage.
+- Fixed **build artifact upload** issue by updating `package.json` build/start scripts to include the backend server.
+- Updated **project metadata** (`metadata.json`) and created `README.md`.
+
+## 2026-04-02 02:30:00
+- Removed unused `FolderOpen` icon from the workspace input field in the header.
