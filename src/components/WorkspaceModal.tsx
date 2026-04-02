@@ -37,7 +37,7 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
     onClose();
   };
 
-  const filtered = workspaces.filter(w => w.toLowerCase().includes(search.toLowerCase()));
+  const filtered = workspaces.filter(w => w.split('/').pop()?.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm">
@@ -121,7 +121,7 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
                   >
                     <div className="flex items-center gap-3">
                       <Folder className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentWorkspace === name ? 'text-blue-300' : 'text-[#007acc]'}`} />
-                      <span className="text-sm font-medium">{name}</span>
+                      <span className="text-sm font-medium">{name.split('/').pop()}</span>
                     </div>
                     {currentWorkspace === name && (
                       <span className="text-[9px] sm:text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">Active</span>

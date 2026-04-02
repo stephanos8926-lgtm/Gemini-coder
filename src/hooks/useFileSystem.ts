@@ -19,7 +19,7 @@ export function useFiles(workspace: string, path: string = '', recursive: boolea
       filesystemService.setWorkspace(workspace);
       return filesystemService.listFiles(path, recursive);
     },
-    enabled: !!idToken && (!!workspace || workspace === ''),
+    enabled: !!idToken && !!workspace,
   });
 }
 
@@ -31,7 +31,7 @@ export function useFileContent(workspace: string, path: string) {
       filesystemService.setWorkspace(workspace);
       return filesystemService.getFileContent(path);
     },
-    enabled: !!idToken && !!path,
+    enabled: !!idToken && !!path && !!workspace,
     staleTime: 1000 * 60, // 1 minute
   });
 }

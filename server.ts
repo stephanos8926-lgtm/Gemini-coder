@@ -275,7 +275,7 @@ async function startServer() {
 
     // Ensure the workspace starts with the user's UID and has a sub-folder component
     // Format: <uid>/<project-name>
-    const parts = workspace.split(path.sep).filter(Boolean);
+    const parts = workspace.split(/[/\\]/).filter(Boolean);
     if (parts[0] !== user.uid || parts.length < 2) {
       throw new Error('Access denied: Invalid workspace. You must work within a named project folder.');
     }

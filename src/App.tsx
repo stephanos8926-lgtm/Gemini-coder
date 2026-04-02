@@ -853,7 +853,8 @@ export default function App() {
             <WorkspaceModal
               onClose={() => setShowWorkspaceModal(false)}
               onSelect={(name) => {
-                setWorkspaceName(name);
+                const finalName = (user && name.startsWith(`${user.uid}/`)) ? name : (user ? `${user.uid}/${name.replace(/\//g, '-')}` : name);
+                setWorkspaceName(finalName);
                 setShowWorkspaceModal(false);
               }}
               currentWorkspace={workspaceName}

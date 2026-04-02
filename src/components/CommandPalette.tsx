@@ -58,7 +58,7 @@ export function CommandPalette({
     ...workspaces.map((w, i) => ({
       id: `ws-${w}-${i}`,
       icon: <FolderOpen className="w-4 h-4 text-amber-500" />,
-      label: w,
+      label: w.split('/').pop() || w,
       category: 'Workspaces' as const,
       action: () => onSelectWorkspace(w)
     })),

@@ -71,7 +71,7 @@ export function MobileSidebar({
           <div className="flex items-center justify-between bg-[#252526] p-3 rounded-lg border border-[#3c3c3c]">
             <div className="flex items-center gap-2 text-[#007acc]">
               <FolderOpen className="w-4 h-4" />
-              <span className="text-sm truncate">{workspaceName || 'Default'}</span>
+              <span className="text-sm truncate">{workspaceName ? workspaceName.split('/').pop() : 'Default'}</span>
             </div>
             <button onClick={onShowWorkspaceModal} className="text-xs text-[#007acc] hover:underline">Switch</button>
           </div>
