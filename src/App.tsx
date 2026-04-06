@@ -20,6 +20,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getSystemInstruction } from './constants/systemInstruction';
 import { generateAstSkeleton } from './utils/astChunker';
 
+import { Header } from './components/Header';
+import { AuthGuard } from './components/AuthGuard';
 import { profileStore, type Profile } from './lib/profileStore';
 
 // Lazy load heavy components
@@ -932,140 +934,25 @@ export default function App() {
           </Suspense>
         )}
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-3 sm:px-4 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 shadow-sm z-10 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-2 sm:gap-4 min-w-fit">
-          <button
-            className="p-1.5 hover:bg-[#3c3c3c] rounded transition-colors text-[#858585] hover:text-white"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            <Menu className="w-4 h-4" />
-          </button>
-
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-[#007acc]/10 rounded border border-[#007acc]/20">
-              <Terminal className="w-4 h-4 text-[#007acc]" />
-            </div>
-            <h1 className="font-bold tracking-tight text-[#e5e5e5] text-sm hidden xs:block">GIDE</h1>
-          </div>
-
-          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1 hidden sm:block" />
-
-          <button
-            onClick={() => {
-              setMessages([]);
-              setSelectedFile(null);
-              toast.success('New session started');
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-[#007acc] hover:bg-[#005f9e] text-white rounded-md transition-all shadow-sm"
-            title="New Session"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">New Session</span>
-          </button>
-          
-          {workspaceName && (
-            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-2 py-1 ml-1 max-w-[150px] sm:max-w-[250px] group">
-              <FolderOpen className="w-3.5 h-3.5 text-[#858585] mr-2 shrink-0" />
-              <span className="text-[11px] font-medium text-[#d4d4d4] truncate" title={workspaceName}>
-                {workspaceName.split('/').pop()}
-              </span>
-              <button
-                onClick={() => setShowWorkspaceModal(true)}
-                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-2 shrink-0 opacity-0 group-hover:opacity-100"
-                title="Switch Workspace"
-              >
-                <Search className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-1 sm:gap-2 ml-auto">
-          <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded-md p-0.5 mr-2">
-            <button 
-              onClick={() => setShowTerminal(!showTerminal)}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${showTerminal ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
-              title="Toggle Terminal"
-            >
-              <TerminalIcon className="w-3 h-3" />
-              <span className="hidden md:inline">TERM</span>
-            </button>
-
-            <button 
-              onClick={() => setShowMcpModal(!showMcpModal)}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${showMcpModal ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
-              title="MCP Settings"
-            >
-              <SettingsIcon className="w-3 h-3" />
-              <span className="hidden md:inline">MCP</span>
-            </button>
-          </div>
-
-          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1 hidden lg:block" />
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleSaveAll}
-              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
-              title="Save All"
-            >
-              <Download className="w-4 h-4 rotate-180" />
-            </button>
-
-            <button
-              onClick={() => setShowCommandPalette(true)}
-              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
-              title="Command Palette (Ctrl+K)"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-            
-            <button
-              onClick={() => setShowGitPanel(true)}
-              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
-              title="Git Operations"
-            >
-              <GitBranch className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
-              title="Settings"
-            >
-              <SettingsIcon className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1" />
-
-          {user ? (
-            <div className="flex items-center gap-2 pl-1">
-              <div className="hidden lg:flex flex-col items-end">
-                <span className="text-[10px] font-bold text-white leading-none">{user.displayName || 'User'}</span>
-                <span className="text-[9px] text-[#858585] leading-none mt-0.5">{user.email}</span>
-              </div>
-              <button
-                onClick={handleSignOut}
-                className="p-1.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] rounded-full transition-all border border-[#4c4c4c]"
-                title="Sign Out"
-              >
-                <LogOut className="w-3.5 h-3.5 text-[#cccccc]" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleSignIn}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-[#e5e5e5] rounded-md transition-all"
-              title="Sign In"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Sign In</span>
-            </button>
-          )}
-        </div>
-      </header>
+      <Header
+        user={user}
+        workspaceName={workspaceName}
+        isWorkspacesLoading={isWorkspacesLoading}
+        workspaces={workspaces}
+        model={model}
+        setModel={setModel}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
+        onShowWorkspaceModal={() => setShowWorkspaceModal(true)}
+        onShowSettingsModal={() => setShowSettingsModal(true)}
+        onShowGitPanel={() => setShowGitPanel(true)}
+        onShowTerminal={() => setShowTerminal(!showTerminal)}
+        onShowCommandPalette={() => setShowCommandPalette(true)}
+        onShowMcpModal={() => setShowMcpModal(!showMcpModal)}
+        showMcpModal={showMcpModal}
+        onSaveAll={handleSaveAll}
+        activeProfile={activeProfile}
+      />
 
       {/* Mobile Navigation Tabs */}
       <div className="sm:hidden flex border-b border-[#3c3c3c] bg-[#252526] shrink-0">
@@ -1099,106 +986,19 @@ export default function App() {
         settings.sidebarPosition === 'right' ? 'sm:flex-row-reverse' : ''
       }`}>
         
-        {/* Auth and Workspace Guard */}
-        {!user && !isAuthLoading && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 bg-[#007acc]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <LogIn className="w-8 h-8 text-[#007acc]" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Welcome to GIDE</h2>
-              <p className="text-[#858585] mb-8">Please sign in with your Google account to access your secure development workspaces.</p>
-              <button 
-                onClick={handleSignIn}
-                className="w-full py-3 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20"
-              >
-                <LogIn className="w-5 h-5" />
-                Sign In with Google
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {user && !isAuthLoading && isWorkspacesLoading && !showWorkspaceModal && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="w-12 h-12 text-[#007acc] animate-spin" />
-              <span className="text-white font-medium">Loading your workspaces...</span>
-            </div>
-          </div>
-        )}
-
-        {user && !isAuthLoading && isWorkspacesError && !showWorkspaceModal && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-[#252526] border border-red-500/20 rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <X className="w-8 h-8 text-red-500" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Failed to Load Workspaces</h2>
-              <p className="text-[#858585] mb-8">There was an error connecting to the development server. Please check your connection and try again.</p>
-              <button 
-                onClick={() => queryClient.invalidateQueries({ queryKey: ['workspaces'] })}
-                className="w-full py-3 bg-[#3c3c3c] hover:bg-[#454545] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
-              >
-                Retry Loading
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {user && !isAuthLoading && !isWorkspacesLoading && !isWorkspacesError && idToken && workspaces.length === 0 && !workspaceName && !showWorkspaceModal && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Plus className="w-8 h-8 text-green-500" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">No Workspaces Found</h2>
-              <p className="text-[#858585] mb-8">You need to create your first workspace to start coding. Each workspace is a secure, isolated environment for your projects.</p>
-              <button 
-                onClick={() => setShowWorkspaceModal(true)}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
-              >
-                <Plus className="w-5 h-5" />
-                Create First Workspace
-              </button>
-            </motion.div>
-          </div>
-        )}
-
-        {user && !isAuthLoading && !isWorkspacesLoading && idToken && workspaces.length > 0 && !workspaceName && !showWorkspaceModal && (
-          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 bg-[#007acc]/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <FolderOpen className="w-8 h-8 text-[#007acc]" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Select a Workspace</h2>
-              <p className="text-[#858585] mb-8">Choose an existing workspace or create a new one to continue your work.</p>
-              <button 
-                onClick={() => setShowWorkspaceModal(true)}
-                className="w-full py-3 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20"
-              >
-                <Search className="w-5 h-5" />
-                Open Workspace Selector
-              </button>
-            </motion.div>
-          </div>
-        )}
+        <AuthGuard
+          user={user}
+          isAuthLoading={isAuthLoading}
+          isWorkspacesLoading={isWorkspacesLoading}
+          isWorkspacesError={isWorkspacesError}
+          workspaces={workspaces}
+          workspaceName={workspaceName}
+          showWorkspaceModal={showWorkspaceModal}
+          onSignIn={handleSignIn}
+          onShowWorkspaceModal={() => setShowWorkspaceModal(true)}
+          onRetry={() => queryClient.invalidateQueries({ queryKey: ['workspaces'] })}
+          idToken={idToken}
+        />
 
         {/* Profile Selector */}
         <AnimatePresence>

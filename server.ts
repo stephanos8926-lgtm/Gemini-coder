@@ -488,7 +488,26 @@ async function startServer() {
   // API Routes
   app.get('/api/workspaces', authenticateUser, async (req: any, res, next) => {
     try {
-      logger.info('Listing workspaces', { uid: req.user.uid });
+      logger.info('Listing workspaces', { uid: req.user.uid, role: req.user.role });
+      
+      if (req.user.role === 'admin') {
+        const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
+        const allWorkspaces: string[] = [];
+        
+        for (const userDir of entries) {
+          if (userDir.isDirectory()) {
+            const userPath = path.join(WORKSPACE_ROOT, userDir.name);
+            const workspaceEntries = await fs.readdir(userPath, { withFileTypes: true });
+            workspaceEntries
+              .filter(entry => entry.isDirectory())
+              .forEach(entry => allWorkspaces.push(`${userDir.name}/${entry.name}`));
+          }
+        }
+        
+        logger.info(`Admin found ${allWorkspaces.length} total workspaces`, { count: allWorkspaces.length });
+        return res.json(allWorkspaces);
+      }
+
       const userRoot = path.join(WORKSPACE_ROOT, req.user.uid);
       await fs.mkdir(userRoot, { recursive: true });
       

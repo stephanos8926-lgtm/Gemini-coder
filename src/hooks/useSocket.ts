@@ -1,31 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 
 export const useSocket = (onFsEvent?: (data: { event: string, path: string }) => void) => {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const onFsEventRef = useRef(onFsEvent);
 
   useEffect(() => {
-    const socket = io();
-    socketRef.current = socket;
+    onFsEventRef.current = onFsEvent;
+  }, [onFsEvent]);
 
-    socket.on('connect', () => {
+  useEffect(() => {
+    const s = io();
+    setSocket(s);
+
+    s.on('connect', () => {
       console.log('Connected to WebSocket');
     });
 
-    socket.on('fs-event', (data) => {
+    s.on('fs-event', (data) => {
       console.log('File system event:', data);
-      if (onFsEvent) onFsEvent(data);
+      if (onFsEventRef.current) onFsEventRef.current(data);
     });
 
-    socket.on('disconnect', () => {
+    s.on('disconnect', () => {
       console.log('Disconnected from WebSocket');
     });
 
     return () => {
-      socket.disconnect();
+      s.disconnect();
     };
   }, []);
 
-  return socketRef.current;
+  return socket;
 };
