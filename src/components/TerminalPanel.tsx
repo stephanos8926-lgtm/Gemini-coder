@@ -1,6 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Terminal as TerminalIcon, X, Loader2 } from 'lucide-react';
-import { auth } from '../firebase';
+import React, { useEffect, useRef } from 'react';
+import { Terminal as TerminalIcon, X } from 'lucide-react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import { useSocket } from '../hooks/useSocket';
 
 interface TerminalPanelProps {
   onClose: () => void;
@@ -8,84 +11,93 @@ interface TerminalPanelProps {
 }
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose, workspace }) => {
-  const [history, setHistory] = useState<{ command: string; output: string; success: boolean }[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const socket = useSocket();
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
+    if (!terminalRef.current || !socket) return;
 
-  const runCommand = async (command: string) => {
-    if (!command.trim()) return;
-    setIsLoading(true);
+    // Initialize xterm.js
+    const term = new Terminal({
+      theme: {
+        background: '#1e1e1e',
+        foreground: '#cccccc',
+        cursor: '#007acc',
+        selectionBackground: '#264f78',
+      },
+      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+      fontSize: 13,
+      cursorBlink: true,
+    });
     
-    try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch('/api/tools/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken, command, workspace }),
-      });
-      const result = await response.json();
-      
-      let output = result.stdout || '';
-      if (!result.success) {
-        output = result.stderr || result.stdout || result.error || 'Unknown error';
-      }
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    
+    term.open(terminalRef.current);
+    
+    // Fit needs a tiny delay to ensure container is rendered
+    setTimeout(() => {
+      fitAddon.fit();
+    }, 10);
 
-      setHistory(prev => [...prev, { 
-        command, 
-        output, 
-        success: result.success 
-      }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { command, output: String(error), success: false }]);
-    } finally {
-      setIsLoading(false);
-      setInput('');
-    }
-  };
+    xtermRef.current = term;
+    fitAddonRef.current = fitAddon;
+
+    // Handle terminal input
+    term.onData((data) => {
+      socket.emit('terminal:data', data);
+    });
+
+    // Handle socket output
+    const onTerminalData = (data: string) => {
+      // Replace \n with \r\n to prevent staircase effect in xterm.js
+      const formattedData = data.replace(/(?<!\r)\n/g, '\r\n');
+      term.write(formattedData);
+    };
+
+    const onTerminalExit = (code: number) => {
+      term.write(`\r\n\x1b[33mProcess exited with code ${code}\x1b[0m\r\n`);
+    };
+
+    socket.on('terminal:data', onTerminalData);
+    socket.on('terminal:exit', onTerminalExit);
+
+    // Start the terminal session
+    socket.emit('terminal:start', { cwd: workspace });
+
+    // Handle resize
+    const handleResize = () => {
+      fitAddon.fit();
+      socket.emit('terminal:resize', term.cols, term.rows);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      socket.off('terminal:data', onTerminalData);
+      socket.off('terminal:exit', onTerminalExit);
+      term.dispose();
+    };
+  }, [socket, workspace]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl shadow-2xl w-full max-w-3xl h-[600px] flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-[#3c3c3c]">
+      <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl shadow-2xl w-full max-w-4xl h-[70vh] flex flex-col overflow-hidden">
+        <div className="flex justify-between items-center p-4 border-b border-[#3c3c3c] bg-[#252526]">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <TerminalIcon className="w-4 h-4 text-[#007acc]" />
             Terminal
           </h2>
-          <button onClick={onClose} className="text-[#858585] hover:text-white">
+          <button onClick={onClose} className="text-[#858585] hover:text-white transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
         
-        <div className="flex-1 overflow-auto p-4 font-mono text-xs space-y-2">
-          {history.map((item, i) => (
-            <div key={`${item.command}-${i}`}>
-              <div className="text-blue-400">$ {item.command}</div>
-              <div className={`whitespace-pre-wrap ${item.success ? 'text-gray-300' : 'text-red-400'}`}>
-                {item.output}
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-        
-        <div className="p-4 border-t border-[#3c3c3c]">
-          <div className="flex gap-2">
-            <span className="text-blue-400">$</span>
-            <input 
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && runCommand(input)}
-              className="flex-1 bg-transparent text-white outline-none font-mono text-xs"
-              placeholder="Enter command..."
-              disabled={isLoading}
-            />
-            {isLoading && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
-          </div>
+        <div className="flex-1 p-2 bg-[#1e1e1e] overflow-hidden">
+          <div ref={terminalRef} className="w-full h-full" />
         </div>
       </div>
     </div>

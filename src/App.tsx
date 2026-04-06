@@ -18,6 +18,7 @@ import { useWorkspacePersistence } from './hooks/useWorkspacePersistence';
 import { useSocket } from './hooks/useSocket';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSystemInstruction } from './constants/systemInstruction';
+import { generateAstSkeleton } from './utils/astChunker';
 
 import { profileStore, type Profile } from './lib/profileStore';
 
@@ -27,6 +28,8 @@ const ChatPanel = lazy(() => import('./components/ChatPanel').then(m => ({ defau
 const CodeEditor = lazy(() => import('./components/CodeEditor').then(m => ({ default: m.CodeEditor })));
 const FileTree = lazy(() => import('./components/FileTree').then(m => ({ default: m.FileTree })));
 const BottomPanel = lazy(() => import('./components/BottomPanel').then(m => ({ default: m.BottomPanel })));
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const ProjectModal = lazy(() => import('./components/ProjectModal').then(m => ({ default: m.ProjectModal })));
 import { ModalsContainer } from './components/modals/ModalsContainer';
 const SearchPanel = lazy(() => import('./components/SearchPanel').then(m => ({ default: m.SearchPanel })));
@@ -37,6 +40,7 @@ const DiffViewer = lazy(() => import('./components/DiffViewer').then(m => ({ def
 const MobileSidebar = lazy(() => import('./components/MobileSidebar').then(m => ({ default: m.MobileSidebar })));
 const ProfileSelector = lazy(() => import('./components/ProfileSelector').then(m => ({ default: m.ProfileSelector })));
 const ToolsPanel = lazy(() => import('./components/ToolsPanel').then(m => ({ default: m.ToolsPanel })));
+const McpPanel = lazy(() => import('./components/McpPanel').then(m => ({ default: m.McpPanel })));
 
 const PanelLoader = () => (
   <div className="flex-1 flex items-center justify-center h-full bg-[#1e1e1e] text-[#858585]">
@@ -75,7 +79,7 @@ export default function App() {
   const [systemModifier, setSystemModifier] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
-  const [sidebarTab, setSidebarTab] = useState<'files' | 'search'>('files');
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'search' | 'mcp'>('files');
   const [showMcpModal, setShowMcpModal] = useState(false);
   const [targetLine, setTargetLine] = useState<number | undefined>(undefined);
   const [enabledTools, setEnabledTools] = useState<any[]>([]);
@@ -218,25 +222,24 @@ export default function App() {
     if (!isStreaming) {
       const syncFiles = async () => {
         try {
-          // We need to know what was there before to detect deletions
-          // But for now, let's just sync what's currently in the store
-          // and assume the AI only adds/modifies.
-          // To handle deletions, we'd need to compare with the actual filesystem.
-          
-          const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew);
+          const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew || f.isDeleted);
           for (const [path, file] of modifiedFiles) {
-            if (!file.isDir) {
+            if (file.isDeleted) {
+              await filesystemService.deleteFile(path);
+            } else if (!file.isDir) {
               await filesystemService.saveFile(path, file.content);
             } else {
               await filesystemService.createFile(path, true);
             }
           }
           
-          // Clear flags after sync
+          // Clear flags after sync and remove deleted files from state
           setFileStore(prev => {
             const newStore = { ...prev };
             Object.keys(newStore).forEach(p => {
-              if (newStore[p].isModified || newStore[p].isNew) {
+              if (newStore[p].isDeleted) {
+                delete newStore[p];
+              } else if (newStore[p].isModified || newStore[p].isNew) {
                 newStore[p] = { ...newStore[p], isModified: false, isNew: false };
               }
             });
@@ -725,44 +728,107 @@ export default function App() {
       return;
     }
 
-    const newMessages: Message[] = [...messages, { id: Date.now().toString(), role: 'user', content }];
-    setMessages([...newMessages, { id: (Date.now() + 1).toString(), role: 'model', content: '' }]);
-    setIsStreaming(true);
+    const userMsgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newMessages: Message[] = [...messages, { id: userMsgId, role: 'user', content }];
+    
+    const processAIResponse = async (currentMessages: Message[], currentFileStore: typeof fileStore) => {
+      const modelMsgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setMessages([...currentMessages, { id: modelMsgId, role: 'model', content: '' }]);
+      setIsStreaming(true);
 
-    // Capture the initial file store state before streaming begins
-    // so that we can idempotently apply diffs as the response streams in.
-    const initialFileStore = { ...fileStore };
+      try {
+        let fullResponse = '';
+        let finalFunctionCalls: { name: string; args: any }[] | undefined;
+        
+        const fileTree = Object.entries(currentFileStore).map(([path, file]) => {
+          const skeleton = generateAstSkeleton(file.content, path);
+          if (skeleton) {
+            return `- ${path}\n  AST Summary:\n  ${skeleton.split('\n').join('\n  ')}`;
+          }
+          return `- ${path}`;
+        }).join('\n');
+        const systemPrompt = getSystemInstruction(enabledTools) + 
+          `\n\n[CURRENT WORKSPACE FILES]\n${fileTree || 'No files yet.'}\n` +
+          (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + 
+          systemModifier;
 
-    try {
-      let fullResponse = '';
-      await streamGemini(
-        newMessages,
-        model,
-        apiKey,
-        getSystemInstruction(enabledTools) + (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + systemModifier,
-        (chunk) => {
-          fullResponse += chunk;
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1].content = fullResponse;
-            return updated;
-          });
-          setFileStore(extractFiles(fullResponse, initialFileStore));
-        },
-        settings.temperature
-      );
-      toast.success('Response received');
-    } catch (error: any) {
-      console.error('Error streaming Gemini:', error);
-      toast.error('Failed to send message: ' + error.message);
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1].content += `\n\n**Error:** ${error.message}`;
-        return updated;
-      });
-    } finally {
-      setIsStreaming(false);
-    }
+        // Truncate context window to last 20 messages to prevent token limits
+        const MAX_MESSAGES = 20;
+        const messagesToProcess = currentMessages.length > MAX_MESSAGES 
+          ? currentMessages.slice(-MAX_MESSAGES) 
+          : currentMessages;
+
+        await streamGemini(
+          messagesToProcess,
+          model,
+          apiKey,
+          systemPrompt,
+          (chunk, functionCalls) => {
+            fullResponse += chunk;
+            finalFunctionCalls = functionCalls;
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1].content = fullResponse;
+              if (functionCalls) {
+                updated[updated.length - 1].functionCalls = functionCalls;
+              }
+              return updated;
+            });
+            setFileStore(extractFiles(fullResponse, currentFileStore));
+          },
+          settings.temperature
+        );
+
+        if (finalFunctionCalls && finalFunctionCalls.length > 0) {
+          const functionResponses: { name: string; response: any }[] = [];
+          for (const call of finalFunctionCalls) {
+            try {
+              if (call.name === 'runCommand') {
+                const res = await filesystemService.runTool(call.args.command);
+                functionResponses.push({ name: call.name, response: res });
+              } else {
+                // MCP tool
+                const idToken = await auth.currentUser?.getIdToken();
+                const argsObj = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
+                const res = await fetch('/api/mcp/call', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                  body: JSON.stringify({ serverName: call.name, toolName: call.args.toolName, args: argsObj })
+                });
+                const data = await res.json();
+                functionResponses.push({ name: call.name, response: data });
+              }
+            } catch (err) {
+              functionResponses.push({ name: call.name, response: { error: String(err) } });
+            }
+          }
+
+          const nextMessages: Message[] = [
+            ...currentMessages,
+            { id: Date.now().toString(), role: 'model', content: fullResponse, functionCalls: finalFunctionCalls },
+            { id: (Date.now() + 1).toString(), role: 'function', content: '', functionResponses }
+          ];
+          
+          // Re-evaluate the fileStore after the stream to pass to the next iteration
+          const updatedFileStore = extractFiles(fullResponse, currentFileStore);
+          await processAIResponse(nextMessages, updatedFileStore);
+        } else {
+          toast.success('Response received');
+          setIsStreaming(false);
+        }
+      } catch (error: any) {
+        console.error('Error streaming Gemini:', error);
+        toast.error('Failed to send message: ' + error.message);
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].content += `\n\n**Error:** ${error.message}`;
+          return updated;
+        });
+        setIsStreaming(false);
+      }
+    };
+
+    await processAIResponse(newMessages, { ...fileStore });
   };
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -797,7 +863,7 @@ export default function App() {
   const totalTokens = messages.reduce((acc, m) => acc + m.content.length, 0) / 4;
 
   return (
-    <div className={`flex flex-col h-screen bg-[#1e1e1e] text-[#d4d4d4] font-sans overflow-hidden ${
+    <div className={`flex flex-col h-[100dvh] bg-[#1e1e1e] text-[#d4d4d4] font-sans overflow-hidden ${
       settings.theme === 'light' ? 'bg-white text-gray-900' : 
       settings.theme === 'high-contrast' ? 'bg-black text-yellow-400' : ''
     } ${settings.compactMode ? 'text-xs' : ''}`}>
@@ -1068,36 +1134,40 @@ export default function App() {
                 <PanelGroup orientation="horizontal">
               {/* Chat Panel */}
               <Panel defaultSize={30} minSize={20}>
-                <Suspense fallback={<PanelLoader />}>
-                  <ChatPanel
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    onReviewChange={(filename, content) => {
-                      const original = fileStore[filename]?.content || '';
-                      setPendingDiff({ filename, original, modified: content });
-                    }}
-                    isStreaming={isStreaming}
-                    settings={settings}
-                  />
-                </Suspense>
+                <ErrorBoundary name="Chat Panel">
+                  <Suspense fallback={<PanelLoader />}>
+                    <ChatPanel
+                      messages={messages}
+                      onSendMessage={handleSendMessage}
+                      onReviewChange={(filename, content) => {
+                        const original = fileStore[filename]?.content || '';
+                        setPendingDiff({ filename, original, modified: content });
+                      }}
+                      isStreaming={isStreaming}
+                      settings={settings}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </Panel>
 
               <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
 
               {/* Editor Panel */}
               <Panel defaultSize={50} minSize={30}>
-                <Suspense fallback={<PanelLoader />}>
-                  <CodeEditor
-                    content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
-                    filename={selectedFile || ''}
-                    onOpenFiles={() => setIsMobileMenuOpen(true)}
-                    onChange={handleFileChange}
-                    onAiAction={handleAiAction}
-                    targetLine={targetLine}
-                    onLineRevealed={() => setTargetLine(undefined)}
-                    settings={settings}
-                  />
-                </Suspense>
+                <ErrorBoundary name="Code Editor">
+                  <Suspense fallback={<PanelLoader />}>
+                    <CodeEditor
+                      content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
+                      filename={selectedFile || ''}
+                      onOpenFiles={() => setIsMobileMenuOpen(true)}
+                      onChange={handleFileChange}
+                      onAiAction={handleAiAction}
+                      targetLine={targetLine}
+                      onLineRevealed={() => setTargetLine(undefined)}
+                      settings={settings}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </Panel>
 
               <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
@@ -1122,36 +1192,48 @@ export default function App() {
                     >
                       Search
                     </button>
+                    <button
+                      onClick={() => setSidebarTab('mcp')}
+                      className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        sidebarTab === 'mcp' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+                      }`}
+                    >
+                      MCP
+                    </button>
                   </div>
                   
                   <div className="flex-1 overflow-hidden">
-                    <Suspense fallback={<PanelLoader />}>
-                      {sidebarTab === 'files' ? (
-                        <FileTree
-                          files={fileStore}
-                          selectedFile={selectedFile}
-                          workspaceName={workspaceName}
-                          onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
-                          onDownload={handleDownloadFile}
-                          onDownloadZip={handleDownloadZip}
-                          onImportZip={handleImportZip}
-                          onDelete={handleDeleteFile}
-                          onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
-                          onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
-                          onFolderExpand={handleFolderExpand}
-                          showDetails={true}
-                        />
-                      ) : (
-                        <SearchPanel 
-                          onSelectFile={(path, line) => {
-                            setSelectedFile(path);
-                            setTargetLine(line);
-                            setIsMobileMenuOpen(false);
-                            setMobileView('editor');
-                          }} 
-                        />
-                      )}
-                    </Suspense>
+                    <ErrorBoundary name="Sidebar Panel">
+                      <Suspense fallback={<PanelLoader />}>
+                        {sidebarTab === 'files' ? (
+                          <FileTree
+                            files={fileStore}
+                            selectedFile={selectedFile}
+                            workspaceName={workspaceName}
+                            onSelect={(path) => { setSelectedFile(path); setIsMobileMenuOpen(false); setMobileView('editor'); }}
+                            onDownload={handleDownloadFile}
+                            onDownloadZip={handleDownloadZip}
+                            onImportZip={handleImportZip}
+                            onDelete={handleDeleteFile}
+                            onRename={(oldPath) => { setFileToRename(oldPath); setNewFileName(oldPath); }}
+                            onCreateFile={() => { setIsCreatingFile(true); setNewFilePath('new_file.txt'); }}
+                            onFolderExpand={handleFolderExpand}
+                            showDetails={true}
+                          />
+                        ) : sidebarTab === 'search' ? (
+                          <SearchPanel 
+                            onSelectFile={(path, line) => {
+                              setSelectedFile(path);
+                              setTargetLine(line);
+                              setIsMobileMenuOpen(false);
+                              setMobileView('editor');
+                            }} 
+                          />
+                        ) : (
+                          <McpPanel />
+                        )}
+                      </Suspense>
+                    </ErrorBoundary>
                   </div>
                 </div>
               </Panel>
@@ -1162,34 +1244,38 @@ export default function App() {
           <div className="sm:hidden flex flex-1 h-full">
             {mobileView === 'chat' && (
               <div className="w-full h-full">
-                <Suspense fallback={<PanelLoader />}>
-                  <ChatPanel
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    onReviewChange={(filename, content) => {
-                      const original = fileStore[filename]?.content || '';
-                      setPendingDiff({ filename, original, modified: content });
-                    }}
-                    isStreaming={isStreaming}
-                    settings={settings}
-                  />
-                </Suspense>
+                <ErrorBoundary name="Chat Panel">
+                  <Suspense fallback={<PanelLoader />}>
+                    <ChatPanel
+                      messages={messages}
+                      onSendMessage={handleSendMessage}
+                      onReviewChange={(filename, content) => {
+                        const original = fileStore[filename]?.content || '';
+                        setPendingDiff({ filename, original, modified: content });
+                      }}
+                      isStreaming={isStreaming}
+                      settings={settings}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             )}
             {mobileView === 'editor' && (
               <div className="w-full h-full">
-                <Suspense fallback={<PanelLoader />}>
-                  <CodeEditor
-                    content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
-                    filename={selectedFile || ''}
-                    onOpenFiles={() => setIsMobileMenuOpen(true)}
-                    onChange={handleFileChange}
-                    onAiAction={handleAiAction}
-                    targetLine={targetLine}
-                    onLineRevealed={() => setTargetLine(undefined)}
-                    settings={settings}
-                  />
-                </Suspense>
+                <ErrorBoundary name="Code Editor">
+                  <Suspense fallback={<PanelLoader />}>
+                    <CodeEditor
+                      content={selectedFile ? fileStore[selectedFile]?.content || '' : ''}
+                      filename={selectedFile || ''}
+                      onOpenFiles={() => setIsMobileMenuOpen(true)}
+                      onChange={handleFileChange}
+                      onAiAction={handleAiAction}
+                      targetLine={targetLine}
+                      onLineRevealed={() => setTargetLine(undefined)}
+                      settings={settings}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               </div>
             )}
           </div>

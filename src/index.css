@@ -52,3 +52,11 @@ body {
   font-size: 0.85rem;
 }
 
+.markdown-body {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.markdown-body p {
+  white-space: pre-wrap;
+}
+

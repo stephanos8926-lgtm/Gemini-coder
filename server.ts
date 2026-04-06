@@ -161,6 +161,17 @@ async function connectToMCP(serverPath: string, args: string[], workspaceRoot: s
 
 
 
+const mcpClientPool = new Map<string, Client>();
+
+async function getMcpClient(serverName: string, serverDef: any, workspaceRoot: string) {
+  if (mcpClientPool.has(serverName)) {
+    return mcpClientPool.get(serverName)!;
+  }
+  const client = await connectToMCP(serverDef.command, serverDef.args, workspaceRoot);
+  mcpClientPool.set(serverName, client);
+  return client;
+}
+
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const upload = multer({ dest: UPLOAD_DIR });
@@ -182,12 +193,21 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
 
   // MCP Tool Registry
+  let cachedTools: any[] | null = null;
+  let lastConfigRead: number = 0;
+
   const getEnabledTools = async () => {
+    const now = Date.now();
+    if (cachedTools && now - lastConfigRead < 60000) { // Cache for 60 seconds
+      return cachedTools;
+    }
     try {
       const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
-      return Object.entries(config.tools)
+      cachedTools = Object.entries(config.tools)
         .filter(([_, tool]: any) => tool.enabled)
         .map(([name, tool]: any) => ({ name, ...tool }));
+      lastConfigRead = now;
+      return cachedTools;
     } catch (error) {
       console.error('Error reading mcp-config.json:', error);
       return [];
@@ -206,8 +226,8 @@ async function startServer() {
         return res.status(404).json({ error: 'Server not found' });
       }
       
-      // Connect to MCP server
-      const client = await connectToMCP(serverDef.command, serverDef.args, WORKSPACE_ROOT);
+      // Get pooled client
+      const client = await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
       
       // Call tool
       const result = await client.callTool({
@@ -215,13 +235,64 @@ async function startServer() {
         arguments: args,
       });
       
-      // Disconnect
-      await client.close();
-      
       res.json(result);
     } catch (error) {
       console.error('Error calling MCP tool:', error);
       res.status(500).json({ error: 'Failed to call tool' });
+    }
+  });
+
+  // Endpoint to get all MCP servers and their status
+  app.get('/api/mcp/servers', async (req, res, next) => {
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      const servers = [];
+      
+      for (const [serverName, serverDef] of Object.entries(config.tools)) {
+        const isConnected = mcpClientPool.has(serverName);
+        let tools = [];
+        
+        if (isConnected) {
+          try {
+            const client = mcpClientPool.get(serverName)!;
+            const toolsResponse = await client.listTools();
+            tools = toolsResponse.tools || [];
+          } catch (e) {
+            console.error(`Error listing tools for ${serverName}:`, e);
+          }
+        }
+        
+        servers.push({
+          name: serverName,
+          status: isConnected ? 'connected' : 'disconnected',
+          command: (serverDef as any).command,
+          tools
+        });
+      }
+      
+      res.json(servers);
+    } catch (error) {
+      console.error('Error getting MCP servers:', error);
+      res.status(500).json({ error: 'Failed to get MCP servers' });
+    }
+  });
+
+  // Endpoint to explicitly connect to an MCP server
+  app.post('/api/mcp/connect', async (req, res, next) => {
+    const { serverName } = req.body;
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      const serverDef = config.tools[serverName];
+      
+      if (!serverDef) {
+        return res.status(404).json({ error: 'Server not found' });
+      }
+      
+      await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
+      res.json({ success: true });
+    } catch (error) {
+      console.error(`Error connecting to MCP server ${serverName}:`, error);
+      res.status(500).json({ error: 'Failed to connect to server' });
     }
   });
 
@@ -866,17 +937,67 @@ async function startServer() {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
     
-    const formattedMessages = messages.map((m: any) => ({
-      role: m.role,
-      parts: [{ text: m.content }]
+    const formattedMessages = messages.map((m: any) => {
+      const parts: any[] = [];
+      if (m.content) {
+        parts.push({ text: m.content });
+      }
+      if (m.functionCalls) {
+        m.functionCalls.forEach((fc: any) => {
+          parts.push({ functionCall: { name: fc.name, args: fc.args } });
+        });
+      }
+      if (m.functionResponses) {
+        m.functionResponses.forEach((fr: any) => {
+          parts.push({ functionResponse: { name: fr.name, response: fr.response } });
+        });
+      }
+      return {
+        role: m.role === 'function' ? 'user' : m.role, // Gemini uses 'user' role for function responses
+        parts
+      };
+    });
+
+    const enabledMcpTools = await getEnabledTools();
+    const mcpFunctionDeclarations = enabledMcpTools.map(tool => ({
+      name: tool.name.replace(/[^a-zA-Z0-9_]/g, '_'), // Ensure valid function name
+      description: tool.description || `Execute a tool on the ${tool.name} MCP server.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          toolName: { type: 'string', description: 'The specific tool to execute on this server (e.g., read_file, search).' },
+          args: { type: 'string', description: 'JSON string of arguments for the tool.' }
+        },
+        required: ['toolName', 'args']
+      }
     }));
+
+    const tools = [
+      {
+        functionDeclarations: [
+          {
+            name: 'runCommand',
+            description: 'Run a shell command or tool in the workspace.',
+            parameters: {
+              type: 'object',
+              properties: {
+                command: { type: 'string', description: 'The command to run.' }
+              },
+              required: ['command']
+            }
+          },
+          ...mcpFunctionDeclarations
+        ]
+      }
+    ];
 
     const body = {
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: formattedMessages,
       generationConfig: {
         temperature: temperature,
-      }
+      },
+      tools: tools
     };
 
     try {
@@ -950,8 +1071,51 @@ async function startServer() {
 
   io.on('connection', (socket) => {
     logger.info('Client connected to WebSocket');
+    
+    let ptyProcess: ReturnType<typeof spawn> | null = null;
+
+    socket.on('terminal:start', (options) => {
+      if (ptyProcess) {
+        ptyProcess.kill();
+      }
+      
+      const cwd = options?.cwd || process.cwd();
+      
+      // Use python to spawn a real PTY since node-pty is unavailable
+      ptyProcess = spawn('python3', ['-c', 'import pty; pty.spawn("/bin/bash")'], {
+        cwd,
+        env: { ...process.env, TERM: 'xterm-256color' },
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      ptyProcess.stdout?.on('data', (data: Buffer) => {
+        socket.emit('terminal:data', data.toString());
+      });
+
+      ptyProcess.stderr?.on('data', (data: Buffer) => {
+        socket.emit('terminal:data', data.toString());
+      });
+
+      ptyProcess.on('exit', (code: number) => {
+        socket.emit('terminal:exit', code);
+      });
+    });
+
+    socket.on('terminal:data', (data: string) => {
+      if (ptyProcess && ptyProcess.stdin) {
+        ptyProcess.stdin.write(data);
+      }
+    });
+
+    socket.on('terminal:resize', (cols: number, rows: number) => {
+      // Cannot resize without a real PTY, ignore
+    });
+
     socket.on('disconnect', () => {
       logger.info('Client disconnected from WebSocket');
+      if (ptyProcess) {
+        ptyProcess.kill();
+      }
     });
   });
 

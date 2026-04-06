@@ -3,6 +3,8 @@ import { AlertCircle, RefreshCcw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
+  name?: string;
 }
 
 interface State {
@@ -21,34 +23,50 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error(`Uncaught error in ${this.props.name || 'Component'}:`, error, errorInfo);
   }
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      const isAppLevel = !this.props.name;
+
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#121212] p-4">
+        <div className={`${isAppLevel ? 'min-h-screen' : 'h-full flex-1'} flex items-center justify-center bg-[#121212] p-4 overflow-hidden`}>
           <div className="max-w-md w-full bg-[#1e1e1e] border border-red-900/30 rounded-lg p-6 shadow-2xl">
             <div className="flex items-center gap-3 text-red-500 mb-4">
-              <AlertCircle className="w-8 h-8" />
-              <h1 className="text-xl font-semibold tracking-tight">Something went wrong</h1>
+              <AlertCircle className="w-8 h-8 shrink-0" />
+              <h1 className="text-xl font-semibold tracking-tight">
+                {isAppLevel ? 'Something went wrong' : `${this.props.name} crashed`}
+              </h1>
             </div>
             
-            <div className="bg-black/20 rounded p-4 mb-6 font-mono text-sm text-red-400/80 break-words">
-              {this.state.error?.message || 'An unexpected error occurred in GIDE.'}
+            <div className="bg-black/20 rounded p-4 mb-6 font-mono text-sm text-red-400/80 break-words max-h-40 overflow-y-auto">
+              {this.state.error?.message || 'An unexpected error occurred.'}
             </div>
 
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                if (isAppLevel) {
+                  window.location.reload();
+                } else {
+                  this.setState({ hasError: false, error: null });
+                }
+              }}
               className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded transition-colors"
             >
               <RefreshCcw className="w-4 h-4" />
-              Reload Application
+              {isAppLevel ? 'Reload Application' : 'Try Again'}
             </button>
             
-            <p className="mt-4 text-xs text-gray-500 text-center">
-              If the problem persists, please check the developer console for more details.
-            </p>
+            {isAppLevel && (
+              <p className="mt-4 text-xs text-gray-500 text-center">
+                If the problem persists, please check the developer console for more details.
+              </p>
+            )}
           </div>
         </div>
       );

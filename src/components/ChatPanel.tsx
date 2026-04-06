@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap } from 'lucide-react';
+import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
 import { marked } from 'marked';
@@ -13,6 +13,40 @@ interface ChatPanelProps {
   isStreaming: boolean;
   settings: Settings;
 }
+
+const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; args: any }[] }) => {
+  return (
+    <div className="w-full bg-[#252526]/80 border border-[#007acc]/30 rounded-xl p-3 space-y-3 mt-3 shadow-lg backdrop-blur-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-[#007acc] uppercase tracking-widest">
+          <Activity className="w-3 h-3 animate-pulse" />
+          <span>Executing Tools</span>
+        </div>
+        <div className="flex gap-1">
+          <div className="w-1 h-1 rounded-full bg-[#007acc] animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-1 h-1 rounded-full bg-[#007acc] animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-1 h-1 rounded-full bg-[#007acc] animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+      <div className="space-y-2">
+        {functionCalls.map((call, idx) => (
+          <div key={`call-${idx}-${call.name}`} className="group relative">
+            <div className="absolute -left-1 top-0 bottom-0 w-0.5 bg-[#007acc]/50 rounded-full" />
+            <div className="pl-3 py-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Code2 className="w-3 h-3 text-[#858585]" />
+                <span className="text-xs font-mono font-bold text-[#3794ff]">{call.name}</span>
+              </div>
+              <div className="text-[11px] text-[#858585] font-mono bg-[#1e1e1e] p-2 rounded-lg border border-[#3c3c3c] overflow-x-auto whitespace-pre-wrap break-all">
+                {JSON.stringify(call.args, null, 2)}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming, settings }: ChatPanelProps) {
   const [input, setInput] = useState('');
@@ -72,9 +106,9 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] border-r border-[#3c3c3c]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#1e1e1e] border-r border-[#3c3c3c]">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[#3c3c3c] bg-[#252526] flex items-center justify-between shadow-sm z-10">
+      <div className="px-4 py-3 border-b border-[#3c3c3c] bg-[#252526] flex items-center justify-between shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-2">
           <div className="p-1.5 bg-[#007acc]/10 rounded-lg">
             <Sparkles className="w-4 h-4 text-[#007acc]" />
@@ -88,7 +122,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar min-h-0">
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
             <div className="w-16 h-16 bg-[#252526] rounded-2xl flex items-center justify-center border border-[#3c3c3c] shadow-xl">
@@ -113,7 +147,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
 
           return (
             <motion.div
-              key={msg.id || `${msg.role}-${i}-${msg.content.substring(0, 10)}`}
+              key={msg.id || `msg-${i}-${msg.role}-${msg.content.substring(0, 20)}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
@@ -134,7 +168,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
                 )}
               </div>
 
-              <div className={`flex flex-col max-w-[85%] space-y-2 ${isUser ? 'items-end' : 'items-start'}`}>
+              <div className={`flex flex-col max-w-[95%] sm:max-w-[85%] min-w-0 space-y-2 ${isUser ? 'items-end' : 'items-start'}`}>
                 {/* Thinking Block */}
                 {thinking && (
                   <div className="w-full bg-[#252526]/50 border border-[#3c3c3c] rounded-xl p-3 space-y-2">
@@ -147,16 +181,45 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
                 )}
 
                 {/* Main Message Bubble */}
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group break-words max-w-full ${
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm relative group break-words max-w-full overflow-hidden ${
                   isUser 
                     ? 'bg-[#007acc] text-white rounded-tr-none' 
                     : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'
                 }`}>
                   <div 
-                    className="markdown-body prose prose-invert prose-sm max-w-none prose-pre:bg-[#0d0d0d] prose-pre:border prose-pre:border-[#2d2d2d] prose-a:text-[#3794ff] prose-a:no-underline hover:prose-a:underline prose-p:leading-relaxed"
+                    className="markdown-body prose prose-invert prose-sm max-w-none overflow-x-auto break-words prose-pre:bg-[#0d0d0d] prose-pre:border prose-pre:border-[#2d2d2d] prose-a:text-[#3794ff] prose-a:no-underline hover:prose-a:underline prose-p:leading-relaxed"
                     dangerouslySetInnerHTML={renderMarkdown(contentToRender)}
                   />
 
+                  {msg.functionCalls && <ToolCallRenderer functionCalls={msg.functionCalls} />}
+                  
+                  {msg.functionResponses && (
+                    <div className="mt-4 space-y-3">
+                      {msg.functionResponses.map((res, idx) => {
+                        const isError = typeof res.response === 'object' && res.response !== null && ('error' in res.response || 'stderr' in res.response && res.response.stderr);
+                        return (
+                          <div key={`resp-${idx}-${res.name}`} className={`bg-[#1e1e1e]/50 border ${isError ? 'border-red-500/30' : 'border-green-500/30'} rounded-xl p-3 shadow-inner`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                {isError ? (
+                                  <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                                ) : (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                                )}
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-green-400'}`}>
+                                  {res.name} Result
+                                </span>
+                              </div>
+                            </div>
+                            <div className={`text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all p-2 rounded-lg bg-black/20 ${isError ? 'text-red-300' : 'text-[#cccccc]'}`}>
+                              {typeof res.response === 'string' ? res.response : JSON.stringify(res.response, null, 2)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
                   {/* Review Changes Buttons */}
                   {msg.role === 'model' && !isStreaming && (
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -166,7 +229,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
                         if (filename.includes('.') && !['diff', 'delete', 'rename'].includes(filename)) {
                           return (
                             <button
-                              key={idx}
+                              key={`review-${idx}-${filename}`}
                               onClick={() => onReviewChange?.(filename, content)}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007acc]/10 border border-[#007acc]/30 text-[#007acc] rounded-md hover:bg-[#007acc]/20 transition-all text-[10px] font-bold uppercase tracking-wider"
                             >
@@ -240,7 +303,7 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
       </div>
 
       {/* Input Area */}
-      <div className="p-4 bg-[#252526] border-t border-[#3c3c3c] shadow-[0_-4px_10px_rgba(0,0,0,0.1)] z-10">
+      <div className="p-4 bg-[#252526] border-t border-[#3c3c3c] shadow-[0_-4px_10px_rgba(0,0,0,0.1)] z-10 shrink-0">
         <form onSubmit={handleSubmit} className="relative group max-w-4xl mx-auto">
           <textarea
             value={input}

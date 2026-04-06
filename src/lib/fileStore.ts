@@ -5,6 +5,7 @@ export type FileStore = {
     content: string;
     isNew: boolean;
     isModified: boolean;
+    isDeleted?: boolean;
     size: number;
     isDir?: boolean;
   };
@@ -24,7 +25,7 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
   while ((match = deleteRegex.exec(content)) !== null) {
     let path = match[1] ? match[1].trim() : match[2].trim();
     if (path && newStore[path]) {
-      delete newStore[path];
+      newStore[path] = { ...newStore[path], isDeleted: true };
     }
   }
 
@@ -48,9 +49,10 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
       newStore[newPath] = {
         ...newStore[oldPath],
         isNew: true,
-        isModified: false
+        isModified: false,
+        isDeleted: false
       };
-      delete newStore[oldPath];
+      newStore[oldPath] = { ...newStore[oldPath], isDeleted: true };
     }
   }
 
