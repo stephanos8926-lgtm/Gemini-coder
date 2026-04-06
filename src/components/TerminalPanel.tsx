@@ -38,9 +38,21 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose, workspace
     term.open(terminalRef.current);
     
     // Fit needs a tiny delay to ensure container is rendered
+    const resizeObserver = new ResizeObserver(() => {
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+      }
+    });
+
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
+
     setTimeout(() => {
-      fitAddon.fit();
-    }, 10);
+      if (fitAddonRef.current) {
+        fitAddonRef.current.fit();
+      }
+    }, 100);
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -63,6 +75,9 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose, workspace
 
     socket.on('terminal:data', onTerminalData);
     socket.on('terminal:exit', onTerminalExit);
+    socket.on('connect_error', (err) => {
+      term.write(`\r\n\x1b[31mSocket connection error: ${err.message}\x1b[0m\r\n`);
+    });
 
     // Start the terminal session
     socket.emit('terminal:start', { cwd: workspace });
@@ -76,6 +91,7 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose, workspace
     window.addEventListener('resize', handleResize);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       socket.off('terminal:data', onTerminalData);
       socket.off('terminal:exit', onTerminalExit);

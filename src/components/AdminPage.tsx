@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const AdminPage = () => {
+export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'users' | 'mcp' | 'system'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [mcpTools, setMcpTools] = useState<any[]>([]);
@@ -50,8 +50,10 @@ export const AdminPage = () => {
         localStorage.setItem('gide_admin_key', secretKey);
         fetchMcpTools();
       } else {
+        const errorData = await response.json().catch(() => ({}));
         setIsAuthorized(false);
-        if (secretKey) toast.error('Invalid admin secret key');
+        localStorage.removeItem('gide_admin_key');
+        if (secretKey) toast.error(errorData.error || 'Invalid admin secret key');
       }
     } catch (e) {
       console.error('Auth check failed', e);
@@ -118,6 +120,22 @@ export const AdminPage = () => {
       }
     } catch (e) {
       toast.error('Update failed');
+    }
+  };
+
+  const updateUserRole = async (uid: string, role: 'user' | 'admin') => {
+    try {
+      const response = await fetch('/api/admin/users/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secretKey, uid, role })
+      });
+      if (response.ok) {
+        toast.success('User role updated');
+        fetchUsers();
+      }
+    } catch (e) {
+      toast.error('Role update failed');
     }
   };
 
@@ -189,10 +207,15 @@ export const AdminPage = () => {
           </div>
           <button
             onClick={checkAuthorization}
-            className="w-full bg-[#007acc] hover:bg-[#005f9e] text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+            disabled={loading}
+            className="w-full bg-[#007acc] hover:bg-[#005f9e] text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Unlock className="w-4 h-4" />
-            Unlock Admin Panel
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Unlock className="w-4 h-4" />
+            )}
+            {loading ? 'Authenticating...' : 'Unlock Admin Panel'}
           </button>
         </div>
       </div>
@@ -271,6 +294,19 @@ export const AdminPage = () => {
                   </div>
 
                   <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="text-[10px] text-[#858585] uppercase font-bold">Role</span>
+                      <button 
+                        onClick={() => updateUserRole(user.uid, user.role === 'admin' ? 'user' : 'admin')}
+                        className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${
+                          user.role === 'admin' 
+                            ? 'bg-[#007acc]/20 text-[#007acc] hover:bg-[#007acc]/30' 
+                            : 'bg-[#3c3c3c] text-[#858585] hover:bg-[#454545] hover:text-[#cccccc]'
+                        }`}
+                      >
+                        {user.role === 'admin' ? 'Admin' : 'User'}
+                      </button>
+                    </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className="text-[10px] text-[#858585] uppercase font-bold">Sandbox</span>
                       <button 
@@ -375,7 +411,5 @@ export const AdminPage = () => {
       </div>
     </div>
   );
-};
-
-export default AdminPage;
+}
 

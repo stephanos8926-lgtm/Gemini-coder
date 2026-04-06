@@ -22,7 +22,10 @@ RUN npm ci --omit=dev
 
 # Copy the built frontend and server from the builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/.env.example ./.env
+# Copy runtime config files needed by the server
+COPY --from=builder /app/firebase-applet-config.json ./firebase-applet-config.json
+# NOTE: Do NOT copy .env here. Inject environment variables at runtime:
+#   docker run -e ADMIN_SECRET_KEY=... -e NODE_ENV=production <image>
 
 # Expose the port GIDE runs on
 EXPOSE 3000

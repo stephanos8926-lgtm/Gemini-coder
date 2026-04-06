@@ -6,7 +6,10 @@ export function useWorkspaces() {
   const { idToken } = useFirebase();
   return useQuery({
     queryKey: ['workspaces', idToken],
-    queryFn: () => filesystemService.listWorkspaces(),
+    queryFn: () => {
+      if (idToken) filesystemService.setToken(idToken);
+      return filesystemService.listWorkspaces();
+    },
     enabled: !!idToken,
   });
 }
@@ -16,6 +19,7 @@ export function useFiles(workspace: string, path: string = '', recursive: boolea
   return useQuery({
     queryKey: ['files', workspace, path, recursive, idToken],
     queryFn: () => {
+      if (idToken) filesystemService.setToken(idToken);
       filesystemService.setWorkspace(workspace);
       return filesystemService.listFiles(path, recursive);
     },
@@ -28,6 +32,7 @@ export function useFileContent(workspace: string, path: string) {
   return useQuery({
     queryKey: ['fileContent', workspace, path, idToken],
     queryFn: () => {
+      if (idToken) filesystemService.setToken(idToken);
       filesystemService.setWorkspace(workspace);
       return filesystemService.getFileContent(path);
     },
@@ -42,6 +47,10 @@ export function useFileSystemMutations() {
 
   const saveFileMutation = useMutation({
     mutationFn: ({ workspace, path, content }: { workspace: string, path: string, content: string }) => {
+      if (user) {
+        // We can't get idToken directly here easily without passing it or using a ref
+        // But filesystemService should have it from the App.tsx useEffect
+      }
       filesystemService.setWorkspace(workspace);
       return filesystemService.saveFile(path, content);
     },
@@ -81,10 +90,22 @@ export function useFileSystemMutations() {
     },
   });
 
+  const createWorkspaceMutation = useMutation({
+    mutationFn: (name: string) => {
+      // Just creating a dummy file to ensure the directory exists
+      filesystemService.setWorkspace(name);
+      return filesystemService.createFile('.gide', false);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+
   return {
     saveFileMutation,
     createFileMutation,
     deleteFileMutation,
     renameFileMutation,
+    createWorkspaceMutation,
   };
 }

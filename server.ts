@@ -53,7 +53,8 @@ const AdminRequestSchema = z.object({
 
 const AdminUserUpdateSchema = AdminRequestSchema.extend({
   uid: z.string().min(1),
-  no_sandbox: z.boolean(),
+  no_sandbox: z.boolean().optional(),
+  role: z.enum(['user', 'admin']).optional(),
 });
 
 const AdminUserDeleteSchema = AdminRequestSchema.extend({
@@ -190,7 +191,14 @@ async function startServer() {
     logger.error('Failed to create workspace root', e);
   }
 
-  app.use(express.json({ limit: '50mb' }));
+  try {
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    logger.info('Upload directory initialized', { UPLOAD_DIR });
+  } catch (e) {
+    logger.error('Failed to create upload directory', e);
+  }
+
+  app.use(express.json({ limit: '5mb' }));
 
   // MCP Tool Registry
   let cachedTools: any[] | null = null;
@@ -480,6 +488,7 @@ async function startServer() {
   // API Routes
   app.get('/api/workspaces', authenticateUser, async (req: any, res, next) => {
     try {
+      logger.info('Listing workspaces', { uid: req.user.uid });
       const userRoot = path.join(WORKSPACE_ROOT, req.user.uid);
       await fs.mkdir(userRoot, { recursive: true });
       
@@ -488,8 +497,10 @@ async function startServer() {
         .filter(entry => entry.isDirectory())
         .map(entry => `${req.user.uid}/${entry.name}`);
       
+      logger.info(`Found ${workspaces.length} workspaces for user ${req.user.uid}`, { workspaces });
       res.json(workspaces);
     } catch (error) {
+      logger.error('Failed to list workspaces', error);
       next(error);
     }
   });
@@ -575,8 +586,14 @@ async function startServer() {
     try {
       const { secretKey } = AdminRequestSchema.parse(req.body);
       if (secretKey !== env.ADMIN_SECRET_KEY) {
-        logger.warn('Unauthorized admin users access attempt');
-        return res.status(403).json({ error: 'Unauthorized' });
+        logger.warn('Unauthorized admin users access attempt', { 
+          providedKey: secretKey?.substring(0, 3) + '...',
+          expectedKeySet: !!env.ADMIN_SECRET_KEY 
+        });
+        const errorMsg = !env.ADMIN_SECRET_KEY 
+          ? 'Admin secret key is not configured on the server.' 
+          : 'Invalid admin secret key.';
+        return res.status(403).json({ error: errorMsg });
       }
       
       if (!db) {
@@ -597,12 +614,20 @@ async function startServer() {
 
   app.post('/api/admin/users/update', async (req, res, next) => {
     try {
-      const { secretKey, uid, no_sandbox } = AdminUserUpdateSchema.parse(req.body);
+      const { secretKey, uid, no_sandbox, role } = AdminUserUpdateSchema.parse(req.body);
       if (secretKey !== env.ADMIN_SECRET_KEY) {
         return res.status(403).json({ error: 'Unauthorized' });
       }
       
-      await db.collection('users').doc(uid).update({ no_sandbox });
+      const updateData: any = {};
+      if (no_sandbox !== undefined) updateData.no_sandbox = no_sandbox;
+      if (role !== undefined) updateData.role = role;
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: 'No update data provided' });
+      }
+
+      await db.collection('users').doc(uid).update(updateData);
       res.json({ success: true });
     } catch (error) {
       next(error);
@@ -645,7 +670,9 @@ async function startServer() {
           http,
           dir,
           author: { name: 'AI Studio', email: 'ai@studio.build' },
-          singleBranch: true
+          singleBranch: true,
+          ref: branch,
+          remoteRef: branch
         });
       } else {
         await git.clone({
@@ -653,7 +680,8 @@ async function startServer() {
           http,
           dir,
           url: repoUrl,
-          singleBranch: true
+          singleBranch: true,
+          ref: branch
         });
       }
       
@@ -733,10 +761,12 @@ async function startServer() {
       const execAsync = promisify(exec);
       
       let cmd = '';
+      const safeMessage = (message || 'Update').replace(/[`"$\\]/g, '');
+
       switch (command) {
         case 'init': cmd = 'git init'; break;
         case 'add': cmd = 'git add .'; break;
-        case 'commit': cmd = `git commit -m ${JSON.stringify(message || 'Update')}`; break;
+        case 'commit': cmd = `git commit -m "${safeMessage}"`; break;
         case 'pull': cmd = 'git pull'; break;
         default: 
           return res.status(400).json({ error: 'Invalid git command' });
@@ -751,26 +781,16 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/logs', async (req, res) => {
+  app.post('/api/admin/logs', async (req, res, next) => {
     try {
       const { secretKey } = AdminRequestSchema.parse(req.body);
       if (secretKey !== env.ADMIN_SECRET_KEY) {
-        logger.warn('Unauthorized admin logs access attempt');
         return res.status(403).json({ error: 'Unauthorized' });
       }
-
-      const logPath = path.join(process.cwd(), 'combined.log');
-      if (fsSync.existsSync(logPath)) {
-        const logs = await fs.readFile(logPath, 'utf-8');
-        // Return last 100 lines
-        const lines = logs.trim().split('\n').slice(-100).join('\n');
-        res.json({ logs: lines });
-      } else {
-        res.json({ logs: 'No logs found yet.' });
-      }
+      // TODO: implement log retrieval (e.g. read from a rotating log file)
+      res.status(501).json({ error: 'Log retrieval not yet implemented' });
     } catch (error) {
-      logger.error('Failed to read logs', error);
-      res.status(500).json({ error: 'Failed to read logs' });
+      next(error);
     }
   });
 
@@ -802,11 +822,13 @@ async function startServer() {
       const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
       await fs.mkdir(root, { recursive: true });
 
-      const zip = new AdmZip(req.file.path);
-      zip.extractAllTo(root, true);
-
-      await fs.unlink(req.file.path);
-      res.json({ success: true });
+      try {
+        const zip = new AdmZip(req.file.path);
+        zip.extractAllTo(root, true);
+        res.json({ success: true });
+      } finally {
+        await fs.unlink(req.file.path).catch(() => {});
+      }
     } catch (error) {
       next(error);
     }
@@ -887,40 +909,50 @@ async function startServer() {
 
   app.get('/api/search', authenticateUser, async (req: any, res, next) => {
     const { query, workspace = '' } = req.query;
+
     if (!query) {
       return res.status(400).json({ error: 'Query required' });
-    }
-    if (/[`$\\|;&<>(){}]/.test(query as string)) {
-      return res.status(400).json({ error: 'Invalid characters in search query' });
     }
 
     try {
       const root = getSafePath('', req.user, workspace as string);
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
 
-      const excludeDirs = ['node_modules', '.git', 'dist', '.next'].map(d => `--exclude-dir=${d}`).join(' ');
-      const command = `grep -rnIE ${excludeDirs} "${query}" "${root}"`;
-      
-      try {
-        const { stdout } = await execAsync(command);
-        const results = stdout.split('\n').filter(Boolean).map(line => {
-          const [fullPath, lineNum, ...contentParts] = line.split(':');
-          const relativePath = path.relative(root, fullPath);
-          return {
-            path: relativePath,
-            line: parseInt(lineNum),
-            content: contentParts.join(':').trim()
-          };
+      const grepArgs = [
+        '-rnIE',
+        '--exclude-dir=node_modules',
+        '--exclude-dir=.git',
+        '--exclude-dir=dist',
+        '--exclude-dir=.next',
+        query as string,
+        root
+      ];
+
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn('grep', grepArgs);
+        let stdout = '';
+        let stderr = '';
+        child.stdout.on('data', (d) => { stdout += d; });
+        child.stderr.on('data', (d) => { stderr += d; });
+        child.on('close', (code) => {
+          if (code === 0 || code === 1) {
+            // code 1 = no matches (not an error)
+            const results = stdout.split('\n').filter(Boolean).map(line => {
+              const [fullPath, lineNum, ...contentParts] = line.split(':');
+              const relativePath = path.relative(root, fullPath);
+              return {
+                path: relativePath,
+                line: parseInt(lineNum),
+                content: contentParts.join(':').trim()
+              };
+            });
+            res.json(results);
+            resolve();
+          } else {
+            reject(new Error(stderr || `grep exited with code ${code}`));
+          }
         });
-        res.json(results);
-      } catch (e: any) {
-        if (e.code === 1) {
-          return res.json([]);
-        }
-        throw e;
-      }
+        child.on('error', reject);
+      });
     } catch (error) {
       next(error);
     }
@@ -1002,11 +1034,16 @@ async function startServer() {
 
     try {
       logger.info('Sending request to Gemini API');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const err = await response.text();
@@ -1044,7 +1081,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('/*splat', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -1075,30 +1112,44 @@ async function startServer() {
     let ptyProcess: ReturnType<typeof spawn> | null = null;
 
     socket.on('terminal:start', (options) => {
+      logger.info('Terminal start requested', { options, uid: socket.id });
       if (ptyProcess) {
+        logger.info('Killing existing PTY process');
         ptyProcess.kill();
       }
       
-      const cwd = options?.cwd || process.cwd();
+      const cwd = options?.cwd ? path.join(WORKSPACE_ROOT, options.cwd) : process.cwd();
+      logger.info('Spawning PTY', { cwd });
       
       // Use python to spawn a real PTY since node-pty is unavailable
-      ptyProcess = spawn('python3', ['-c', 'import pty; pty.spawn("/bin/bash")'], {
-        cwd,
-        env: { ...process.env, TERM: 'xterm-256color' },
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
+      try {
+        ptyProcess = spawn('python3', ['-c', 'import pty; pty.spawn("/bin/bash")'], {
+          cwd,
+          env: { ...process.env, TERM: 'xterm-256color' },
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
 
-      ptyProcess.stdout?.on('data', (data: Buffer) => {
-        socket.emit('terminal:data', data.toString());
-      });
+        ptyProcess.stdout?.on('data', (data: Buffer) => {
+          socket.emit('terminal:data', data.toString());
+        });
 
-      ptyProcess.stderr?.on('data', (data: Buffer) => {
-        socket.emit('terminal:data', data.toString());
-      });
+        ptyProcess.stderr?.on('data', (data: Buffer) => {
+          socket.emit('terminal:data', data.toString());
+        });
 
-      ptyProcess.on('exit', (code: number) => {
-        socket.emit('terminal:exit', code);
-      });
+        ptyProcess.on('exit', (code: number) => {
+          logger.info('PTY process exited', { code });
+          socket.emit('terminal:exit', code);
+        });
+
+        ptyProcess.on('error', (err) => {
+          logger.error('PTY process error', err);
+          socket.emit('terminal:data', `\r\n\x1b[31mFailed to start terminal: ${err.message}\x1b[0m\r\n`);
+        });
+      } catch (err: any) {
+        logger.error('Failed to spawn PTY', err);
+        socket.emit('terminal:data', `\r\n\x1b[31mFailed to spawn terminal process: ${err.message}\x1b[0m\r\n`);
+      }
     });
 
     socket.on('terminal:data', (data: string) => {

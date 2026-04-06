@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Folder, Plus, X, Search, Loader2, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { filesystemService } from '../lib/filesystemService';
+import { useFileSystemMutations } from '../hooks/useFileSystem';
+import { useFirebase } from '../contexts/FirebaseContext';
 
 interface WorkspaceModalProps {
   onClose: () => void;
@@ -10,18 +12,23 @@ interface WorkspaceModalProps {
 }
 
 export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: WorkspaceModalProps) {
+  const { user, idToken } = useFirebase();
+  const { createWorkspaceMutation } = useFileSystemMutations();
   const [workspaces, setWorkspaces] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [newWorkspace, setNewWorkspace] = useState('');
 
   useEffect(() => {
-    loadWorkspaces();
-  }, []);
+    if (idToken) {
+      loadWorkspaces();
+    }
+  }, [idToken]);
 
   const loadWorkspaces = async () => {
     try {
       setLoading(true);
+      if (idToken) filesystemService.setToken(idToken);
       const list = await filesystemService.listWorkspaces();
       setWorkspaces(list);
     } catch (e) {
@@ -32,9 +39,20 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
   };
 
   const handleCreate = async () => {
-    if (!newWorkspace.trim()) return;
-    onSelect(newWorkspace.trim());
-    onClose();
+    if (!newWorkspace.trim() || !user) return;
+    
+    const workspaceName = `${user.uid}/${newWorkspace.trim().replace(/\//g, '-')}`;
+    
+    try {
+      setLoading(true);
+      await createWorkspaceMutation.mutateAsync(workspaceName);
+      onSelect(workspaceName);
+      onClose();
+    } catch (e) {
+      console.error('Failed to create workspace', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filtered = workspaces.filter(w => w.split('/').pop()?.toLowerCase().includes(search.toLowerCase()));

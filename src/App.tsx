@@ -1,5 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
-import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon } from 'lucide-react';
+import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon, Sparkles } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { Toaster, toast } from 'sonner';
@@ -43,8 +43,11 @@ const ToolsPanel = lazy(() => import('./components/ToolsPanel').then(m => ({ def
 const McpPanel = lazy(() => import('./components/McpPanel').then(m => ({ default: m.McpPanel })));
 
 const PanelLoader = () => (
-  <div className="flex-1 flex items-center justify-center h-full bg-[#1e1e1e] text-[#858585]">
-    <Loader2 className="w-6 h-6 animate-spin text-[#007acc]" />
+  <div className="flex-1 flex flex-col items-center justify-center h-full bg-[#1e1e1e] text-[#858585] gap-3">
+    <div className="p-2 bg-[#007acc]/10 rounded-xl border border-[#007acc]/20 animate-pulse">
+      <Sparkles className="w-6 h-6 text-[#007acc]" />
+    </div>
+    <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Initializing Panel</span>
   </div>
 );
 
@@ -109,8 +112,23 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
   const { workspaceName, setWorkspaceName, workspaces, setWorkspaces } = useAppStore();
-  const { data: workspacesData, isLoading: isWorkspacesLoading } = useWorkspaces();
+  const { data: workspacesData, isLoading: isWorkspacesLoading, isError: isWorkspacesError } = useWorkspaces();
   
+  // Restore workspaceName from localStorage
+  useEffect(() => {
+    const savedWorkspace = localStorage.getItem('gide_workspace_name');
+    if (savedWorkspace && !workspaceName) {
+      setWorkspaceName(savedWorkspace);
+    }
+  }, []);
+
+  // Save workspaceName to localStorage
+  useEffect(() => {
+    if (workspaceName) {
+      localStorage.setItem('gide_workspace_name', workspaceName);
+    }
+  }, [workspaceName]);
+
   console.log('App rendering', { workspaceName, workspaces, isWorkspacesLoading, workspacesData });
 
   useEffect(() => {
@@ -121,6 +139,12 @@ export default function App() {
 
   const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
   
+  useEffect(() => {
+    if (idToken) {
+      filesystemService.setToken(idToken);
+    }
+  }, [idToken]);
+
   useWorkspacePersistence(workspaceName, messages, setMessages);
 
   // Sync profile name to user email
@@ -652,7 +676,7 @@ export default function App() {
 
   const processSlashCommand = (msg: string): boolean => {
     if (msg.startsWith('/help')) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: '**Available Commands:**\n- `/help` : Show this message\n- `/reset` : Clear chat and files\n- `/files` : Print file tree\n- `/zip` : Download project as ZIP\n- `/preview` : Switch to Preview tab\n- `/persona <name>` : Switch persona\n- `/verbose` : Toggle verbose mode\n- `/terse` : Toggle terse mode' }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: '**Available Commands:**\n- `/help` : Show this message\n- `/reset` : Clear chat and files\n- `/files` : Print file tree\n- `/zip` : Download project as ZIP\n- `/preview` : Switch to Preview tab\n- `/persona <name>` : Switch persona\n- `/verbose` : Toggle verbose mode\n- `/terse` : Toggle terse mode' }]);
       return true;
     }
     if (msg.startsWith('/reset')) {
@@ -665,34 +689,34 @@ export default function App() {
     }
     if (msg.startsWith('/files')) {
       const tree = Object.keys(fileStore).map(p => `- ${p}`).join('\n');
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: `**Current Files:**\n${tree || 'No files yet.'}` }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: `**Current Files:**\n${tree || 'No files yet.'}` }]);
       return true;
     }
     if (msg.startsWith('/zip')) {
       handleDownloadZip();
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Triggered ZIP download.' }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: 'Triggered ZIP download.' }]);
       return true;
     }
     if (msg.startsWith('/preview')) {
       setBottomTab('preview');
       setMobileView('preview');
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Switched to Preview tab.' }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: 'Switched to Preview tab.' }]);
       return true;
     }
     if (msg.startsWith('/persona ')) {
       const persona = msg.split(' ')[1];
       setSystemModifier(`\n\n[CURRENT PERSONA: ${persona.toUpperCase()}]`);
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: `[→ ${persona.toUpperCase()}] Persona activated.` }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: `[→ ${persona.toUpperCase()}] Persona activated.` }]);
       return true;
     }
     if (msg.startsWith('/verbose')) {
       setSystemModifier('\n\n[MODE: VERBOSE AND EXPLANATORY]');
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Verbose mode enabled.' }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: 'Verbose mode enabled.' }]);
       return true;
     }
     if (msg.startsWith('/terse')) {
       setSystemModifier('\n\n[MODE: TERSE AND TECHNICAL]');
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: msg }, { id: (Date.now() + 1).toString(), role: 'model', content: 'Terse mode enabled.' }]);
+      setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: 'Terse mode enabled.' }]);
       return true;
     }
     return false;
@@ -728,11 +752,13 @@ export default function App() {
       return;
     }
 
-    const userMsgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newMessages: Message[] = [...messages, { id: userMsgId, role: 'user', content }];
+    const userMsgId = generateId();
+    const userMessage: Message = { id: userMsgId, role: 'user', content };
+    const newMessages: Message[] = [...messages, userMessage];
+    setMessages(newMessages);
     
     const processAIResponse = async (currentMessages: Message[], currentFileStore: typeof fileStore) => {
-      const modelMsgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const modelMsgId = generateId();
       setMessages([...currentMessages, { id: modelMsgId, role: 'model', content: '' }]);
       setIsStreaming(true);
 
@@ -805,8 +831,8 @@ export default function App() {
 
           const nextMessages: Message[] = [
             ...currentMessages,
-            { id: Date.now().toString(), role: 'model', content: fullResponse, functionCalls: finalFunctionCalls },
-            { id: (Date.now() + 1).toString(), role: 'function', content: '', functionResponses }
+            { id: generateId(), role: 'model', content: fullResponse, functionCalls: finalFunctionCalls },
+            { id: generateId(), role: 'function', content: '', functionResponses }
           ];
           
           // Re-evaluate the fileStore after the stream to pass to the next iteration
@@ -908,39 +934,45 @@ export default function App() {
 
       {/* Header */}
       <header className="flex items-center justify-between px-3 sm:px-4 py-2 bg-[#252526] border-b border-[#3c3c3c] shrink-0 shadow-sm z-10 overflow-x-auto no-scrollbar">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-fit">
-          <div className="p-1 bg-[#1e1e1e] rounded border border-[#3c3c3c] shadow-inner">
-            <Terminal className="w-4 h-4 text-[#007acc]" />
-          </div>
-          <h1 className="font-semibold tracking-wide hidden md:block text-[#e5e5e5] text-sm">GIDE</h1>
-          
-          <button 
-            onClick={() => setShowTerminal(!showTerminal)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showTerminal ? 'bg-green-500 text-white border-green-400' : 'bg-green-900/30 border-green-500/30 text-green-400'}`}
-            title="Toggle Terminal"
+        <div className="flex items-center gap-2 sm:gap-4 min-w-fit">
+          <button
+            className="p-1.5 hover:bg-[#3c3c3c] rounded transition-colors text-[#858585] hover:text-white"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            <TerminalIcon className="w-2.5 h-2.5" />
-            <span className="hidden xs:inline">TERM</span>
+            <Menu className="w-4 h-4" />
           </button>
 
-          <button 
-            onClick={() => setShowMcpModal(!showMcpModal)}
-            className={`flex items-center gap-1 px-1.5 py-0.5 border rounded text-[9px] font-bold uppercase tracking-tighter transition-colors ${showMcpModal ? 'bg-blue-500 text-white border-blue-400' : 'bg-blue-900/30 border-blue-500/30 text-blue-400'}`}
-            title="MCP Settings"
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-[#007acc]/10 rounded border border-[#007acc]/20">
+              <Terminal className="w-4 h-4 text-[#007acc]" />
+            </div>
+            <h1 className="font-bold tracking-tight text-[#e5e5e5] text-sm hidden xs:block">GIDE</h1>
+          </div>
+
+          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1 hidden sm:block" />
+
+          <button
+            onClick={() => {
+              setMessages([]);
+              setSelectedFile(null);
+              toast.success('New session started');
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium bg-[#007acc] hover:bg-[#005f9e] text-white rounded-md transition-all shadow-sm"
+            title="New Session"
           >
-            <SettingsIcon className="w-2.5 h-2.5" />
-            <span className="hidden xs:inline">MCP</span>
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New Session</span>
           </button>
           
           {workspaceName && (
-            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded px-2 py-0.5 ml-1 max-w-[150px] sm:max-w-[200px]">
-              <FolderOpen className="w-3 h-3 text-[#858585] mr-1.5 shrink-0" />
-              <span className="text-[10px] text-[#d4d4d4] truncate" title={workspaceName}>
+            <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-2 py-1 ml-1 max-w-[150px] sm:max-w-[250px] group">
+              <FolderOpen className="w-3.5 h-3.5 text-[#858585] mr-2 shrink-0" />
+              <span className="text-[11px] font-medium text-[#d4d4d4] truncate" title={workspaceName}>
                 {workspaceName.split('/').pop()}
               </span>
               <button
                 onClick={() => setShowWorkspaceModal(true)}
-                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-1 shrink-0"
+                className="p-1 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors ml-2 shrink-0 opacity-0 group-hover:opacity-100"
                 title="Switch Workspace"
               >
                 <Search className="w-3 h-3" />
@@ -949,69 +981,89 @@ export default function App() {
           )}
         </div>
         
-        <div className="flex items-center gap-1.5 sm:gap-3 ml-auto">
-          <button
-            onClick={handleSaveAll}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="Save All"
-          >
-            <Download className="w-3.5 h-3.5 text-green-500 rotate-180" />
-            <span className="hidden lg:inline">Save</span>
-          </button>
+        <div className="flex items-center gap-1 sm:gap-2 ml-auto">
+          <div className="flex items-center bg-[#1e1e1e] border border-[#3c3c3c] rounded-md p-0.5 mr-2">
+            <button 
+              onClick={() => setShowTerminal(!showTerminal)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${showTerminal ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
+              title="Toggle Terminal"
+            >
+              <TerminalIcon className="w-3 h-3" />
+              <span className="hidden md:inline">TERM</span>
+            </button>
 
-          <button
-            onClick={() => setShowCommandPalette(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="Command Palette (Ctrl+K)"
-          >
-            <Search className="w-3.5 h-3.5 text-[#007acc]" />
-            <span className="hidden lg:inline">Search</span>
-          </button>
-          
-          <button
-            onClick={() => setShowGitPanel(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="Git Operations"
-          >
-            <GitBranch className="w-3.5 h-3.5 text-[#858585]" />
-            <span className="hidden lg:inline">Git</span>
-          </button>
+            <button 
+              onClick={() => setShowMcpModal(!showMcpModal)}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${showMcpModal ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
+              title="MCP Settings"
+            >
+              <SettingsIcon className="w-3 h-3" />
+              <span className="hidden md:inline">MCP</span>
+            </button>
+          </div>
 
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-            title="Settings"
-          >
-            <SettingsIcon className="w-3.5 h-3.5 text-[#858585]" />
-            <span className="hidden lg:inline">Settings</span>
-          </button>
+          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1 hidden lg:block" />
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSaveAll}
+              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+              title="Save All"
+            >
+              <Download className="w-4 h-4 rotate-180" />
+            </button>
+
+            <button
+              onClick={() => setShowCommandPalette(true)}
+              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+              title="Command Palette (Ctrl+K)"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={() => setShowGitPanel(true)}
+              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+              title="Git Operations"
+            >
+              <GitBranch className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+              title="Settings"
+            >
+              <SettingsIcon className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1" />
 
           {user ? (
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
-              title="Sign Out"
-            >
-              <LogOut className="w-3.5 h-3.5 text-[#858585]" />
-              <span className="hidden lg:inline">Sign Out</span>
-            </button>
+            <div className="flex items-center gap-2 pl-1">
+              <div className="hidden lg:flex flex-col items-end">
+                <span className="text-[10px] font-bold text-white leading-none">{user.displayName || 'User'}</span>
+                <span className="text-[9px] text-[#858585] leading-none mt-0.5">{user.email}</span>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="p-1.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] rounded-full transition-all border border-[#4c4c4c]"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5 text-[#cccccc]" />
+              </button>
+            </div>
           ) : (
             <button
               onClick={handleSignIn}
-              className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-[#3c3c3c] rounded transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-[#e5e5e5] rounded-md transition-all"
               title="Sign In"
             >
-              <LogIn className="w-3.5 h-3.5 text-[#858585]" />
-              <span className="hidden lg:inline">Sign In</span>
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
             </button>
           )}
-
-          <button
-            className="sm:hidden p-1.5 hover:bg-[#3c3c3c] rounded transition-colors"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
         </div>
       </header>
 
@@ -1071,7 +1123,38 @@ export default function App() {
           </div>
         )}
 
-        {user && !isAuthLoading && !isWorkspacesLoading && idToken && workspaces.length === 0 && !showWorkspaceModal && (
+        {user && !isAuthLoading && isWorkspacesLoading && !showWorkspaceModal && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-12 h-12 text-[#007acc] animate-spin" />
+              <span className="text-white font-medium">Loading your workspaces...</span>
+            </div>
+          </div>
+        )}
+
+        {user && !isAuthLoading && isWorkspacesError && !showWorkspaceModal && (
+          <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-[#252526] border border-red-500/20 rounded-xl p-8 max-w-md w-full shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <X className="w-8 h-8 text-red-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-2">Failed to Load Workspaces</h2>
+              <p className="text-[#858585] mb-8">There was an error connecting to the development server. Please check your connection and try again.</p>
+              <button 
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['workspaces'] })}
+                className="w-full py-3 bg-[#3c3c3c] hover:bg-[#454545] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+              >
+                Retry Loading
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {user && !isAuthLoading && !isWorkspacesLoading && !isWorkspacesError && idToken && workspaces.length === 0 && !workspaceName && !showWorkspaceModal && (
           <div className="absolute inset-0 z-[100] flex items-center justify-center bg-[#1e1e1e]/90 backdrop-blur-md">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -1150,7 +1233,7 @@ export default function App() {
                 </ErrorBoundary>
               </Panel>
 
-              <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
+              <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
 
               {/* Editor Panel */}
               <Panel defaultSize={50} minSize={30}>
@@ -1170,7 +1253,7 @@ export default function App() {
                 </ErrorBoundary>
               </Panel>
 
-              <PanelResizeHandle className="w-1 bg-[#3c3c3c] hover:bg-[#007acc] transition-colors" />
+              <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
 
               {/* File Tree Panel */}
               <Panel defaultSize={20} minSize={15}>
