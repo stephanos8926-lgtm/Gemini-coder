@@ -246,7 +246,7 @@ export default function App() {
   // Sync fileStore to backend after streaming finishes
   useEffect(() => {
     if (!isStreaming) {
-      const syncFiles = async () => {
+      const syncFiles = async (retries = 3) => {
         try {
           const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew || f.isDeleted);
           for (const [path, file] of modifiedFiles) {
@@ -273,6 +273,14 @@ export default function App() {
           });
         } catch (e) {
           console.error('Failed to sync files after stream', e);
+          if (retries > 0) {
+            console.log(`Retrying file sync... (${retries} retries left)`);
+            setTimeout(() => syncFiles(retries - 1), 1000);
+          } else {
+            // Final failure - alert user
+            console.error('File sync failed after multiple retries');
+            // TODO: Add user-facing error notification
+          }
         }
       };
       syncFiles();
@@ -952,6 +960,8 @@ export default function App() {
         showMcpModal={showMcpModal}
         onSaveAll={handleSaveAll}
         activeProfile={activeProfile}
+        isMobileMenuOpen={isMobileMenuOpen}
+        setIsMobileMenuOpen={setIsMobileMenuOpen}
       />
 
       {/* Mobile Navigation Tabs */}
@@ -1198,6 +1208,7 @@ export default function App() {
                   onShowSettingsModal={() => { setShowSettingsModal(true); setIsMobileMenuOpen(false); }}
                   onShowWorkspaceModal={() => { setShowWorkspaceModal(true); setIsMobileMenuOpen(false); }}
                   onShowCommandPalette={() => { setShowCommandPalette(true); setIsMobileMenuOpen(false); }}
+                  onShowSearchPanel={() => { setSidebarTab('search'); setIsMobileMenuOpen(false); }}
                   model={model}
                   onModelChange={handleModelChange}
                   workspaceName={workspaceName}

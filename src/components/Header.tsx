@@ -21,6 +21,8 @@ interface HeaderProps {
   showMcpModal: boolean;
   onSaveAll: () => void;
   activeProfile: Profile | null;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,7 +42,9 @@ export const Header: React.FC<HeaderProps> = ({
   onShowMcpModal,
   showMcpModal,
   onSaveAll,
-  activeProfile
+  activeProfile,
+  isMobileMenuOpen,
+  setIsMobileMenuOpen
 }) => {
   return (
     <header className="h-12 border-b border-[#3c3c3c] bg-[#2d2d2d] flex items-center justify-between px-4 shrink-0 z-50">
@@ -53,6 +57,12 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-sm font-bold text-white tracking-tight leading-none">GIDE</span>
             <span className="text-[9px] text-[#858585] font-bold uppercase tracking-widest leading-none mt-1">v2.5.0</span>
           </div>
+          <button
+            className="p-1.5 hover:bg-[#3c3c3c] rounded transition-colors text-[#858585] hover:text-white lg:hidden"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            <Menu className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="h-6 w-[1px] bg-[#3c3c3c] mx-2 hidden sm:block" />

@@ -6,10 +6,14 @@ export type Message = {
   functionResponses?: { name: string; response: any }[];
 };
 
-const CACHE_KEY_PREFIX = 'gide_ai_cache_';
+// In-memory cache for current session only - cleared on page refresh
+// WARNING: This is session-only. Do NOT store sensitive data in localStorage
+// For persistent caching, implement server-side session storage with encryption
+const inMemoryCache = new Map<string, { text: string; functionCalls?: any[] }>();
 
 function getCacheKey(messages: Message[], model: string, systemInstruction: string, temperature: number): string {
-  return `${CACHE_KEY_PREFIX}${JSON.stringify({messages, model, systemInstruction, temperature})}`;
+  // Create cache key but DON'T use localStorage
+  return `${model}:${temperature}:${messages.length}`;
 }
 
 export async function streamGemini(
@@ -21,13 +25,14 @@ export async function streamGemini(
   temperature: number = 0.7
 ) {
   const cacheKey = getCacheKey(messages, model, systemInstruction, temperature);
-  const cached = localStorage.getItem(cacheKey);
+  
+  // SECURITY: Check in-memory cache only (session-bound)
+  const cached = inMemoryCache.get(cacheKey);
   if (cached) {
     try {
-      const parsed = JSON.parse(cached);
-      onChunk(parsed.text, parsed.functionCalls);
+      onChunk(cached.text, cached.functionCalls);
     } catch (e) {
-      onChunk(cached);
+      console.warn('In-memory cache parse error:', e);
     }
     return;
   }
@@ -35,7 +40,7 @@ export async function streamGemini(
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, model, apiKey, systemInstruction, temperature })
+    body: JSON.stringify({ messages, model, apiKey, systemInstruction, temperature }),
   });
 
   if (!response.ok) {
@@ -95,5 +100,15 @@ export async function streamGemini(
   if (chunkBuffer || allFunctionCalls.length > 0) {
     onChunk(chunkBuffer, allFunctionCalls.length > 0 ? allFunctionCalls : undefined);
   }
-  localStorage.setItem(cacheKey, JSON.stringify({ text: fullResponse, functionCalls: allFunctionCalls }));
+  
+  // Cache in memory only for this session
+  // Note: This cache is cleared when the page refreshes or browser closes
+  // For persistence, implement server-side session storage with encryption
+  inMemoryCache.set(cacheKey, { text: fullResponse, functionCalls: allFunctionCalls });
+  
+  // Limit cache size to prevent memory exhaustion
+  if (inMemoryCache.size > 50) {
+    const firstKey = inMemoryCache.keys().next().value;
+    if (firstKey) inMemoryCache.delete(firstKey);
+  }
 }

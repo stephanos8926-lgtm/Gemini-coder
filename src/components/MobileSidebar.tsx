@@ -22,6 +22,7 @@ interface MobileSidebarProps {
   onShowSettingsModal: () => void;
   onShowWorkspaceModal: () => void;
   onShowCommandPalette: () => void;
+  onShowSearchPanel: () => void;
   model: string;
   onModelChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   workspaceName: string;
@@ -45,6 +46,7 @@ export function MobileSidebar({
   onShowSettingsModal,
   onShowWorkspaceModal,
   onShowCommandPalette,
+  onShowSearchPanel,
   model,
   onModelChange,
   workspaceName
@@ -117,10 +119,10 @@ export function MobileSidebar({
         </div>
 
         {/* Other Sections */}
-        <button onClick={onShowCommandPalette} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
+        <button onClick={() => { onClose(); onShowSearchPanel(); }} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Search className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Global Search</span>
         </button>
-        <button onClick={onShowCommandPalette} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
+        <button onClick={() => { onClose(); onShowCommandPalette(); }} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Zap className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Quick Actions</span>
         </button>
         <button onClick={onShowSettingsModal} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">

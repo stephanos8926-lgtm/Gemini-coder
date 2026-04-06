@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 
 export default function AdminPage() {
+  console.log('AdminPage rendering');
   const [activeTab, setActiveTab] = useState<'users' | 'mcp' | 'system'>('users');
   const [users, setUsers] = useState<any[]>([]);
   const [mcpTools, setMcpTools] = useState<any[]>([]);
@@ -157,17 +158,18 @@ export default function AdminPage() {
   };
 
   const handleGitPull = async () => {
-    const repoUrl = prompt('Enter repository URL (optional):');
+    const target = window.confirm('Update GIDE Application (root)? Click Cancel to update Projects (workspaces).') ? 'root' : 'workspaces';
+    const repoUrl = prompt('Enter repository URL (optional if already initialized):');
     const branch = prompt('Enter branch name (default: main):') || 'main';
     
     toast.promise(
       fetch('/api/git/pull', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secretKey, repoUrl, branch })
+        body: JSON.stringify({ secretKey, repoUrl, branch, target })
       }),
       {
-        loading: 'Pulling latest changes...',
+        loading: `Pulling latest changes into ${target}...`,
         success: 'Repository updated successfully',
         error: 'Git pull failed'
       }

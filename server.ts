@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
@@ -9,6 +8,46 @@ import fsSync from 'fs';
 import git from 'isomorphic-git';
 import { Server } from 'socket.io';
 import http from 'http';
+import https from 'https';
+import { HttpClient } from 'isomorphic-git';
+
+// Create a compatible HTTP client for isomorphic-git
+const gitHttpClient: HttpClient = {
+  request: async ({ url, method, headers, body, signal }) => {
+    const isHttps = url.startsWith('https:');
+    const client = isHttps ? https : http;
+    
+    return new Promise((resolve, reject) => {
+      const req = client.request(url, {
+        method,
+        headers: headers as any,
+      }, (res) => {
+        const chunks: Uint8Array[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          // Create an async iterator for the body
+          const bodyIterator = (async function* () {
+            for (const chunk of chunks) {
+              yield chunk;
+            }
+          })();
+          
+          resolve({
+            url: url,
+            statusCode: res.statusCode || 200,
+            statusMessage: res.statusMessage || 'OK',
+            headers: res.headers as any,
+            body: bodyIterator,
+          });
+        });
+      });
+      
+      req.on('error', reject);
+      if (body) req.write(body);
+      req.end();
+    });
+  }
+};
 import chokidar from 'chokidar';
 import admin from 'firebase-admin';
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
@@ -62,8 +101,9 @@ const AdminUserDeleteSchema = AdminRequestSchema.extend({
 });
 
 const GitPullSchema = AdminRequestSchema.extend({
-  repoUrl: z.string().url(),
+  repoUrl: z.string().url().optional(),
   branch: z.string().optional().default('main'),
+  target: z.enum(['root', 'workspaces']).optional().default('workspaces'),
 });
 
 
@@ -99,11 +139,11 @@ async function initializeFirebase() {
       // This prevents the "aud" claim mismatch error.
       app = initializeApp({
         credential: admin.credential.applicationDefault(),
-        projectId: config.projectId,
-      });
+        projectId: (config.projectId as unknown) as string,
+      }) as unknown as admin.app.App;
       logger.info('Firebase Admin initialized with applicationDefault', { projectId: config.projectId });
     } else {
-      app = existingApps[0];
+      app = existingApps[0] as unknown as admin.app.App;
       logger.info('Firebase Admin already initialized, using existing app');
     }
     
@@ -117,10 +157,11 @@ async function initializeFirebase() {
       // Test the connection to catch PERMISSION_DENIED early
       await db.collection('users').limit(1).get();
       logger.info('Firestore connection successful', { databaseId: config.firestoreDatabaseId || '(default)' });
-    } catch (firestoreError) {
+    } catch (firestoreError: unknown) {
+      const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
       logger.warn('Failed to initialize Firestore with named database, falling back to default', { 
         databaseId: config.firestoreDatabaseId,
-        error: firestoreError.message 
+        error: errorMessage
       });
       db = getFirestore(app);
     }
@@ -256,9 +297,9 @@ async function startServer() {
       const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
       const servers = [];
       
-      for (const [serverName, serverDef] of Object.entries(config.tools)) {
+      for (const [serverName, serverDef] of Object.entries(config.tools as Record<string, any>)) {
         const isConnected = mcpClientPool.has(serverName);
-        let tools = [];
+        let tools: any[] = [];
         
         if (isConnected) {
           try {
@@ -391,12 +432,13 @@ async function startServer() {
         if (userDoc.exists) {
           userData = userDoc.data() || {};
         }
-      } catch (firestoreError) {
+      } catch (firestoreError: unknown) {
+        const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
         // Only log as warning if it's not a simple NOT_FOUND error
-        if (!firestoreError.message?.includes('NOT_FOUND')) {
+        if (!errorMessage.includes('NOT_FOUND')) {
           logger.warn('Failed to fetch user data from Firestore, using token data only', { 
             uid: decodedToken.uid, 
-            error: firestoreError.message 
+            error: errorMessage
           });
         }
       }
@@ -417,6 +459,16 @@ async function startServer() {
   };
 
   // Helper to validate path is within workspace
+  function validateFilePath(unsafePath: string, user: any, workspace: string = '') {
+    const resolvedPath = getSafePath(unsafePath, user, workspace);
+    // Additional validation: prevent access to hidden files or system files
+    const fileName = path.basename(resolvedPath);
+    if (fileName.startsWith('.')) {
+      throw new Error('Access denied: Hidden files are not accessible');
+    }
+    return resolvedPath;
+  }
+
   function getSafePath(unsafePath: string, user: any, workspace: string = '') {
     if (user.role === 'admin') {
       const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
@@ -445,11 +497,6 @@ async function startServer() {
     if (!resolvedPath.startsWith(base)) {
       throw new Error('Access denied: Path is outside of your project workspace');
     }
-
-    // Prevent writing directly to the project root if it's too shallow (optional but safer)
-    // The user said: "They should not be able to write to their own parent workspace folder either."
-    // This usually means they shouldn't write to workspaces/uid/
-    // Our check `parts.length < 2` already ensures they are at least in workspaces/uid/something/
     
     return resolvedPath;
   }
@@ -669,12 +716,12 @@ async function startServer() {
 
   app.post('/api/git/pull', async (req, res, next) => {
     try {
-      const { repoUrl, branch, secretKey } = GitPullSchema.parse(req.body);
+      const { repoUrl, branch, secretKey, target } = GitPullSchema.parse(req.body);
       if (secretKey !== env.ADMIN_SECRET_KEY) {
         return res.status(403).json({ error: 'Unauthorized' });
       }
 
-      const dir = WORKSPACE_ROOT;
+      const dir = target === 'root' ? process.cwd() : WORKSPACE_ROOT;
       let isRepo = false;
       try {
         await fs.stat(path.join(dir, '.git'));
@@ -686,22 +733,24 @@ async function startServer() {
       if (isRepo) {
         await git.pull({
           fs: fsSync,
-          http,
+          http: gitHttpClient,
           dir,
           author: { name: 'AI Studio', email: 'ai@studio.build' },
           singleBranch: true,
           ref: branch,
           remoteRef: branch
         });
-      } else {
+      } else if (repoUrl) {
         await git.clone({
           fs: fsSync,
-          http,
+          http: gitHttpClient,
           dir,
           url: repoUrl,
           singleBranch: true,
           ref: branch
         });
+      } else {
+        return res.status(400).json({ error: 'Repository URL required for initial clone' });
       }
       
       res.json({ success: true });
@@ -936,18 +985,21 @@ async function startServer() {
     try {
       const root = getSafePath('', req.user, workspace as string);
 
+      // SECURITY: Add timeout and limit to prevent ReDoS
       const grepArgs = [
         '-rnIE',
         '--exclude-dir=node_modules',
         '--exclude-dir=.git',
         '--exclude-dir=dist',
         '--exclude-dir=.next',
+        '--max-count=100', // Limit results
         query as string,
         root
       ];
 
       await new Promise<void>((resolve, reject) => {
-        const child = spawn('grep', grepArgs);
+        // Use timeout to kill long-running grep processes
+        const child = spawn('grep', grepArgs, { timeout: 5000 });
         let stdout = '';
         let stderr = '';
         child.stdout.on('data', (d) => { stdout += d; });
@@ -966,6 +1018,8 @@ async function startServer() {
             });
             res.json(results);
             resolve();
+          } else if (code === null) {
+            reject(new Error('Grep process timed out'));
           } else {
             reject(new Error(stderr || `grep exited with code ${code}`));
           }
@@ -977,9 +1031,12 @@ async function startServer() {
     }
   });
 
-  app.post('/api/chat', async (req, res) => {
+  // SECURITY: Chat endpoint REQUIRES authentication
+  // Without this, anyone can access the endpoint and potentially leak/abuse API keys
+  app.post('/api/chat', authenticateUser, async (req: any, res: express.Response) => {
     const { messages, model, apiKey, systemInstruction, temperature } = req.body;
-    logger.info('Chat request received', { model, temperature, messageCount: messages?.length });
+    
+    logger.info('Chat request received', { model, temperature, messageCount: messages?.length, uid: req.user.uid });
     
     if (!apiKey) {
       logger.warn('Chat request missing API key');
