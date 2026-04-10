@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Loader2, X, Plus, FolderOpen } from 'lucide-react';
+import { LogIn, Loader2, X, Plus, FolderOpen, Github } from 'lucide-react';
 
 interface AuthGuardProps {
   user: any;
@@ -10,7 +10,8 @@ interface AuthGuardProps {
   workspaces: string[];
   workspaceName: string;
   showWorkspaceModal: boolean;
-  onSignIn: () => void;
+  onSignInGoogle: () => void;
+  onSignInGithub: () => void;
   onShowWorkspaceModal: () => void;
   onRetry: () => void;
   idToken: string | null;
@@ -24,7 +25,8 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   workspaces,
   workspaceName,
   showWorkspaceModal,
-  onSignIn,
+  onSignInGoogle,
+  onSignInGithub,
   onShowWorkspaceModal,
   onRetry,
   idToken
@@ -41,14 +43,23 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
             <LogIn className="w-8 h-8 text-[#007acc]" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Welcome to GIDE</h2>
-          <p className="text-[#858585] mb-8">Please sign in with your Google account to access your secure development workspaces.</p>
-          <button 
-            onClick={onSignIn}
-            className="w-full py-3 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20"
-          >
-            <LogIn className="w-5 h-5" />
-            Sign In with Google
-          </button>
+          <p className="text-[#858585] mb-8">Please sign in to access your secure development workspaces.</p>
+          <div className="flex flex-col gap-4">
+            <button 
+              onClick={onSignInGithub}
+              className="w-full py-3 bg-white text-black hover:bg-[#e5e5e5] rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+            >
+              <Github className="w-5 h-5" />
+              Sign In with GitHub
+            </button>
+            <button 
+              onClick={onSignInGoogle}
+              className="w-full py-3 bg-[#4285F4] hover:bg-[#357ae8] text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
+            >
+              <LogIn className="w-5 h-5" />
+              Sign In with Google
+            </button>
+          </div>
         </motion.div>
       </div>
     );

@@ -11,6 +11,11 @@ export type FileStore = {
   };
 };
 
+const deleteRegex = /```delete(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
+const renameRegex = /```rename(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
+const fullFileRegex = /```(?:[a-zA-Z0-9-]+\s+)?([\w./-]+)\n([\s\S]*?)```/g;
+const diffRegex = /```diff(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
+
 export function extractFiles(content: string, currentStore: FileStore): FileStore {
   const newStore = { ...currentStore };
   
@@ -20,9 +25,7 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
   }
 
   // Extract deletes first
-  const deleteRegex = /```delete(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
-  let match;
-  while ((match = deleteRegex.exec(content)) !== null) {
+  for (const match of content.matchAll(deleteRegex)) {
     let path = match[1] ? match[1].trim() : match[2].trim();
     if (path && newStore[path]) {
       newStore[path] = { ...newStore[path], isDeleted: true };
@@ -30,8 +33,7 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
   }
 
   // Extract renames
-  const renameRegex = /```rename(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
-  while ((match = renameRegex.exec(content)) !== null) {
+  for (const match of content.matchAll(renameRegex)) {
     let oldPath = match[1] ? match[1].trim() : '';
     let newPath = '';
     
@@ -57,8 +59,7 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
   }
 
   // Extract full files
-  const fullFileRegex = /```(?:[a-zA-Z0-9-]+\s+)?([\w./-]+)\n([\s\S]*?)```/g;
-  while ((match = fullFileRegex.exec(content)) !== null) {
+  for (const match of content.matchAll(fullFileRegex)) {
     let path = match[1].trim();
     let fileContent = match[2];
 
@@ -69,20 +70,27 @@ export function extractFiles(content: string, currentStore: FileStore): FileStor
       fileContent = fileContent.substring(firstLineMatch[0].length);
     }
 
-    const ignoreList = ['diff', 'json', 'html', 'javascript', 'js', 'ts', 'tsx', 'jsx', 'css', 'bash', 'sh', 'shell', 'yaml', 'yml', 'markdown', 'md', 'text', 'txt'];
-    if (!ignoreList.includes(path.toLowerCase())) {
+    // List of language tags that might be mistaken for filenames if the AI 
+    // omits the actual filename in the code block header.
+    const ignoreList = ['diff', 'json', 'html', 'javascript', 'js', 'typescript', 'ts', 'tsx', 'jsx', 'css', 'bash', 'sh', 'shell', 'yaml', 'yml', 'markdown', 'md', 'text', 'txt', 'python', 'py', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'go', 'rust', 'rs', 'php', 'rb', 'ruby', 'sql', 'xml', 'swift', 'kt', 'kotlin', 'scala', 'r', 'matlab', 'dockerfile', 'makefile', 'graphql', 'gql', 'vue', 'svelte'];
+    const isNew = !currentStore[path];
+    const isModified = !isNew && currentStore[path].content !== fileContent;
+    // FIXED: Check file extension, not the entire path
+    const ext = path.split('.').pop()?.toLowerCase();
+    if (!ext || !ignoreList.includes(ext)) {
       newStore[path] = {
         content: fileContent,
-        isNew: !currentStore[path],
-        isModified: !!currentStore[path],
+        isNew,
+        isModified,
         size: fileContent.length
       };
     }
   }
 
   // Extract diffs
+  // FIXED: Allow optional trailing content or empty match gracefully
   const diffRegex = /```diff(?:[ \t]+([\w./-]+))?\n([\s\S]*?)```/g;
-  while ((match = diffRegex.exec(content)) !== null) {
+  for (const match of content.matchAll(diffRegex)) {
     let path = match[1] ? match[1].trim() : '';
     const diffContent = match[2];
 

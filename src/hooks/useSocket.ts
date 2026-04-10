@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+const API_BASE = import.meta.env.VITE_API_BASE || '';
+
 export const useSocket = (onFsEvent?: (data: { event: string, path: string }) => void) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const onFsEventRef = useRef(onFsEvent);
@@ -9,9 +11,12 @@ export const useSocket = (onFsEvent?: (data: { event: string, path: string }) =>
     onFsEventRef.current = onFsEvent;
   }, [onFsEvent]);
 
+  const isMounted = useRef(true);
+  useEffect(() => { return () => { isMounted.current = false; }; }, []);
+
   useEffect(() => {
-    const s = io();
-    setSocket(s);
+    const s = io(API_BASE);
+    if (isMounted.current) setSocket(s);
 
     s.on('connect', () => {
       console.log('Connected to WebSocket');
@@ -28,6 +33,7 @@ export const useSocket = (onFsEvent?: (data: { event: string, path: string }) =>
 
     return () => {
       s.disconnect();
+      if (!isMounted.current) return;
     };
   }, []);
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
+import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
 import { marked, Renderer } from 'marked';
@@ -25,6 +25,7 @@ marked.setOptions({
 interface ChatPanelProps {
   messages: Message[];
   onSendMessage: (msg: string) => void;
+  onNewChat: () => void;
   onReviewChange?: (filename: string, content: string) => void;
   isStreaming: boolean;
   settings: Settings;
@@ -81,7 +82,7 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
   );
 };
 
-export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming, settings }: ChatPanelProps) {
+export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, isStreaming, settings }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThinking, setExpandedThinking] = useState<number | null>(null);
@@ -148,12 +149,40 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
       {/* Header */}
       <div className="px-4 py-3 border-b border-[#3c3c3c] bg-[#252526] flex items-center justify-between shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-2">
+          <button
+            onClick={onNewChat}
+            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors"
+            title="New Chat"
+          >
+            <Plus className="w-4 h-4 text-[#858585]" />
+          </button>
           <div className="p-1.5 bg-[#007acc]/10 rounded-lg">
             <Sparkles className="w-4 h-4 text-[#007acc]" />
           </div>
-          <span className="font-bold text-sm text-[#e5e5e5] tracking-tight uppercase">AI Assistant</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-sm text-[#e5e5e5] tracking-tight uppercase leading-none">AI Assistant</span>
+            <span className="text-[9px] text-[#007acc] font-bold uppercase tracking-widest mt-0.5 leading-none">
+              {settings.aiPersona === 'custom' ? 'Custom Persona' : settings.aiPersona}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              // This is a bit of a hack since we don't have direct access to updateSetting here
+              // but we can trigger it via a custom event or just rely on the SettingsModal
+              // For now, let's just show the status and link to settings
+            }}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all ${
+              settings.aiChainOfThought 
+                ? 'bg-[#007acc]/10 border-[#007acc]/30 text-[#007acc]' 
+                : 'bg-[#3c3c3c]/30 border-[#3c3c3c] text-[#858585]'
+            }`}
+            title={settings.aiChainOfThought ? "Chain of Thought Enabled" : "Chain of Thought Disabled"}
+          >
+            <BrainCircuit className={`w-3.5 h-3.5 ${settings.aiChainOfThought ? 'animate-pulse' : ''}`} />
+            <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">CoT</span>
+          </button>
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
           <span className="text-[10px] text-[#858585] font-medium uppercase tracking-widest">Ready</span>
         </div>
@@ -312,9 +341,9 @@ export function ChatPanel({ messages, onSendMessage, onReviewChange, isStreaming
                   )}
                   
                   {/* Review Changes Buttons */}
-                  {msg.role === 'model' && !isStreaming && (
+                  {msg.role === 'model' && !isStreaming && msg.content && (
                     <div className="mt-4 flex flex-wrap gap-2">
-                      {[...main.matchAll(/```([\w./-]+)\n([\s\S]*?)```/g)].map((match, idx) => {
+                      {[...msg.content.matchAll(/```([\w./-]+)\n([\s\S]*?)```/g)].map((match, idx) => {
                         const filename = match[1];
                         const content = match[2];
                         if (filename.includes('.') && !['diff', 'delete', 'rename'].includes(filename)) {

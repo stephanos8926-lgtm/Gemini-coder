@@ -26,3 +26,7 @@ GIDE uses a full-stack architecture with:
 - **Frontend**: React, Vite, Tailwind CSS, and Monaco Editor.
 - **Backend**: Express.js server for filesystem operations and API proxying.
 - **AI**: Integration with Google Gemini models for code assistance.
+
+## Changelog
+
+See the [CHANGELOG.md](CHANGELOG.md) for a list of all changes.

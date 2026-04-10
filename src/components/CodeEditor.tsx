@@ -28,6 +28,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
   const [selection, setSelection] = useState<{ text: string; startLine: number; endLine: number } | null>(null);
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const selectionDisposable = useRef<monaco.IDisposable | null>(null);
 
   useEffect(() => {
     if (editorRef.current && targetLine) {
@@ -47,7 +48,9 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
       noSyntaxValidation: !settings.showErrorHighlighting,
     });
 
-    editor.onDidChangeCursorSelection((e: monaco.editor.ICursorSelectionChangedEvent) => {
+    // FIXED: Dispose previous listener to prevent memory leaks
+    if (selectionDisposable.current) { selectionDisposable.current.dispose(); }
+    selectionDisposable.current = editor.onDidChangeCursorSelection((e: monaco.editor.ICursorSelectionChangedEvent) => {
       const selection = editor.getSelection();
       const model = editor.getModel();
       if (!selection || !model) return;
@@ -84,6 +87,8 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
     window.addEventListener('scroll', handleScroll, true);
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, []);
+
+  useEffect(() => { return () => { if (selectionDisposable.current) selectionDisposable.current.dispose(); }; }, []);
 
   if (!filename) {
     return (

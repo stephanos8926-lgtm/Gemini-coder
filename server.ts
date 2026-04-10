@@ -5,6 +5,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
+import crypto from 'crypto';
 import git from 'isomorphic-git';
 import { Server } from 'socket.io';
 import http from 'http';
@@ -203,16 +204,36 @@ async function connectToMCP(serverPath: string, args: string[], workspaceRoot: s
 
 
 
-const mcpClientPool = new Map<string, Client>();
+const mcpClientPool = new Map<string, { client: Client, lastUsed: number }>();
 
 async function getMcpClient(serverName: string, serverDef: any, workspaceRoot: string) {
-  if (mcpClientPool.has(serverName)) {
-    return mcpClientPool.get(serverName)!;
+  const existing = mcpClientPool.get(serverName);
+  if (existing) {
+    try {
+      await existing.client.listTools();
+      existing.lastUsed = Date.now();
+      return existing.client;
+    } catch {
+      logger.warn(`MCP client ${serverName} unresponsive, recreating...`);
+      mcpClientPool.delete(serverName);
+    }
   }
   const client = await connectToMCP(serverDef.command, serverDef.args, workspaceRoot);
-  mcpClientPool.set(serverName, client);
+  mcpClientPool.set(serverName, { client, lastUsed: Date.now() });
   return client;
 }
+
+// Periodically clean up unused MCP clients
+setInterval(() => {
+  const now = Date.now();
+  for (const [name, entry] of mcpClientPool.entries()) {
+    if (now - entry.lastUsed > 300000) { // 5 minutes
+      entry.client.close();
+      mcpClientPool.delete(name);
+      logger.info(`Cleaned up unused MCP client: ${name}`);
+    }
+  }
+}, 60000); // 1 minute
 
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
@@ -239,6 +260,21 @@ async function startServer() {
     logger.error('Failed to create upload directory', e);
   }
 
+  // CSRF Protection Middleware
+  const csrfProtection = (req: any, res: any, next: any) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return next();
+    }
+    const token = req.headers['x-csrf-token'];
+    // In a real app, you'd validate this against a session token.
+    // For this prototype, we'll check against a simple server-side secret.
+    if (!token || token !== env.CSRF_SECRET) {
+      return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
+    next();
+  };
+  app.use(csrfProtection);
+
   app.use(express.json({ limit: '5mb' }));
 
   // MCP Tool Registry
@@ -264,35 +300,15 @@ async function startServer() {
   };
 
   // Endpoint for GIDE to call tools
-  app.post('/api/mcp/call', async (req: any, res, next) => {
-    const { serverName, toolName, args } = req.body;
-    
-    try {
-      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
-      const serverDef = config.tools[serverName];
-      
-      if (!serverDef) {
-        return res.status(404).json({ error: 'Server not found' });
-      }
-      
-      // Get pooled client
-      const client = await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
-      
-      // Call tool
-      const result = await client.callTool({
-        name: toolName,
-        arguments: args,
-      });
-      
-      res.json(result);
-    } catch (error) {
-      console.error('Error calling MCP tool:', error);
-      res.status(500).json({ error: 'Failed to call tool' });
-    }
-  });
 
   // Endpoint to get all MCP servers and their status
-  app.get('/api/mcp/servers', async (req, res, next) => {
+  const mcpLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 30,
+    message: { error: 'Too many requests to MCP endpoints' }
+  });
+
+  app.get('/api/mcp/servers', mcpLimiter, async (req, res, next) => {
     try {
       const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
       const servers = [];
@@ -303,8 +319,8 @@ async function startServer() {
         
         if (isConnected) {
           try {
-            const client = mcpClientPool.get(serverName)!;
-            const toolsResponse = await client.listTools();
+            const entry = mcpClientPool.get(serverName)!;
+            const toolsResponse = await entry.client.listTools();
             tools = toolsResponse.tools || [];
           } catch (e) {
             console.error(`Error listing tools for ${serverName}:`, e);
@@ -327,7 +343,7 @@ async function startServer() {
   });
 
   // Endpoint to explicitly connect to an MCP server
-  app.post('/api/mcp/connect', async (req, res, next) => {
+  app.post('/api/mcp/connect', mcpLimiter, async (req, res, next) => {
     const { serverName } = req.body;
     try {
       const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
@@ -458,51 +474,74 @@ async function startServer() {
     }
   };
 
+  // Endpoint for GIDE to call tools
+  app.post('/api/mcp/call', authenticateUser, async (req: any, res, next) => {
+    const { serverName, toolName, args } = req.body;
+    
+    try {
+      const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
+      const serverDef = config.tools[serverName];
+      
+      if (!serverDef) {
+        return res.status(404).json({ error: 'Server not found' });
+      }
+      
+      // Get pooled client
+      const client = await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
+      
+      // Call tool
+      const result = await client.callTool({
+        name: toolName,
+        arguments: args,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error('Error calling MCP tool:', error);
+      res.status(500).json({ error: 'Failed to call tool' });
+    }
+  });
+
   // Helper to validate path is within workspace
   function validateFilePath(unsafePath: string, user: any, workspace: string = '') {
     const resolvedPath = getSafePath(unsafePath, user, workspace);
     // Additional validation: prevent access to hidden files or system files
-    const fileName = path.basename(resolvedPath);
-    if (fileName.startsWith('.')) {
-      throw new Error('Access denied: Hidden files are not accessible');
+    const pathComponents = resolvedPath.split(path.sep);
+    for (const component of pathComponents) {
+      if (component.startsWith('.') && component !== '.') {
+        throw new Error('Access denied: Hidden files are not accessible');
+      }
     }
     return resolvedPath;
   }
 
   function getSafePath(unsafePath: string, user: any, workspace: string = '') {
-    if (user.role === 'admin') {
-      const base = workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT;
-      const resolvedPath = path.resolve(base, unsafePath);
-      if (!resolvedPath.startsWith(WORKSPACE_ROOT)) {
-        throw new Error('Access denied: Path is outside of workspace root');
-      }
-      return resolvedPath;
-    }
-
-    // For regular users, workspace MUST be provided and MUST be in the format "uid/workspace-name"
-    if (!workspace) {
-      throw new Error('Access denied: Workspace name is required');
-    }
-
-    // Ensure the workspace starts with the user's UID and has a sub-folder component
-    // Format: <uid>/<project-name>
-    const parts = workspace.split(/[/\\]/).filter(Boolean);
-    if (parts[0] !== user.uid || parts.length < 2) {
-      throw new Error('Access denied: Invalid workspace. You must work within a named project folder.');
-    }
-
-    const base = path.join(WORKSPACE_ROOT, workspace);
+    const base = user.role === 'admin' 
+      ? (workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT)
+      : path.join(WORKSPACE_ROOT, workspace);
     const resolvedPath = path.resolve(base, unsafePath);
     
-    if (!resolvedPath.startsWith(base)) {
-      throw new Error('Access denied: Path is outside of your project workspace');
+    let realResolvedPath, realBasePath;
+    try {
+      realResolvedPath = fsSync.realpathSync(resolvedPath);
+      realBasePath = fsSync.realpathSync(base);
+    } catch { 
+      throw new Error('Access denied: Invalid path or missing directory'); 
     }
     
+    if (!realResolvedPath.startsWith(realBasePath + path.sep) && realResolvedPath !== realBasePath) {
+      throw new Error('Access denied: Path is outside of workspace root');
+    }
+    
+    if (user.role !== 'admin' && (!workspace || !workspace.includes(user.uid) || workspace.split(/[/\\]/).filter(Boolean).length < 2)) {
+      throw new Error('Access denied: Workspace name is required');
+    }
     return resolvedPath;
   }
 
   // Helper to list files (non-recursive by default for lazy loading)
-  async function listFiles(dir: string, baseDir: string = '', recursive: boolean = false): Promise<any[]> {
+  async function listFiles(dir: string, baseDir: string = '', recursive: boolean = false, depth: number = 0, maxDepth: number = 5): Promise<any[]> {
+    if (depth > maxDepth) return [];
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       const files = await Promise.all(entries.map(async (entry) => {
@@ -518,7 +557,7 @@ async function startServer() {
 
         if (entry.isDirectory()) {
           if (recursive) {
-            const subFiles = await listFiles(res, baseDir || dir, true);
+            const subFiles = await listFiles(res, baseDir || dir, true, depth + 1, maxDepth);
             return [{ path: relativePath + '/', isDir: true, size: 0 }, ...subFiles];
           }
           return [{ path: relativePath + '/', isDir: true, size: 0 }];
@@ -624,6 +663,11 @@ async function startServer() {
       logger.info('Spawning child process', { tool, args });
       const child = spawn(tool, args, { cwd: root });
       
+      const processTimeout = setTimeout(() => { 
+        child.kill('SIGTERM'); 
+        logger.warn('Child process timed out and was killed'); 
+      }, 30_000);
+      
       let stdout = '';
       let stderr = '';
       
@@ -631,18 +675,92 @@ async function startServer() {
       child.stderr.on('data', (data) => { stderr += data; });
       
       child.on('close', (code) => {
+        clearTimeout(processTimeout);
         logger.info('Child process closed', { code, stdout: stdout.substring(0, 100), stderr: stderr.substring(0, 100) });
-        if (code === 0) {
-          res.json({ stdout, stderr, success: true });
-        } else {
-          res.json({ stdout, stderr, success: false });
+        if (!res.headersSent) {
+          if (code === 0) {
+            res.json({ stdout, stderr, success: true });
+          } else {
+            res.json({ stdout, stderr, success: false });
+          }
         }
       });
       
       child.on('error', (error) => {
+        clearTimeout(processTimeout);
         logger.error('Child process error', error);
-        res.status(500).json({ error: String(error), success: false });
+        if (!res.headersSent) {
+          res.status(500).json({ error: String(error), success: false });
+        }
       });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/tools/find_symbol', authenticateUser, async (req: any, res, next) => {
+    try {
+      const { symbol, file_pattern, workspace } = req.body;
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
+      
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      // Try rg first, fallback to grep
+      const cmd = `rg --json --no-heading --line-number ${file_pattern ? `-g "${file_pattern}"` : ''} "${symbol}" . || grep -rn "${symbol}" ${file_pattern ? `--include="${file_pattern}"` : ''} .`;
+      
+      try {
+        const { stdout } = await execAsync(cmd, { cwd: root, timeout: 10000 });
+        const locations = stdout.split('\n').filter(Boolean).slice(0, 50).map(line => {
+          try {
+            // Try to parse rg JSON output
+            const data = JSON.parse(line);
+            if (data.type === 'match') {
+              return { file: data.data.path.text, line: data.data.line_number, snippet: data.data.lines.text.trim() };
+            }
+            return null;
+          } catch (e) {
+            // Fallback to grep parsing
+            const [file, lineNum, ...snippet] = line.split(':');
+            if (file && lineNum && !isNaN(parseInt(lineNum, 10))) {
+              return { file, line: parseInt(lineNum, 10), snippet: snippet.join(':').trim() };
+            }
+            return null;
+          }
+        }).filter(Boolean);
+        res.json({ locations });
+      } catch (e: any) {
+        // grep returns exit code 1 if no lines were selected
+        if (e.code === 1) return res.json({ locations: [] });
+        throw e;
+      }
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/tools/diagnostics', authenticateUser, async (req: any, res, next) => {
+    try {
+      const { file_path, workspace } = req.body;
+      const targetPath = getSafePath(file_path, req.user, workspace);
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
+      
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      // Basic syntax check using node for JS/TS
+      if (file_path.endsWith('.js') || file_path.endsWith('.ts')) {
+        try {
+          await execAsync(`node --check ${targetPath}`, { cwd: root, timeout: 5000 });
+          res.json({ diagnostics: [] });
+        } catch (e: any) {
+          res.json({ diagnostics: [{ message: e.stderr || e.message }] });
+        }
+      } else {
+        res.json({ diagnostics: [{ message: "Diagnostics not supported for this file type yet." }] });
+      }
     } catch (error) {
       next(error);
     }
@@ -651,7 +769,11 @@ async function startServer() {
   app.post('/api/admin/users', async (req, res, next) => {
     try {
       const { secretKey } = AdminRequestSchema.parse(req.body);
-      if (secretKey !== env.ADMIN_SECRET_KEY) {
+      const isValidSecret = crypto.timingSafeEqual(
+        Buffer.from(secretKey || ''),
+        Buffer.from(env.ADMIN_SECRET_KEY || '')
+      );
+      if (!isValidSecret) {
         logger.warn('Unauthorized admin users access attempt', { 
           providedKey: secretKey?.substring(0, 3) + '...',
           expectedKeySet: !!env.ADMIN_SECRET_KEY 
@@ -828,22 +950,30 @@ async function startServer() {
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
       
-      let cmd = '';
-      const safeMessage = (message || 'Update').replace(/[`"$\\]/g, '');
-
+      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
+      
       switch (command) {
-        case 'init': cmd = 'git init'; break;
-        case 'add': cmd = 'git add .'; break;
-        case 'commit': cmd = `git commit -m "${safeMessage}"`; break;
-        case 'pull': cmd = 'git pull'; break;
+        case 'init': 
+          await execAsync('git init', { cwd: root });
+          return res.json({ success: true });
+        case 'add': 
+          await execAsync('git add .', { cwd: root });
+          return res.json({ success: true });
+        case 'commit': 
+          await new Promise((resolve, reject) => {
+            const child = spawn('git', ['commit', '-m', message || 'Update'], { cwd: root });
+            child.on('close', (code) => {
+              if (code === 0) resolve(true);
+              else reject(new Error(`Git commit failed with code ${code}`));
+            });
+          });
+          return res.json({ success: true });
+        case 'pull': 
+          await execAsync('git pull', { cwd: root });
+          return res.json({ success: true });
         default: 
           return res.status(400).json({ error: 'Invalid git command' });
       }
-      
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
-      
-      const { stdout, stderr } = await execAsync(cmd, { cwd: root });
-      res.json({ success: true, stdout, stderr });
     } catch (error) {
       next(error);
     }
@@ -1084,6 +1214,41 @@ async function startServer() {
       {
         functionDeclarations: [
           {
+            name: 'read_file',
+            description: 'Read the contents of a file.',
+            parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }
+          },
+          {
+            name: 'write_file',
+            description: 'Write content to a file.',
+            parameters: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } }, required: ['path', 'content'] }
+          },
+          {
+            name: 'apply_diff',
+            description: 'Apply a unified diff to a file.',
+            parameters: { type: 'object', properties: { path: { type: 'string' }, diff: { type: 'string' } }, required: ['path', 'diff'] }
+          },
+          {
+            name: 'search_code',
+            description: 'Search for a regex pattern in the codebase.',
+            parameters: { type: 'object', properties: { pattern: { type: 'string' }, dir: { type: 'string' } }, required: ['pattern'] }
+          },
+          {
+            name: 'find_symbol',
+            description: 'Find the definition and references of a symbol.',
+            parameters: { type: 'object', properties: { symbol: { type: 'string' }, file_pattern: { type: 'string' } }, required: ['symbol'] }
+          },
+          {
+            name: 'get_diagnostics',
+            description: 'Get linting or compilation errors for a file.',
+            parameters: { type: 'object', properties: { file_path: { type: 'string' } }, required: ['file_path'] }
+          },
+          {
+            name: 'mcp_dispatch',
+            description: 'Execute a tool on an MCP server.',
+            parameters: { type: 'object', properties: { server_name: { type: 'string' }, tool_name: { type: 'string' }, args: { type: 'string' } }, required: ['server_name', 'tool_name', 'args'] }
+          },
+          {
             name: 'runCommand',
             description: 'Run a shell command or tool in the workspace.',
             parameters: {
@@ -1113,6 +1278,8 @@ async function startServer() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60_000);
 
+      req.on('close', () => { controller.abort(); logger.info('Client disconnected, aborting Gemini stream'); });
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1136,13 +1303,15 @@ async function startServer() {
         const reader = response.body.getReader();
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
-          res.write(value);
+          if (done || !res.writable) break;
+          try { res.write(value); } catch (e) { logger.error('SSE write failed', e); break; }
         }
       }
       res.end();
     } catch (error: any) {
-      res.status(500).json({ error: String(error) });
+      if (error.name === 'AbortError') return;
+      if (!res.headersSent) res.status(500).json({ error: String(error) });
+      else res.end();
     }
   });
 
@@ -1165,8 +1334,9 @@ async function startServer() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
+      origin: process.env.ALLOWED_ORIGINS?.split(',') || [process.env.CLIENT_URL || 'http://localhost:5173'],
+      methods: ["GET", "POST"],
+      credentials: true
     }
   });
 
@@ -1191,7 +1361,7 @@ async function startServer() {
       logger.info('Terminal start requested', { options, uid: socket.id });
       if (ptyProcess) {
         logger.info('Killing existing PTY process');
-        ptyProcess.kill();
+        ptyProcess.kill('SIGKILL');
       }
       
       const cwd = options?.cwd ? path.join(WORKSPACE_ROOT, options.cwd) : process.cwd();
@@ -1205,13 +1375,25 @@ async function startServer() {
           stdio: ['pipe', 'pipe', 'pipe']
         });
 
-        ptyProcess.stdout?.on('data', (data: Buffer) => {
-          socket.emit('terminal:data', data.toString());
-        });
+      const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB
+      let stdout = '';
+      let stderr = '';
+      
+      ptyProcess.stdout?.on('data', (data: Buffer) => {
+        if (stdout.length + data.length > MAX_BUFFER_SIZE) {
+          stdout = stdout.slice(-5 * 1024 * 1024); // Keep last 5MB
+        }
+        stdout += data;
+        socket.emit('terminal:data', data.toString());
+      });
 
-        ptyProcess.stderr?.on('data', (data: Buffer) => {
-          socket.emit('terminal:data', data.toString());
-        });
+      ptyProcess.stderr?.on('data', (data: Buffer) => {
+        if (stderr.length + data.length > MAX_BUFFER_SIZE) {
+          stderr = stderr.slice(-5 * 1024 * 1024); // Keep last 5MB
+        }
+        stderr += data;
+        socket.emit('terminal:data', data.toString());
+      });
 
         ptyProcess.on('exit', (code: number) => {
           logger.info('PTY process exited', { code });
@@ -1241,7 +1423,7 @@ async function startServer() {
     socket.on('disconnect', () => {
       logger.info('Client disconnected from WebSocket');
       if (ptyProcess) {
-        ptyProcess.kill();
+        ptyProcess.kill('SIGKILL');
       }
     });
   });

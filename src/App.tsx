@@ -6,10 +6,11 @@ import { Toaster, toast } from 'sonner';
 import { useAppStore } from './store/useAppStore';
 import { Message, streamGemini } from './lib/gemini';
 import { extractFiles, type FileStore } from './lib/fileStore';
+import { applyDiff } from './lib/diff';
 import { getProjects, saveProjects, getCurrentProjectId, setCurrentProjectId, generateId, type Project } from './lib/projectStore';
 import { filesystemService } from './lib/filesystemService';
 import { settingsStore, type Settings } from './lib/settingsStore';
-import { auth, googleProvider } from './firebase';
+import { auth, googleProvider, githubProvider } from './firebase';
 import { signInWithPopup, signOut } from 'firebase/auth';
 import { useFirebase } from './contexts/FirebaseContext';
 import { useWorkspaces, useFiles, useFileSystemMutations } from './hooks/useFileSystem';
@@ -22,6 +23,7 @@ import { generateAstSkeleton } from './utils/astChunker';
 
 import { Header } from './components/Header';
 import { AuthGuard } from './components/AuthGuard';
+import { LandingPage } from './components/LandingPage';
 import { profileStore, type Profile } from './lib/profileStore';
 
 // Lazy load heavy components
@@ -57,16 +59,23 @@ export default function App() {
   const { user, isAuthLoading, idToken } = useFirebase();
   const queryClient = useQueryClient();
   const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
+  const { workspaceName, setWorkspaceName, workspaces, setWorkspaces } = useAppStore();
+
+  const workspaceNameRef = useRef(workspaceName);
+  useEffect(() => {
+    workspaceNameRef.current = workspaceName;
+  }, [workspaceName]);
 
   // Socket for real-time updates
   useSocket((data) => {
-    if (workspaceName && data.path.includes(workspaceName)) {
+    const currentWorkspace = workspaceNameRef.current;
+    if (currentWorkspace && data.path.includes(currentWorkspace)) {
       // Invalidate file queries for this workspace
-      queryClient.invalidateQueries({ queryKey: ['files', workspaceName] });
+      queryClient.invalidateQueries({ queryKey: ['files', currentWorkspace] });
       
       // If the selected file was changed, invalidate its content query
       if (selectedFile && data.path.endsWith(selectedFile)) {
-        queryClient.invalidateQueries({ queryKey: ['fileContent', workspaceName, selectedFile] });
+        queryClient.invalidateQueries({ queryKey: ['fileContent', currentWorkspace, selectedFile] });
       }
     }
   });
@@ -77,6 +86,10 @@ export default function App() {
   const { model, setModel } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [fileStore, setFileStore] = useState<FileStore>({});
+  const fileStoreRef = useRef<FileStore>(fileStore);
+  useEffect(() => {
+    fileStoreRef.current = fileStore;
+  }, [fileStore]);
   const { selectedFile, setSelectedFile } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
@@ -86,6 +99,24 @@ export default function App() {
   const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
   const [sidebarTab, setSidebarTab] = useState<'files' | 'search' | 'mcp'>('files');
   const [showMcpModal, setShowMcpModal] = useState(false);
+  const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
+  const lastPersonaRef = useRef(settings?.aiPersona);
+
+  useEffect(() => {
+    if (lastPersonaRef.current && settings?.aiPersona && lastPersonaRef.current !== settings.aiPersona) {
+      const personaName = settings.aiPersona === 'custom' ? 'Custom Persona' : settings.aiPersona;
+      setMessages(prev => [
+        ...prev,
+        { 
+          id: generateId(), 
+          role: 'model', 
+          content: `[SYSTEM] AI Persona changed to: **${personaName.toUpperCase()}**. I will now adhere to this new persona for the remainder of our conversation.` 
+        }
+      ]);
+    }
+    lastPersonaRef.current = settings?.aiPersona;
+  }, [settings?.aiPersona]);
+
   const [targetLine, setTargetLine] = useState<number | undefined>(undefined);
   const [enabledTools, setEnabledTools] = useState<any[]>([]);
 
@@ -103,7 +134,7 @@ export default function App() {
   }, []);
 
   // Project Management State
-  const { projects, setProjects, currentProjectId, setCurrentProjectId, createProject, deleteProject } = useProjects();
+  const { projects, setProjects, currentProjectId, setCurrentProjectId, createProject, deleteProject, isLoading: isProjectsLoading } = useProjects();
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -111,9 +142,7 @@ export default function App() {
   const [showTerminal, setShowTerminal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [pendingDiff, setPendingDiff] = useState<{ filename: string; original: string; modified: string } | null>(null);
-  const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
-  const { workspaceName, setWorkspaceName, workspaces, setWorkspaces } = useAppStore();
   const { data: workspacesData, isLoading: isWorkspacesLoading, isError: isWorkspacesError } = useWorkspaces();
   
   // Restore workspaceName from localStorage
@@ -164,18 +193,23 @@ export default function App() {
   
   useEffect(() => {
     if (rootFiles) {
-      const store: FileStore = {};
-      rootFiles.forEach(file => {
-        const cleanPath = (file.isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
-        store[cleanPath] = {
-          content: '',
-          isNew: false,
-          isModified: false,
-          size: file.size,
-          isDir: file.isDir
-        };
+      setFileStore(prevStore => {
+        const store = { ...prevStore };
+        rootFiles.forEach(file => {
+          const cleanPath = (file.isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
+          // Only update if not already tracking this file
+          if (!store[cleanPath]) {
+            store[cleanPath] = {
+              content: '',
+              isNew: false,
+              isModified: false,
+              size: file.size,
+              isDir: file.isDir
+            };
+          }
+        });
+        return store;
       });
-      setFileStore(store);
       setIsProjectsLoaded(true);
     }
   }, [rootFiles]);
@@ -208,23 +242,23 @@ export default function App() {
     }
   };
 
-  // Save projects to localStorage whenever they change (only in non-filesystem mode)
+  // Save projects to IndexedDB whenever they change (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded) {
+    if (isProjectsLoaded && !isProjectsLoading) {
       saveProjects(projects);
     }
-  }, [projects, isProjectsLoaded]);
+  }, [projects, isProjectsLoaded, isProjectsLoading]);
 
   // Auto-save current project files (only in non-filesystem mode)
   useEffect(() => {
-    if (isProjectsLoaded && currentProjectId) {
+    if (isProjectsLoaded && !isProjectsLoading && currentProjectId) {
       setProjects(prev => prev.map((p: Project) => 
         p.id === currentProjectId 
           ? { ...p, files: fileStore, updatedAt: Date.now() } 
           : p
       ));
     }
-  }, [fileStore, currentProjectId, isProjectsLoaded]);
+  }, [fileStore, currentProjectId, isProjectsLoaded, isProjectsLoading]);
 
   useEffect(() => {
     if (selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
@@ -245,10 +279,11 @@ export default function App() {
 
   // Sync fileStore to backend after streaming finishes
   useEffect(() => {
-    if (!isStreaming) {
+    if (!isStreaming && Object.keys(fileStoreRef.current).length > 0) {
       const syncFiles = async (retries = 3) => {
         try {
-          const modifiedFiles = (Object.entries(fileStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew || f.isDeleted);
+          const currentStore = fileStoreRef.current;
+          const modifiedFiles = (Object.entries(currentStore) as [string, any][]).filter(([_, f]) => f.isModified || f.isNew || f.isDeleted);
           for (const [path, file] of modifiedFiles) {
             if (file.isDeleted) {
               await filesystemService.deleteFile(path);
@@ -262,11 +297,16 @@ export default function App() {
           // Clear flags after sync and remove deleted files from state
           setFileStore(prev => {
             const newStore = { ...prev };
-            Object.keys(newStore).forEach(p => {
-              if (newStore[p].isDeleted) {
-                delete newStore[p];
-              } else if (newStore[p].isModified || newStore[p].isNew) {
-                newStore[p] = { ...newStore[p], isModified: false, isNew: false };
+            modifiedFiles.forEach(([p, file]) => {
+              if (newStore[p]) {
+                if (file.isDeleted) {
+                  delete newStore[p];
+                } else {
+                  // Only clear flags if the content hasn't changed since we started saving
+                  if (newStore[p].content === file.content) {
+                    newStore[p] = { ...newStore[p], isModified: false, isNew: false };
+                  }
+                }
               }
             });
             return newStore;
@@ -280,6 +320,14 @@ export default function App() {
             // Final failure - alert user
             console.error('File sync failed after multiple retries');
             // TODO: Add user-facing error notification
+            // Using a simple alert for now as a placeholder for a proper toast notification
+            // In a real app, use a toast library like sonner or react-hot-toast
+            // alert('Failed to save files. Some changes may be lost.');
+            // Assuming sonner is available based on previous context
+            import('sonner').then(({ toast }) => {
+              toast.error('Failed to save files. Some changes may be lost.');
+            });
+            console.error('File sync failed after multiple retries', e);
           }
         }
       };
@@ -356,11 +404,14 @@ export default function App() {
     setShowKeyModal(false);
   };
 
-  const handleCreateProject = (name: string) => {
-    createProject(name);
+  const handleCreateProject = async (name: string) => {
+    const newProject = await createProject(name);
     setFileStore({});
     setSelectedFile(null);
     setMessages([]);
+    // Ensure the new project is saved to IndexedDB immediately
+    await saveProjects([newProject, ...projects]);
+    setShowProjectModal(false);
   };
 
   const handleSaveAll = async () => {
@@ -371,17 +422,19 @@ export default function App() {
             await saveFileMutation.mutateAsync({ workspace: workspaceName, path, content: file.content });
           }
         }
+        
+        setFileStore(prev => {
+          const newStore = { ...prev };
+          modifiedFiles.forEach(([path, file]) => {
+            if (newStore[path] && newStore[path].content === file.content) {
+              newStore[path] = { ...newStore[path], isModified: false, isNew: false };
+            }
+          });
+          return newStore;
+        });
       } catch (e) {
         alert('Failed to save some files to filesystem');
       }
-
-    setFileStore(prev => {
-      const newStore = { ...prev };
-      Object.keys(newStore).forEach(path => {
-        newStore[path] = { ...newStore[path], isModified: false, isNew: false };
-      });
-      return newStore;
-    });
   };
 
   const handleSwitchProject = (id: string) => {
@@ -495,11 +548,19 @@ export default function App() {
     }
   };
 
-  const handleSignIn = async () => {
+  const handleSignInGithub = async () => {
+    try {
+      await signInWithPopup(auth, githubProvider);
+    } catch (error) {
+      console.error('Failed to sign in with GitHub', error);
+    }
+  };
+
+  const handleSignInGoogle = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      console.error('Failed to sign in', error);
+      console.error('Failed to sign in with Google', error);
     }
   };
 
@@ -595,10 +656,14 @@ export default function App() {
 
       setFileStore(prev => {
         const newStore = { ...prev };
-        delete newStore[fileToDelete];
+        Object.keys(newStore).forEach(path => {
+          if (path === fileToDelete || path.startsWith(fileToDelete + '/')) {
+            delete newStore[path];
+          }
+        });
         return newStore;
       });
-      if (selectedFile === fileToDelete) {
+      if (selectedFile === fileToDelete || (selectedFile && selectedFile.startsWith(fileToDelete + '/'))) {
         setSelectedFile(null);
       }
       setFileToDelete(null);
@@ -617,30 +682,36 @@ export default function App() {
 
     setFileStore(prev => {
       const newStore = { ...prev };
-      if (newStore[oldPath]) {
-        // Ensure new parent directories exist
-        const parts = newPath.split('/');
-        let currentPath = '';
-        for (let i = 0; i < parts.length - 1; i++) {
-          currentPath += (currentPath ? '/' : '') + parts[i];
-          if (!newStore[currentPath]) {
-            newStore[currentPath] = { 
-              content: '', 
-              isNew: true, 
-              isModified: false, 
-              size: 0, 
-              isDir: true 
-            };
-          }
+      
+      // Ensure new parent directories exist
+      const parts = newPath.split('/');
+      let currentPath = '';
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentPath += (currentPath ? '/' : '') + parts[i];
+        if (!newStore[currentPath]) {
+          newStore[currentPath] = { 
+            content: '', 
+            isNew: true, 
+            isModified: false, 
+            size: 0, 
+            isDir: true 
+          };
         }
-
-        newStore[newPath] = { ...newStore[oldPath] };
-        delete newStore[oldPath];
       }
+
+      // Rename the item and all its children if it's a directory
+      Object.keys(newStore).forEach(path => {
+        if (path === oldPath || path.startsWith(oldPath + '/')) {
+          const updatedPath = path.replace(oldPath, newPath);
+          newStore[updatedPath] = { ...newStore[path] };
+          delete newStore[path];
+        }
+      });
+
       return newStore;
     });
-    if (selectedFile === oldPath) {
-      setSelectedFile(newPath);
+    if (selectedFile === oldPath || (selectedFile && selectedFile.startsWith(oldPath + '/'))) {
+      setSelectedFile(selectedFile.replace(oldPath, newPath));
     }
   };
 
@@ -767,7 +838,12 @@ export default function App() {
     const newMessages: Message[] = [...messages, userMessage];
     setMessages(newMessages);
     
-    const processAIResponse = async (currentMessages: Message[], currentFileStore: typeof fileStore) => {
+    const processAIResponse = async (currentMessages: Message[], currentFileStore: typeof fileStore, depth: number = 0) => {
+      if (depth > 5) {
+        console.warn('AI tool call depth limit reached (5). Breaking loop to prevent memory exhaustion.');
+        setIsStreaming(false);
+        return;
+      }
       const modelMsgId = generateId();
       setMessages([...currentMessages, { id: modelMsgId, role: 'model', content: '' }]);
       setIsStreaming(true);
@@ -783,9 +859,21 @@ export default function App() {
           }
           return `- ${path}`;
         }).join('\n');
+        const personaInstruction = settings.aiPersona === 'custom' 
+          ? settings.customPersona 
+          : `Act as a ${settings.aiPersona}.`;
+
         const systemPrompt = getSystemInstruction(enabledTools) + 
-          `\n\n[CURRENT WORKSPACE FILES]\n${fileTree || 'No files yet.'}\n` +
-          (settings.systemInstruction ? `\n\n[USER CUSTOM INSTRUCTION: ${settings.systemInstruction}]` : '') + 
+          `\n\n[CURRENT WORKSPACE CONTEXT]\n` +
+          `Workspace Name: ${workspaceName}\n` +
+          `Active File: ${selectedFile || 'None'}\n` +
+          `\n[CURRENT WORKSPACE FILES & STRUCTURE]\n` +
+          `The following is a list of files in the current workspace. For supported files (JS, TS, Python), ` +
+          `a structural AST summary is provided to help you understand the codebase without reading every file. ` +
+          `Use these summaries to identify relevant functions, classes, and types.\n\n` +
+          `${fileTree || 'No files yet.'}\n` +
+          `\n\n[AI PERSONA: ${settings.aiPersona.toUpperCase()}]\n${personaInstruction}\n` +
+          (settings.aiChainOfThought ? "\n[CHAIN OF THOUGHT]\nYou MUST wrap your internal reasoning process in <thinking> tags before providing your final response. This reasoning should include your plan, file manifest, and any complexity estimates.\n" : "") +
           systemModifier;
 
         // Truncate context window to last 20 messages to prevent token limits
@@ -810,7 +898,26 @@ export default function App() {
               }
               return updated;
             });
-            setFileStore(extractFiles(fullResponse, currentFileStore));
+            setFileStore(prevStore => {
+              const extractedStore = extractFiles(fullResponse, currentFileStore);
+              const mergedStore = { ...extractedStore };
+              
+              // Preserve user edits made during streaming
+              for (const path in prevStore) {
+                if (!currentFileStore[path] || prevStore[path].content !== currentFileStore[path].content) {
+                  mergedStore[path] = prevStore[path];
+                }
+              }
+              
+              // Respect user deletions made during streaming
+              for (const path in currentFileStore) {
+                if (!prevStore[path]) {
+                  delete mergedStore[path];
+                }
+              }
+              
+              return mergedStore;
+            });
           },
           settings.temperature
         );
@@ -819,20 +926,89 @@ export default function App() {
           const functionResponses: { name: string; response: any }[] = [];
           for (const call of finalFunctionCalls) {
             try {
-              if (call.name === 'runCommand') {
-                const res = await filesystemService.runTool(call.args.command);
-                functionResponses.push({ name: call.name, response: res });
-              } else {
-                // MCP tool
-                const idToken = await auth.currentUser?.getIdToken();
-                const argsObj = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
-                const res = await fetch('/api/mcp/call', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                  body: JSON.stringify({ serverName: call.name, toolName: call.args.toolName, args: argsObj })
-                });
-                const data = await res.json();
-                functionResponses.push({ name: call.name, response: data });
+              switch (call.name) {
+                case 'runCommand': {
+                  const res = await filesystemService.runTool(call.args.command);
+                  functionResponses.push({ name: call.name, response: res });
+                  break;
+                }
+                case 'read_file': {
+                  const content = await filesystemService.getFileContent(call.args.path);
+                  functionResponses.push({ name: call.name, response: { content } });
+                  break;
+                }
+                case 'write_file': {
+                  await filesystemService.saveFile(call.args.path, call.args.content);
+                  setFileStore(prev => ({
+                    ...prev,
+                    [call.args.path]: { content: call.args.content, isNew: !prev[call.args.path], isModified: true, size: call.args.content.length }
+                  }));
+                  functionResponses.push({ name: call.name, response: { success: true } });
+                  break;
+                }
+                case 'apply_diff': {
+                  const original = await filesystemService.getFileContent(call.args.path).catch(() => '');
+                  const patched = applyDiff(original, call.args.diff);
+                  await filesystemService.saveFile(call.args.path, patched);
+                  setFileStore(prev => ({
+                    ...prev,
+                    [call.args.path]: { content: patched, isNew: !prev[call.args.path], isModified: true, size: patched.length }
+                  }));
+                  functionResponses.push({ name: call.name, response: { success: true } });
+                  break;
+                }
+                case 'search_code': {
+                  const res = await filesystemService.search(call.args.pattern);
+                  functionResponses.push({ name: call.name, response: { results: res } });
+                  break;
+                }
+                case 'find_symbol': {
+                  const idToken = await auth.currentUser?.getIdToken();
+                  const res = await fetch('/api/tools/find_symbol', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                    body: JSON.stringify({ symbol: call.args.symbol, file_pattern: call.args.file_pattern, workspace: workspaceName })
+                  });
+                  const data = await res.json();
+                  functionResponses.push({ name: call.name, response: data });
+                  break;
+                }
+                case 'get_diagnostics': {
+                  const idToken = await auth.currentUser?.getIdToken();
+                  const res = await fetch('/api/tools/diagnostics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                    body: JSON.stringify({ file_path: call.args.file_path, workspace: workspaceName })
+                  });
+                  const data = await res.json();
+                  functionResponses.push({ name: call.name, response: data });
+                  break;
+                }
+                case 'mcp_dispatch': {
+                  const idToken = await auth.currentUser?.getIdToken();
+                  const argsObj = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
+                  const res = await fetch('/api/mcp/call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                    body: JSON.stringify({ serverName: call.args.server_name, toolName: call.args.tool_name, args: argsObj })
+                  });
+                  const data = await res.json();
+                  functionResponses.push({ name: call.name, response: data });
+                  break;
+                }
+                default: {
+                  // Fallback for legacy dynamic MCP tools
+                  const idToken = await auth.currentUser?.getIdToken();
+                  const argsObj = typeof call.args.args === 'string' ? JSON.parse(call.args.args) : (call.args.args || {});
+                  const res = await fetch('/api/mcp/call', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+                    body: JSON.stringify({ serverName: call.name, toolName: call.args.toolName, args: argsObj })
+                  });
+                  const data = await res.json();
+                  functionResponses.push({ name: call.name, response: data });
+                  break;
+                }
               }
             } catch (err) {
               functionResponses.push({ name: call.name, response: { error: String(err) } });
@@ -845,9 +1021,8 @@ export default function App() {
             { id: generateId(), role: 'function', content: '', functionResponses }
           ];
           
-          // Re-evaluate the fileStore after the stream to pass to the next iteration
-          const updatedFileStore = extractFiles(fullResponse, currentFileStore);
-          await processAIResponse(nextMessages, updatedFileStore);
+          // Use the latest fileStore from the ref to ensure user edits are preserved
+          await processAIResponse(nextMessages, fileStoreRef.current, depth + 1);
         } else {
           toast.success('Response received');
           setIsStreaming(false);
@@ -869,6 +1044,10 @@ export default function App() {
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+  }, []);
+
   const handleFileChange = async (newContent: string | undefined) => {
     if (selectedFile && newContent !== undefined) {
       setFileStore(prev => ({
@@ -885,10 +1064,15 @@ export default function App() {
         saveTimeoutRef.current = setTimeout(async () => {
           try {
             await saveFileMutation.mutateAsync({ workspace: workspaceName, path: selectedFile, content: newContent });
-            setFileStore(prev => ({
-              ...prev,
-              [selectedFile]: { ...prev[selectedFile], isModified: false }
-            }));
+            setFileStore(prev => {
+              if (prev[selectedFile] && prev[selectedFile].content === newContent) {
+                return {
+                  ...prev,
+                  [selectedFile]: { ...prev[selectedFile], isModified: false }
+                };
+              }
+              return prev;
+            });
           } catch (e) {
             console.error('Failed to auto-save to filesystem', e);
           }
@@ -949,7 +1133,8 @@ export default function App() {
         workspaces={workspaces}
         model={model}
         setModel={setModel}
-        onSignIn={handleSignIn}
+        onSignInGoogle={handleSignInGoogle}
+        onSignInGithub={handleSignInGithub}
         onSignOut={handleSignOut}
         onShowWorkspaceModal={() => setShowWorkspaceModal(true)}
         onShowSettingsModal={() => setShowSettingsModal(true)}
@@ -1004,7 +1189,8 @@ export default function App() {
           workspaces={workspaces}
           workspaceName={workspaceName}
           showWorkspaceModal={showWorkspaceModal}
-          onSignIn={handleSignIn}
+          onSignInGoogle={handleSignInGoogle}
+          onSignInGithub={handleSignInGithub}
           onShowWorkspaceModal={() => setShowWorkspaceModal(true)}
           onRetry={() => queryClient.invalidateQueries({ queryKey: ['workspaces'] })}
           idToken={idToken}
@@ -1021,6 +1207,7 @@ export default function App() {
         
         {/* Main Content Area */}
         <div className="flex-1 flex overflow-hidden relative">
+{user ? (
           <>
             {/* Desktop Resizable Layout */}
             <div className="hidden sm:flex flex-1 h-full">
@@ -1032,6 +1219,7 @@ export default function App() {
                     <ChatPanel
                       messages={messages}
                       onSendMessage={handleSendMessage}
+                      onNewChat={() => setMessages([])}
                       onReviewChange={(filename, content) => {
                         const original = fileStore[filename]?.content || '';
                         setPendingDiff({ filename, original, modified: content });
@@ -1142,6 +1330,7 @@ export default function App() {
                     <ChatPanel
                       messages={messages}
                       onSendMessage={handleSendMessage}
+                      onNewChat={() => setMessages([])}
                       onReviewChange={(filename, content) => {
                         const original = fileStore[filename]?.content || '';
                         setPendingDiff({ filename, original, modified: content });
@@ -1218,23 +1407,28 @@ export default function App() {
           )}
         </AnimatePresence>
       </>
+    ) : (
+      <LandingPage onSignInGoogle={handleSignInGoogle} onSignInGithub={handleSignInGithub} />
+    )}
     </div>
 
       {/* Bottom Panel (Desktop) / Preview (Mobile) */}
       <div className={`h-[30%] sm:h-[30%] shrink-0 ${mobileView !== 'preview' ? 'hidden sm:flex' : 'flex'} flex-col shadow-[0_-4px_10px_rgba(0,0,0,0.2)] z-10`}>
-        <Suspense fallback={<PanelLoader />}>
-          <BottomPanel
-            files={fileStore}
-            activeTab={bottomTab}
-            onTabChange={setBottomTab}
-            onSelectFile={setSelectedFile}
-            onDownloadFile={handleDownloadFile}
-            onDownloadZip={handleDownloadZip}
-            onImportZip={handleImportZip}
-            onDeleteFile={handleDeleteFile}
-            hasPreviewableFiles={hasPreviewableFiles}
-          />
-        </Suspense>
+        <ErrorBoundary name="Bottom Panel">
+          <Suspense fallback={<PanelLoader />}>
+            <BottomPanel
+              files={fileStore}
+              activeTab={bottomTab}
+              onTabChange={setBottomTab}
+              onSelectFile={setSelectedFile}
+              onDownloadFile={handleDownloadFile}
+              onDownloadZip={handleDownloadZip}
+              onImportZip={handleImportZip}
+              onDeleteFile={handleDeleteFile}
+              hasPreviewableFiles={hasPreviewableFiles}
+            />
+          </Suspense>
+        </ErrorBoundary>
       </div>
 
       {/* Modals for File Operations */}

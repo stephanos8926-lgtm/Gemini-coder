@@ -7,6 +7,9 @@
 [x] DONE — Identify SDK replacement opportunities.
 [x] DONE — Edge Case & Security Review.
 [x] DONE — Refactoring and testing.
+[ ] NEXT — Refactor App.tsx (Decomposition).
+[ ] NEXT — Setup CI/CD pipeline (GitHub Actions).
+[ ] NEXT — Perform formal security audit of firestore.rules.
 
 ## Findings
 - **App.tsx**: Too large, managing too much state. Needs decomposition into smaller components/hooks.

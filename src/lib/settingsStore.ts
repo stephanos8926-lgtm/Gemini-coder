@@ -16,8 +16,10 @@ export interface Settings {
   // AI
   defaultModel: string;
   temperature: number;
-  systemInstruction: string;
+  aiPersona: string;
+  customPersona: string;
   aiBehavior: 'terse' | 'verbose' | 'creative' | 'technical';
+  aiChainOfThought: boolean;
   
   // UI
   theme: 'dark' | 'light' | 'high-contrast';
@@ -43,8 +45,10 @@ export const DEFAULT_SETTINGS: Settings = {
   
   defaultModel: 'gemini-2.5-flash-lite',
   temperature: 0.7,
-  systemInstruction: '',
+  aiPersona: 'helpful assistant',
+  customPersona: '',
   aiBehavior: 'technical',
+  aiChainOfThought: true,
   
   theme: 'dark',
   sidebarPosition: 'left',

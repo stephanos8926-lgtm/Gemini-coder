@@ -246,14 +246,46 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
                       />
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[10px] sm:text-xs text-[#cccccc]">System Instruction Override</label>
-                      <textarea
-                        value={settings.systemInstruction}
-                        onChange={(e) => updateSetting('systemInstruction', e.target.value)}
-                        placeholder="Add custom instructions for the AI..."
-                        className="w-full h-32 sm:h-40 bg-[#252526] border border-[#3c3c3c] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#007acc] resize-none font-mono text-xs"
-                      />
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] sm:text-xs text-[#cccccc]">AI Persona</label>
+                        <select
+                          value={settings.aiPersona}
+                          onChange={(e) => updateSetting('aiPersona', e.target.value)}
+                          className="w-full bg-[#252526] border border-[#3c3c3c] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#007acc]"
+                        >
+                          <option value="helpful assistant">Helpful Assistant</option>
+                          <option value="expert programmer">Expert Programmer</option>
+                          <option value="code reviewer">Code Reviewer</option>
+                          <option value="technical writer">Technical Writer</option>
+                          <option value="custom">Custom Persona...</option>
+                        </select>
+                      </div>
+
+                      <label className="flex items-center gap-3 cursor-pointer group pt-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.aiChainOfThought}
+                          onChange={(e) => updateSetting('aiChainOfThought', e.target.checked)}
+                          className="w-4 h-4 rounded border-[#3c3c3c] bg-[#252526] text-[#007acc] focus:ring-0"
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-sm text-[#cccccc] group-hover:text-white transition-colors">Enable Chain of Thought</span>
+                          <span className="text-[10px] text-[#858585]">AI will show its reasoning process in a &lt;thinking&gt; block.</span>
+                        </div>
+                      </label>
+
+                      {settings.aiPersona === 'custom' && (
+                        <div className="space-y-2">
+                          <label className="text-[10px] sm:text-xs text-[#cccccc]">Custom Persona Instructions</label>
+                          <textarea
+                            value={settings.customPersona}
+                            onChange={(e) => updateSetting('customPersona', e.target.value)}
+                            placeholder="Describe how the AI should behave..."
+                            className="w-full h-32 bg-[#252526] border border-[#3c3c3c] rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#007acc] resize-none font-mono text-xs"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

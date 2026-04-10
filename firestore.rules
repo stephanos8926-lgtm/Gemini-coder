@@ -18,8 +18,8 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow update: if isAdmin(); 
-      allow create: if isAuthenticated() && request.resource.data.role == 'user';
+      allow update: if isOwner(uid) || isAdmin(); 
+      allow create: if isOwner(uid) && request.resource.data.role == 'user';
     }
   }
 }

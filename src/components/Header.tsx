@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, Key, Plus, Menu, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Sparkles, Download, FolderOpen } from 'lucide-react';
+import { Terminal, Key, Plus, Menu, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Sparkles, Download, FolderOpen, Github } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Profile } from '../lib/profileStore';
 
@@ -10,7 +10,8 @@ interface HeaderProps {
   workspaces: string[];
   model: string;
   setModel: (model: string) => void;
-  onSignIn: () => void;
+  onSignInGoogle: () => void;
+  onSignInGithub: () => void;
   onSignOut: () => void;
   onShowWorkspaceModal: () => void;
   onShowSettingsModal: () => void;
@@ -32,7 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   workspaces,
   model,
   setModel,
-  onSignIn,
+  onSignInGoogle,
+  onSignInGithub,
   onSignOut,
   onShowWorkspaceModal,
   onShowSettingsModal,
@@ -173,14 +175,24 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
         ) : (
-          <button
-            onClick={onSignIn}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-[#e5e5e5] rounded-md transition-all"
-            title="Sign In"
-          >
-            <LogIn className="w-3.5 h-3.5" />
-            <span>Sign In</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onSignInGithub}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white text-black hover:bg-[#e5e5e5] rounded-md transition-all"
+              title="Sign In with GitHub"
+            >
+              <Github className="w-3.5 h-3.5" />
+              <span>GitHub</span>
+            </button>
+            <button
+              onClick={onSignInGoogle}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#4285F4] text-white hover:bg-[#357ae8] rounded-md transition-all"
+              title="Sign In with Google"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Google</span>
+            </button>
+          </div>
         )}
       </div>
     </header>

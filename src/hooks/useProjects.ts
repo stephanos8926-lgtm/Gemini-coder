@@ -1,27 +1,41 @@
 import { useState, useEffect } from 'react';
-import { generateId, type Project } from '../lib/projectStore';
+import { generateId, getProjects, saveProjects, type Project } from '../lib/projectStore';
 
 export const useProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const createProject = (name: string) => {
+  useEffect(() => {
+    const loadProjects = async () => {
+      const loadedProjects = await getProjects();
+      setProjects(loadedProjects);
+      setIsLoading(false);
+    };
+    loadProjects();
+  }, []);
+
+  const createProject = async (name: string) => {
     const newProject: Project = {
       id: generateId(),
       name,
       files: {},
       updatedAt: Date.now()
     };
-    setProjects(prev => [newProject, ...prev]);
+    const newProjects = [newProject, ...projects];
+    setProjects(newProjects);
     setCurrentProjectId(newProject.id);
+    await saveProjects(newProjects);
     return newProject;
   };
 
-  const deleteProject = (id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
+  const deleteProject = async (id: string) => {
+    const newProjects = projects.filter(p => p.id !== id);
+    setProjects(newProjects);
     if (currentProjectId === id) {
       setCurrentProjectId(null);
     }
+    await saveProjects(newProjects);
   };
 
   return {
@@ -30,6 +44,7 @@ export const useProjects = () => {
     currentProjectId,
     setCurrentProjectId,
     createProject,
-    deleteProject
+    deleteProject,
+    isLoading
   };
 };

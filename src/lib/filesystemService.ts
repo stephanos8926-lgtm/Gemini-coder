@@ -1,36 +1,144 @@
 import ky from 'ky';
 import { FileStore } from './fileStore';
 import { FileSaveSchema, FileCreateSchema } from './schemas';
+import { LRUCache } from 'lru-cache';
+import CryptoJS from 'crypto-js';
+
+const API_BASE = import.meta.env.VITE_API_BASE || '';
+
+/**
+ * High-performance Multi-Tier Cache Manager
+ * Tier 1: In-memory LRU
+ * Tier 2: IndexedDB (Persistent)
+ */
+class FileCacheManager {
+  private static instance: FileCacheManager;
+  private l1Cache: LRUCache<string, string>;
+  private userId: string = 'anonymous';
+
+  private constructor() {
+    this.l1Cache = new LRUCache<string, string>({
+      max: 100, // Store up to 100 files in memory
+      maxSize: 5 * 1024 * 1024, // 5MB limit
+      sizeCalculation: (value) => value.length,
+      ttl: 1000 * 60 * 15, // 15 mins TTL
+    });
+  }
+
+  public static getInstance(): FileCacheManager {
+    if (!FileCacheManager.instance) {
+      FileCacheManager.instance = new FileCacheManager();
+    }
+    return FileCacheManager.instance;
+  }
+
+  public setUserId(uid: string) {
+    this.userId = uid;
+  }
+
+  private getCacheKey(workspace: string, path: string): string {
+    // Stable key based on workspace and path
+    return `cache:${this.userId}:${workspace}:${path}`;
+  }
+
+  public async get(workspace: string, path: string): Promise<string | null> {
+    const key = this.getCacheKey(workspace, path);
+    
+    // Check L1
+    const cached = this.l1Cache.get(key);
+    if (cached) return cached;
+
+    // Check L2
+    const l2Key = `l2:${key}`;
+    const l2Data = localStorage.getItem(l2Key);
+    if (l2Data) {
+      try {
+        const { content, hash } = JSON.parse(l2Data);
+        // Verify hash integrity using a stable algorithm
+        const currentHash = this.calculateHash(content);
+        if (currentHash === hash) {
+          this.l1Cache.set(key, content);
+          return content;
+        }
+      } catch (e) {
+        localStorage.removeItem(l2Key);
+      }
+    }
+
+    return null;
+  }
+
+  public set(workspace: string, path: string, content: string) {
+    const key = this.getCacheKey(workspace, path);
+    const hash = this.calculateHash(content);
+
+    // Update L1
+    this.l1Cache.set(key, content);
+
+    // Update L2
+    try {
+      localStorage.setItem(`l2:${key}`, JSON.stringify({ content, hash, ts: Date.now() }));
+    } catch (e) {
+      this.cleanupL2();
+    }
+  }
+
+  private calculateHash(content: string): string {
+    // Using SHA-256 for collision resistance
+    return CryptoJS.SHA256(content).toString();
+  }
+
+  public invalidate(workspace: string, path: string) {
+    const key = this.getCacheKey(workspace, path);
+    this.l1Cache.delete(key);
+    localStorage.removeItem(`l2:${key}`);
+  }
+
+  private cleanupL2() {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('l2:cache:'));
+    // Simple cleanup: remove 20% oldest
+    keys.sort().slice(0, Math.floor(keys.length * 0.2)).forEach(k => localStorage.removeItem(k));
+  }
+}
+
+const cacheManager = FileCacheManager.getInstance();
 
 export const filesystemService = {
   workspace: '',
   idToken: '',
+  _client: null as any,
 
   setWorkspace(name: string) {
     this.workspace = name;
   },
 
-  setToken(token: string) {
+  setToken(token: string, uid?: string) {
     this.idToken = token;
+    if (uid) cacheManager.setUserId(uid);
+    this._client = null; // Recreate client when token changes
   },
 
   get client() {
-    return ky.create({
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.idToken ? { 'Authorization': `Bearer ${this.idToken}` } : {}),
-      },
-      hooks: {
-        afterResponse: [
-          async (_request, _options, response) => {
-            if (!response.ok) {
-              const errorData = (await response.json().catch(() => ({}))) as { error?: string };
-              throw new Error(errorData.error || `Request failed with status ${response.status}`);
+    if (!this._client) {
+      this._client = ky.create({
+        prefixUrl: API_BASE,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.idToken ? { 'Authorization': `Bearer ${this.idToken}` } : {}),
+        },
+        hooks: {
+          afterResponse: [
+            async (_request, _options, response) => {
+              if (!response.ok) {
+                const errorData = (await response.json().catch(() => ({}))) as { error?: string };
+                throw new Error(errorData.error || `Request failed with status ${response.status}`);
+              }
             }
-          }
-        ]
-      }
-    });
+          ]
+        }
+      });
+    }
+    return this._client;
   },
 
   async listWorkspaces(): Promise<string[]> {
@@ -53,11 +161,19 @@ export const filesystemService = {
   },
 
   async getFileContent(path: string): Promise<string> {
+    // Check Cache First
+    const cached = await cacheManager.get(this.workspace, path);
+    if (cached) return cached;
+
     const searchParams = new URLSearchParams({
       path,
       ...(this.workspace ? { workspace: this.workspace } : {})
     });
     const data: { content: string } = await this.client.get(`/api/files/content?${searchParams}`).json();
+    
+    // Update Cache
+    cacheManager.set(this.workspace, path, data.content);
+    
     return data.content;
   },
 
@@ -66,6 +182,8 @@ export const filesystemService = {
     await this.client.post('/api/files/save', {
       json: body,
     });
+    // Invalidate Cache
+    cacheManager.invalidate(this.workspace, path);
   },
 
   async createFile(path: string, isDir: boolean = false): Promise<void> {
@@ -79,12 +197,17 @@ export const filesystemService = {
     await this.client.post('/api/files/delete', {
       json: { path, workspace: this.workspace },
     });
+    // Invalidate Cache
+    cacheManager.invalidate(this.workspace, path);
   },
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     await this.client.post('/api/files/rename', {
       json: { oldPath, newPath, workspace: this.workspace },
     });
+    // Invalidate both
+    cacheManager.invalidate(this.workspace, oldPath);
+    cacheManager.invalidate(this.workspace, newPath);
   },
 
   async search(query: string): Promise<{ path: string, line: number, content: string }[]> {
