@@ -103,22 +103,32 @@ class FileCacheManager {
 
 const cacheManager = FileCacheManager.getInstance();
 
-export const filesystemService = {
-  workspace: '',
-  idToken: '',
-  _client: null as any,
+export class FilesystemService {
+  private static instance: FilesystemService;
+  private workspace: string = '';
+  private idToken: string = '';
+  private _client: any = null;
 
-  setWorkspace(name: string) {
+  private constructor() {}
+
+  public static getInstance(): FilesystemService {
+    if (!FilesystemService.instance) {
+      FilesystemService.instance = new FilesystemService();
+    }
+    return FilesystemService.instance;
+  }
+
+  public setWorkspace(name: string) {
     this.workspace = name;
-  },
+  }
 
-  setToken(token: string, uid?: string) {
+  public setToken(token: string, uid?: string) {
     this.idToken = token;
     if (uid) cacheManager.setUserId(uid);
     this._client = null; // Recreate client when token changes
-  },
+  }
 
-  get client() {
+  private get client() {
     if (!this._client) {
       this._client = ky.create({
         prefixUrl: API_BASE,
@@ -139,11 +149,11 @@ export const filesystemService = {
       });
     }
     return this._client;
-  },
+  }
 
   async listWorkspaces(): Promise<string[]> {
     return this.client.get('/api/workspaces').json();
-  },
+  }
 
   async listFiles(path: string = '', recursive: boolean = false): Promise<{ path: string, isDir: boolean, size: number }[]> {
     const searchParams = new URLSearchParams({
@@ -152,13 +162,13 @@ export const filesystemService = {
       recursive: recursive.toString()
     });
     return this.client.get(`/api/files?${searchParams}`).json();
-  },
+  }
 
   async runTool(command: string): Promise<{ stdout: string, stderr: string, success: boolean }> {
     return this.client.post('/api/tools/run', {
       json: { command, workspace: this.workspace },
     }).json();
-  },
+  }
 
   async getFileContent(path: string): Promise<string> {
     // Check Cache First
@@ -175,7 +185,7 @@ export const filesystemService = {
     cacheManager.set(this.workspace, path, data.content);
     
     return data.content;
-  },
+  }
 
   async saveFile(path: string, content: string): Promise<void> {
     const body = FileSaveSchema.parse({ path, content, workspace: this.workspace });
@@ -184,14 +194,14 @@ export const filesystemService = {
     });
     // Invalidate Cache
     cacheManager.invalidate(this.workspace, path);
-  },
+  }
 
   async createFile(path: string, isDir: boolean = false): Promise<void> {
     const body = FileCreateSchema.parse({ path, isDir, workspace: this.workspace });
     await this.client.post('/api/files/create', {
       json: body,
     });
-  },
+  }
 
   async deleteFile(path: string): Promise<void> {
     await this.client.post('/api/files/delete', {
@@ -199,7 +209,7 @@ export const filesystemService = {
     });
     // Invalidate Cache
     cacheManager.invalidate(this.workspace, path);
-  },
+  }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     await this.client.post('/api/files/rename', {
@@ -208,7 +218,7 @@ export const filesystemService = {
     // Invalidate both
     cacheManager.invalidate(this.workspace, oldPath);
     cacheManager.invalidate(this.workspace, newPath);
-  },
+  }
 
   async search(query: string): Promise<{ path: string, line: number, content: string }[]> {
     const searchParams = new URLSearchParams({
@@ -216,7 +226,7 @@ export const filesystemService = {
       ...(this.workspace ? { workspace: this.workspace } : {})
     });
     return this.client.get(`/api/search?${searchParams}`).json();
-  },
+  }
 
   /**
    * Loads the root directory contents.
@@ -238,7 +248,7 @@ export const filesystemService = {
       };
     }
     return store;
-  },
+  }
 
   async loadAllFiles(): Promise<FileStore> {
     const files = await this.listFiles('', true);
@@ -258,4 +268,6 @@ export const filesystemService = {
     }
     return store;
   }
-};
+}
+
+export const filesystemService = FilesystemService.getInstance();

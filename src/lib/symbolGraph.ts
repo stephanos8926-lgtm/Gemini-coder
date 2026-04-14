@@ -14,7 +14,23 @@ export interface FileSymbols {
   imports: { source: string; symbols: string[] }[];
 }
 
-class SymbolGraph {
+import { generateAstSkeleton } from '../utils/astChunker';
+
+export interface SymbolInfo {
+  name: string;
+  type: 'function' | 'class' | 'interface' | 'type' | 'variable';
+  line: number;
+  isExported: boolean;
+  doc?: string;
+}
+
+export interface FileSymbols {
+  path: string;
+  exports: SymbolInfo[];
+  imports: { source: string; symbols: string[] }[];
+}
+
+export class SymbolGraph {
   private static instance: SymbolGraph;
   private graph: Map<string, FileSymbols> = new Map();
 

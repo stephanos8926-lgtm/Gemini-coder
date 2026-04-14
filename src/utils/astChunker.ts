@@ -14,17 +14,136 @@ export interface AstNodeInfo {
   children?: AstNodeInfo[];
 }
 
+interface AstParser {
+  parse(code: string, filename: string): AstNodeInfo[];
+}
+
+class JsTsParser implements AstParser {
+  parse(code: string, filename: string): AstNodeInfo[] {
+    try {
+      const ast = parse(code, {
+        sourceType: 'module',
+        plugins: [
+          'typescript',
+          'jsx',
+          ['decorators', { decoratorsBeforeExport: true }],
+        ],
+      });
+
+      const nodes: AstNodeInfo[] = [];
+
+      traverse(ast, {
+        FunctionDeclaration(path: any) {
+          if (path.node.id) {
+            nodes.push({
+              name: path.node.id.name,
+              type: 'function',
+              params: formatJsParams(path.node.params),
+              returnType: path.node.returnType ? code.slice(path.node.returnType.start, path.node.returnType.end).replace(/^:\s*/, '') : undefined,
+              isExported: path.parent.type === 'ExportNamedDeclaration' || path.parent.type === 'ExportDefaultDeclaration',
+              doc: getJSDoc(path.node)
+            });
+          }
+        },
+        ClassDeclaration(path: any) {
+          if (path.node.id) {
+            const children: AstNodeInfo[] = [];
+            path.traverse({
+              ClassMethod(mPath: any) {
+                if (mPath.parentPath.parentPath === path) { // Only direct methods
+                  children.push({
+                    name: mPath.node.key.name,
+                    type: 'method',
+                    params: formatJsParams(mPath.node.params),
+                    returnType: mPath.node.returnType ? code.slice(mPath.node.returnType.start, mPath.node.returnType.end).replace(/^:\s*/, '') : undefined,
+                    doc: getJSDoc(mPath.node)
+                  });
+                }
+              },
+              ClassProperty(pPath: any) {
+                if (pPath.parentPath.parentPath === path) {
+                  children.push({
+                    name: pPath.node.key.name,
+                    type: 'property',
+                    returnType: pPath.node.typeAnnotation ? code.slice(pPath.node.typeAnnotation.start, pPath.node.typeAnnotation.end).replace(/^:\s*/, '') : undefined,
+                    doc: getJSDoc(pPath.node)
+                  });
+                }
+              }
+            });
+            nodes.push({
+              name: path.node.id.name,
+              type: 'class',
+              isExported: path.parent.type === 'ExportNamedDeclaration' || path.parent.type === 'ExportDefaultDeclaration',
+              doc: getJSDoc(path.node),
+              children
+            });
+          }
+        },
+        TSInterfaceDeclaration(path: any) {
+          if (path.node.id) {
+            nodes.push({
+              name: path.node.id.name,
+              type: 'interface',
+              isExported: path.parent.type === 'ExportNamedDeclaration',
+              doc: getJSDoc(path.node)
+            });
+          }
+        },
+        TSTypeAliasDeclaration(path: any) {
+          if (path.node.id) {
+            nodes.push({
+              name: path.node.id.name,
+              type: 'type',
+              isExported: path.parent.type === 'ExportNamedDeclaration',
+              doc: getJSDoc(path.node)
+            });
+          }
+        }
+      });
+
+      return nodes;
+    } catch (error) {
+      console.warn(`Failed to parse JS/TS AST for ${filename}:`, error);
+      return [];
+    }
+  }
+}
+
+class PythonParser implements AstParser {
+  parse(code: string, filename: string): AstNodeInfo[] {
+    // For now, return empty or implement basic logic
+    return [];
+  }
+}
+
+class AstParserFactory {
+  private static parsers: Map<string, AstParser> = new Map([
+    ['js', new JsTsParser()],
+    ['jsx', new JsTsParser()],
+    ['ts', new JsTsParser()],
+    ['tsx', new JsTsParser()],
+    ['py', new PythonParser()]
+  ]);
+
+  static getParser(ext: string): AstParser | null {
+    return this.parsers.get(ext.toLowerCase()) || null;
+  }
+}
+
 export function generateAstSkeleton(code: string, filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();
-  
-  if (['js', 'jsx', 'ts', 'tsx'].includes(ext || '')) {
-    const nodes = getJsTsNodes(code, filename);
-    return formatSkeleton(nodes);
-  } else if (ext === 'py') {
+  if (!ext) return '';
+
+  const parser = AstParserFactory.getParser(ext);
+  if (!parser) return '';
+
+  if (ext === 'py') {
     return generatePythonSkeleton(code);
   }
-  
-  return '';
+
+  const nodes = parser.parse(code, filename);
+  return formatSkeleton(nodes);
 }
 
 function formatSkeleton(nodes: AstNodeInfo[], indent: string = ''): string {
@@ -61,96 +180,6 @@ function formatSkeleton(nodes: AstNodeInfo[], indent: string = ''): string {
     }
     return line;
   }).join('\n');
-}
-
-function getJsTsNodes(code: string, filename: string): AstNodeInfo[] {
-  try {
-    const ast = parse(code, {
-      sourceType: 'module',
-      plugins: [
-        'typescript',
-        'jsx',
-        ['decorators', { decoratorsBeforeExport: true }],
-      ],
-    });
-
-    const nodes: AstNodeInfo[] = [];
-
-    traverse(ast, {
-      FunctionDeclaration(path: any) {
-        if (path.node.id) {
-          nodes.push({
-            name: path.node.id.name,
-            type: 'function',
-            params: formatJsParams(path.node.params),
-            returnType: path.node.returnType ? code.slice(path.node.returnType.start, path.node.returnType.end).replace(/^:\s*/, '') : undefined,
-            isExported: path.parent.type === 'ExportNamedDeclaration' || path.parent.type === 'ExportDefaultDeclaration',
-            doc: getJSDoc(path.node)
-          });
-        }
-      },
-      ClassDeclaration(path: any) {
-        if (path.node.id) {
-          const children: AstNodeInfo[] = [];
-          path.traverse({
-            ClassMethod(mPath: any) {
-              if (mPath.parentPath.parentPath === path) { // Only direct methods
-                children.push({
-                  name: mPath.node.key.name,
-                  type: 'method',
-                  params: formatJsParams(mPath.node.params),
-                  returnType: mPath.node.returnType ? code.slice(mPath.node.returnType.start, mPath.node.returnType.end).replace(/^:\s*/, '') : undefined,
-                  doc: getJSDoc(mPath.node)
-                });
-              }
-            },
-            ClassProperty(pPath: any) {
-              if (pPath.parentPath.parentPath === path) {
-                children.push({
-                  name: pPath.node.key.name,
-                  type: 'property',
-                  returnType: pPath.node.typeAnnotation ? code.slice(pPath.node.typeAnnotation.start, pPath.node.typeAnnotation.end).replace(/^:\s*/, '') : undefined,
-                  doc: getJSDoc(pPath.node)
-                });
-              }
-            }
-          });
-          nodes.push({
-            name: path.node.id.name,
-            type: 'class',
-            isExported: path.parent.type === 'ExportNamedDeclaration' || path.parent.type === 'ExportDefaultDeclaration',
-            doc: getJSDoc(path.node),
-            children
-          });
-        }
-      },
-      TSInterfaceDeclaration(path: any) {
-        if (path.node.id) {
-          nodes.push({
-            name: path.node.id.name,
-            type: 'interface',
-            isExported: path.parent.type === 'ExportNamedDeclaration',
-            doc: getJSDoc(path.node)
-          });
-        }
-      },
-      TSTypeAliasDeclaration(path: any) {
-        if (path.node.id) {
-          nodes.push({
-            name: path.node.id.name,
-            type: 'type',
-            isExported: path.parent.type === 'ExportNamedDeclaration',
-            doc: getJSDoc(path.node)
-          });
-        }
-      }
-    });
-
-    return nodes;
-  } catch (error) {
-    console.warn(`Failed to parse JS/TS AST for ${filename}:`, error);
-    return [];
-  }
 }
 
 function getJSDoc(node: any): string | undefined {

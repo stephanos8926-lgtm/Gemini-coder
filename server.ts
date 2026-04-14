@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { spawn } from 'child_process';
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
@@ -11,6 +11,29 @@ import { Server } from 'socket.io';
 import http from 'http';
 import https from 'https';
 import { HttpClient } from 'isomorphic-git';
+import { LogTool } from './src/utils/LogTool';
+import { ForgeGuard } from './src/utils/ForgeGuard';
+import { TUISensor } from './src/utils/sensors/TUISensor';
+
+export interface AuthenticatedRequest extends Request {
+  user?: any;
+}
+
+// Initialize RapidForge Telemetry
+const logger = new LogTool('server');
+const guard = ForgeGuard.init('server');
+guard.registerSensor('tui', new TUISensor());
+
+// Global Process Error Handlers
+process.on('uncaughtException', (error) => {
+  logger.error('FATAL UNCAUGHT EXCEPTION', error);
+  // Give Winston/ForgeGuard a moment to flush before exiting
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('UNHANDLED PROMISE REJECTION', reason instanceof Error ? reason : new Error(String(reason)));
+});
 
 // Create a compatible HTTP client for isomorphic-git
 const gitHttpClient: HttpClient = {
@@ -57,29 +80,10 @@ import { getAuth } from 'firebase-admin/auth';
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import AdmZip from 'adm-zip';
-import winston from 'winston';
 import { z } from 'zod';
 import { FileSaveSchema, FileCreateSchema } from './src/lib/schemas';
 import { env } from './server-config';
 // @ts-ignore — no types needed for rate-limit config
-
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }),
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' }),
-  ],
-});
 
 // Validation Schemas
 const RunToolSchema = z.object({
@@ -261,7 +265,7 @@ async function startServer() {
   }
 
   // CSRF Protection Middleware
-  const csrfProtection = (req: any, res: any, next: any) => {
+  const csrfProtection = (req: Request, res: Response, next: NextFunction) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
       return next();
     }
@@ -293,8 +297,8 @@ async function startServer() {
         .map(([name, tool]: any) => ({ name, ...tool }));
       lastConfigRead = now;
       return cachedTools;
-    } catch (error) {
-      console.error('Error reading mcp-config.json:', error);
+    } catch (error: any) {
+      logger.error('Error reading mcp-config.json:', error);
       return [];
     }
   };
@@ -322,8 +326,8 @@ async function startServer() {
             const entry = mcpClientPool.get(serverName)!;
             const toolsResponse = await entry.client.listTools();
             tools = toolsResponse.tools || [];
-          } catch (e) {
-            console.error(`Error listing tools for ${serverName}:`, e);
+          } catch (e: any) {
+            logger.error(`Error listing tools for ${serverName}:`, e);
           }
         }
         
@@ -336,8 +340,8 @@ async function startServer() {
       }
       
       res.json(servers);
-    } catch (error) {
-      console.error('Error getting MCP servers:', error);
+    } catch (error: any) {
+      logger.error('Error getting MCP servers:', error);
       res.status(500).json({ error: 'Failed to get MCP servers' });
     }
   });
@@ -355,20 +359,78 @@ async function startServer() {
       
       await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
       res.json({ success: true });
-    } catch (error) {
-      console.error(`Error connecting to MCP server ${serverName}:`, error);
+    } catch (error: any) {
+      logger.error(`Error connecting to MCP server ${serverName}:`, error);
       res.status(500).json({ error: 'Failed to connect to server' });
     }
   });
 
-  app.get('/api/admin/mcp/tools', async (req, res, next) => {
+  // Authentication Middleware
+  const authenticateUser = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const idToken = req.headers.authorization?.split('Bearer ')[1] || req.body.idToken || req.query.idToken;
+    
+    if (!idToken) {
+      return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken);
+      let userData = {};
+      
+      try {
+        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+        if (userDoc.exists) {
+          userData = userDoc.data() || {};
+        }
+      } catch (firestoreError: unknown) {
+        const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
+        // Only log as warning if it's not a simple NOT_FOUND error
+        if (!errorMessage.includes('NOT_FOUND')) {
+          logger.warn('Failed to fetch user data from Firestore, using token data only', { 
+            uid: decodedToken.uid, 
+            error: errorMessage
+          });
+        }
+      }
+
+      req.user = {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        displayName: decodedToken.name,
+        photoURL: decodedToken.picture,
+        role: 'user', // Default role
+        ...userData
+      };
+      next();
+    } catch (error) {
+      logger.error('Authentication failed', error);
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+  };
+
+  app.get('/api/admin/mcp/tools', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // FIXED: 2026-04-10 - Add authentication to admin endpoints
+    // These endpoints modify server configuration and should be restricted
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
     const tools = await getEnabledTools();
     res.json(tools);
   });
 
-  app.post('/api/admin/mcp/tools/:name', async (req: any, res, next) => {
+  // FIXED: 2026-04-10 - Protect with authentication and rate limiting
+  const adminAuthLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 10
+  });
+  
+  app.post('/api/admin/mcp/tools/:name', adminAuthLimiter, authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { name } = req.params;
     const { enabled } = req.body;
+    // FIXED: 2026-04-10 - Verify user is actually an admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
     
     try {
       const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
@@ -379,8 +441,8 @@ async function startServer() {
       } else {
         res.status(404).json({ error: 'Tool not found' });
       }
-    } catch (error) {
-      console.error('Error updating mcp-config.json:', error);
+    } catch (error: any) {
+      logger.error('Error updating mcp-config.json:', error);
       res.status(500).json({ error: 'Failed to update tool' });
     }
   });
@@ -431,51 +493,8 @@ async function startServer() {
     });
   };
 
-  // Authentication Middleware
-  const authenticateUser = async (req: any, res: any, next: any) => {
-    const idToken = req.headers.authorization?.split('Bearer ')[1] || req.body.idToken || req.query.idToken;
-    
-    if (!idToken) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
-
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      let userData = {};
-      
-      try {
-        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-        if (userDoc.exists) {
-          userData = userDoc.data() || {};
-        }
-      } catch (firestoreError: unknown) {
-        const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-        // Only log as warning if it's not a simple NOT_FOUND error
-        if (!errorMessage.includes('NOT_FOUND')) {
-          logger.warn('Failed to fetch user data from Firestore, using token data only', { 
-            uid: decodedToken.uid, 
-            error: errorMessage
-          });
-        }
-      }
-
-      req.user = {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        displayName: decodedToken.name,
-        photoURL: decodedToken.picture,
-        role: 'user', // Default role
-        ...userData
-      };
-      next();
-    } catch (error) {
-      logger.error('Authentication failed', error);
-      res.status(401).json({ error: 'Unauthorized: Invalid token' });
-    }
-  };
-
   // Endpoint for GIDE to call tools
-  app.post('/api/mcp/call', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/mcp/call', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { serverName, toolName, args } = req.body;
     
     try {
@@ -496,8 +515,8 @@ async function startServer() {
       });
       
       res.json(result);
-    } catch (error) {
-      console.error('Error calling MCP tool:', error);
+    } catch (error: any) {
+      logger.error('Error calling MCP tool:', error);
       res.status(500).json({ error: 'Failed to call tool' });
     }
   });
@@ -572,7 +591,7 @@ async function startServer() {
   }
 
   // API Routes
-  app.get('/api/workspaces', authenticateUser, async (req: any, res, next) => {
+  app.get('/api/workspaces', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       logger.info('Listing workspaces', { uid: req.user.uid, role: req.user.role });
       
@@ -610,7 +629,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/files', authenticateUser, async (req: any, res, next) => {
+  app.get('/api/files', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const workspace = (req.query.workspace as string) || '';
     const subPath = (req.query.path as string) || '';
     const recursive = req.query.recursive === 'true';
@@ -627,7 +646,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/tools/run', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/tools/run', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { command, workspace } = RunToolSchema.parse(req.body);
       logger.info('Running tool', { command, workspace, uid: req.user.uid });
@@ -663,9 +682,11 @@ async function startServer() {
       logger.info('Spawning child process', { tool, args });
       const child = spawn(tool, args, { cwd: root });
       
+      // FIXED: 2026-04-10 - Add response sent guard to prevent double-send
+      let responseSent = false;
       const processTimeout = setTimeout(() => { 
         child.kill('SIGTERM'); 
-        logger.warn('Child process timed out and was killed'); 
+        logger.warn('Child process timed out and was killed', { tool, timeout: 30000 }); 
       }, 30_000);
       
       let stdout = '';
@@ -677,7 +698,9 @@ async function startServer() {
       child.on('close', (code) => {
         clearTimeout(processTimeout);
         logger.info('Child process closed', { code, stdout: stdout.substring(0, 100), stderr: stderr.substring(0, 100) });
-        if (!res.headersSent) {
+        // FIXED: 2026-04-10 - Check if response already sent
+        if (!responseSent && res.writable) {
+          responseSent = true;
           if (code === 0) {
             res.json({ stdout, stderr, success: true });
           } else {
@@ -689,7 +712,9 @@ async function startServer() {
       child.on('error', (error) => {
         clearTimeout(processTimeout);
         logger.error('Child process error', error);
-        if (!res.headersSent) {
+        // FIXED: 2026-04-10 - Guard against double response
+        if (!responseSent && res.writable) {
+          responseSent = true;
           res.status(500).json({ error: String(error), success: false });
         }
       });
@@ -698,7 +723,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/tools/find_symbol', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/tools/find_symbol', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { symbol, file_pattern, workspace } = req.body;
       const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
@@ -740,7 +765,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/tools/diagnostics', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/tools/diagnostics', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { file_path, workspace } = req.body;
       const targetPath = getSafePath(file_path, req.user, workspace);
@@ -933,7 +958,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/git', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/git', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { command, message, workspace } = z.object({
         command: z.string(),
@@ -960,12 +985,22 @@ async function startServer() {
           await execAsync('git add .', { cwd: root });
           return res.json({ success: true });
         case 'commit': 
+          // FIXED: 2026-04-10 - Use spawn instead of string interpolation
+          // Eliminates shell injection risk entirely
           await new Promise((resolve, reject) => {
             const child = spawn('git', ['commit', '-m', message || 'Update'], { cwd: root });
+            const errorChunks: Buffer[] = [];
+            
+            child.stderr?.on('data', (chunk) => errorChunks.push(chunk));
             child.on('close', (code) => {
-              if (code === 0) resolve(true);
-              else reject(new Error(`Git commit failed with code ${code}`));
+              if (code === 0) {
+                resolve(true);
+              } else {
+                const stderr = Buffer.concat(errorChunks).toString();
+                reject(new Error(`Git commit failed with code ${code}: ${stderr}`));
+              }
             });
+            child.on('error', reject);
           });
           return res.json({ success: true });
         case 'pull': 
@@ -1010,7 +1045,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/import-zip', upload.single('zip'), authenticateUser, async (req: any, res, next) => {
+  app.post('/api/import-zip', upload.single('zip'), authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { workspace } = req.body;
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -1032,7 +1067,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/files/content', authenticateUser, async (req: any, res, next) => {
+  app.get('/api/files/content', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const filePath = req.query.path as string;
     const workspace = (req.query.workspace as string) || '';
     if (!filePath) {
@@ -1048,7 +1083,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/files/save', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/files/save', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { path: filePath, content, workspace } = FileSaveSchema.parse(req.body);
       const fullPath = getSafePath(filePath, req.user, workspace);
@@ -1060,7 +1095,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/files/create', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/files/create', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { path: filePath, isDir, workspace } = FileCreateSchema.parse(req.body);
       const fullPath = getSafePath(filePath, req.user, workspace);
@@ -1076,7 +1111,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/files/delete', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/files/delete', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { path: filePath, workspace } = FileDeleteSchema.parse(req.body);
       const fullPath = getSafePath(filePath, req.user, workspace);
@@ -1092,7 +1127,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/files/rename', authenticateUser, async (req: any, res, next) => {
+  app.post('/api/files/rename', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { oldPath, newPath, workspace } = FileRenameSchema.parse(req.body);
       const fullOldPath = getSafePath(oldPath, req.user, workspace);
@@ -1105,7 +1140,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/search', authenticateUser, async (req: any, res, next) => {
+  app.get('/api/search', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const { query, workspace = '' } = req.query;
 
     if (!query) {
@@ -1163,7 +1198,7 @@ async function startServer() {
 
   // SECURITY: Chat endpoint REQUIRES authentication
   // Without this, anyone can access the endpoint and potentially leak/abuse API keys
-  app.post('/api/chat', authenticateUser, async (req: any, res: express.Response) => {
+  app.post('/api/chat', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     const { messages, model, apiKey, systemInstruction, temperature } = req.body;
     
     logger.info('Chat request received', { model, temperature, messageCount: messages?.length, uid: req.user.uid });
