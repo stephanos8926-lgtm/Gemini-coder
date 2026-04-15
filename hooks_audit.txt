@@ -1,0 +1,194 @@
+import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
+import { Terminal, Key, Plus, Menu, X, Loader2, FolderOpen, Download, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Terminal as TerminalIcon, Sparkles } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
+import { Toaster, toast } from 'sonner';
+import { useAppStore } from './store/useAppStore';
+import { Message, streamGemini } from './lib/gemini';
+import { extractFiles, type FileStore } from './lib/fileStore';
+--
+import { auth, googleProvider, githubProvider } from './firebase';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { useFirebase } from './contexts/FirebaseContext';
+import { useWorkspaces, useFiles, useFileSystemMutations } from './hooks/useFileSystem';
+import { useProjects } from './hooks/useProjects';
+import { useWorkspacePersistence } from './hooks/useWorkspacePersistence';
+import { useSocket } from './hooks/useSocket';
+import { useQueryClient } from '@tanstack/react-query';
+import { getSystemInstruction } from './constants/systemInstruction';
+import { generateAstSkeleton } from './utils/astChunker';
+--
+
+export default function App() {
+  const { user, isAuthLoading, idToken } = useFirebase();
+  const queryClient = useQueryClient();
+  const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
+  const { workspaceName, setWorkspaceName, workspaces, setWorkspaces } = useAppStore();
+
+  const workspaceNameRef = useRef(workspaceName);
+  useEffect(() => {
+    workspaceNameRef.current = workspaceName;
+  }, [workspaceName]);
+
+  // Socket for real-time updates
+  useSocket((data) => {
+    const currentWorkspace = workspaceNameRef.current;
+    if (currentWorkspace && data.path.includes(currentWorkspace)) {
+--
+  });
+  
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
+  const [apiKey, setApiKey] = useState<string | null>(activeProfile?.apiKey || null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const { model, setModel } = useAppStore();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [fileStore, setFileStore] = useState<FileStore>({});
+  const fileStoreRef = useRef<FileStore>(fileStore);
+  useEffect(() => {
+    fileStoreRef.current = fileStore;
+  }, [fileStore]);
+  const { selectedFile, setSelectedFile } = useAppStore();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [systemModifier, setSystemModifier] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'search' | 'mcp'>('files');
+  const [showMcpModal, setShowMcpModal] = useState(false);
+  const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
+  const lastPersonaRef = useRef(settings?.aiPersona);
+
+  useEffect(() => {
+    if (lastPersonaRef.current && settings?.aiPersona && lastPersonaRef.current !== settings.aiPersona) {
+      const personaName = settings.aiPersona === 'custom' ? 'Custom Persona' : settings.aiPersona;
+--
+  }, [settings?.aiPersona]);
+
+  const [targetLine, setTargetLine] = useState<number | undefined>(undefined);
+  const [enabledTools, setEnabledTools] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchTools = async () => {
+      try {
+--
+
+  // Project Management State
+  const { projects, setProjects, currentProjectId, setCurrentProjectId, createProject, deleteProject, isLoading: isProjectsLoading } = useProjects();
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showGitPanel, setShowGitPanel] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [pendingDiff, setPendingDiff] = useState<{ filename: string; original: string; modified: string } | null>(null);
+  const [isProjectsLoaded, setIsProjectsLoaded] = useState(false);
+  const { data: workspacesData, isLoading: isWorkspacesLoading, isError: isWorkspacesError } = useWorkspaces();
+  
+  // Restore workspaceName from localStorage
+  useEffect(() => {
+    const savedWorkspace = localStorage.getItem('gide_workspace_name');
+    if (savedWorkspace && !workspaceName) {
+--
+
+  // Save workspaceName to localStorage
+  useEffect(() => {
+    if (workspaceName) {
+      localStorage.setItem('gide_workspace_name', workspaceName);
+--
+  console.log('App rendering', { workspaceName, workspaces, isWorkspacesLoading, workspacesData });
+
+  useEffect(() => {
+    if (workspacesData && Array.isArray(workspacesData)) {
+      setWorkspaces(workspacesData);
+--
+  }, [workspacesData]);
+
+  const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
+  
+  useEffect(() => {
+    if (idToken) {
+      filesystemService.setToken(idToken);
+--
+  }, [idToken]);
+
+  useWorkspacePersistence(workspaceName, messages, setMessages);
+
+  // Sync profile name to user email
+  useEffect(() => {
+    if (user && user.email) {
+      const activeProfile = profileStore.getActiveProfile();
+--
+  }, [user]);
+
+  const { data: rootFiles } = useFiles(workspaceName, '', false);
+  
+  useEffect(() => {
+    if (rootFiles) {
+      setFileStore(prevStore => {
+--
+
+  // Save projects to IndexedDB whenever they change (only in non-filesystem mode)
+  useEffect(() => {
+    if (isProjectsLoaded && !isProjectsLoading) {
+      saveProjects(projects);
+--
+
+  // Auto-save current project files (only in non-filesystem mode)
+  useEffect(() => {
+    if (isProjectsLoaded && !isProjectsLoading && currentProjectId) {
+      setProjects(prev => prev.map((p: Project) => 
+--
+  }, [fileStore, currentProjectId, isProjectsLoaded, isProjectsLoading]);
+
+  useEffect(() => {
+    if (selectedFile && fileStore[selectedFile] && !fileStore[selectedFile].isDir && !fileStore[selectedFile].content && !fileStore[selectedFile].isNew) {
+      const loadContent = async () => {
+--
+
+  // Sync fileStore to backend after streaming finishes
+  useEffect(() => {
+    // FIXED: 2026-04-10 - Add guard to prevent sync during active streaming
+    // Race condition: fileStore changes during sync were being overwritten
+--
+  );
+
+  useEffect(() => {
+    if (!hasPreviewableFiles && mobileView === 'preview') {
+      setMobileView('chat');
+--
+  }, [hasPreviewableFiles, mobileView, bottomTab]);
+
+  useEffect(() => {
+    const storedKey = localStorage.getItem('gide_api_key');
+    if (storedKey) setApiKey(storedKey);
+--
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+--
+  }, []);
+
+  useEffect(() => {
+    const fetchWorkspaces = async () => {
+      if (!user) return;
+--
+  };
+
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const [fileToRename, setFileToRename] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [isCreatingFile, setIsCreatingFile] = useState(false);
+  const [newFilePath, setNewFilePath] = useState('');
+
+  const handleDeleteFile = (path: string) => {
+--
+  };
+
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+  }, []);

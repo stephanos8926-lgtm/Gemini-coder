@@ -27,6 +27,14 @@ export function ToolsPanel() {
   const runCommand = async (cmd: string) => {
     if (!cmd.trim() || isRunning) return;
     
+    // Log terminal state
+    console.log('Terminal State:', {
+      dimensions: scrollRef.current ? { width: scrollRef.current.clientWidth, height: scrollRef.current.clientHeight } : 'unknown',
+      isRunning,
+      command: cmd,
+      timestamp: new Date().toISOString()
+    });
+    
     setIsRunning(true);
     const newResult: ToolResult = {
       id: Math.random().toString(36).substring(2, 11),

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build --outDir dist && esbuild server.ts --bundle --platform=node --external:vite --external:express --external:firebase-admin --external:firebase-admin/app --external:firebase-admin/firestore --external:firebase-admin/auth --external:isomorphic-git --external:isomorphic-git/http/node --external:multer --external:adm-zip --external:winston --external:fsevents --outfile=dist/server.cjs",
+    "build": "vite build --outDir dist && esbuild server.ts --bundle --platform=node --external:vite --external:express --external:firebase-admin --external:firebase-admin/app --external:firebase-admin/firestore --external:firebase-admin/auth --external:isomorphic-git --external:isomorphic-git/http/node --external:multer --external:adm-zip --external:winston --external:fsevents --external:better-sqlite3 --outfile=dist/server.cjs",
     "start": "NODE_ENV=production node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -16,7 +16,8 @@
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "@babel/traverse": "^7.29.0",
-    "@google/genai": "^1.29.0",
+    "@google/genai": "^1.50.1",
+    "@google/generative-ai": "^0.24.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/typography": "^0.5.19",
@@ -88,7 +89,7 @@
     "playwright": "^1.59.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "5.7.3",
+    "typescript": "^5.7.3",
     "vite": "^6.2.0",
     "vitest": "^4.1.2"
   }

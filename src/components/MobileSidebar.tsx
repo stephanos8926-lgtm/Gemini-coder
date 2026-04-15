@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download, Upload, FilePlus, Settings, Key, Search, FolderOpen, Plus, ChevronDown, ChevronRight, GitBranch, Terminal, Zap, CheckCircle2 } from 'lucide-react';
+import { X, Download, Upload, FilePlus, Settings, Key, Search, FolderOpen, Plus, ChevronDown, ChevronRight, GitBranch, Terminal, Zap, CheckCircle2, Bug } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { FileStore } from '../lib/fileStore';
 
@@ -124,6 +124,18 @@ export function MobileSidebar({
         </button>
         <button onClick={() => { onClose(); onShowCommandPalette(); }} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Zap className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Quick Actions</span>
+        </button>
+        <button 
+          onClick={() => { 
+            onClose(); 
+            // We need a way to set the bottom tab from here, or just trigger the view
+            // In App.tsx, setBottomTab('debug') and setMobileView('preview')
+            (window as any).setBottomTab?.('debug');
+            (window as any).setMobileView?.('preview');
+          }} 
+          className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]"
+        >
+          <Bug className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Live Debugger</span>
         </button>
         <button onClick={onShowSettingsModal} className="flex items-center gap-3 w-full p-4 hover:bg-[#252526] border-b border-[#3c3c3c]">
           <Settings className="w-4 h-4 text-[#858585]" /> <span className="text-sm">Settings & AI</span>

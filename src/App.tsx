@@ -44,6 +44,7 @@ const DiffViewer = lazy(() => import('./components/DiffViewer').then(m => ({ def
 const MobileSidebar = lazy(() => import('./components/MobileSidebar').then(m => ({ default: m.MobileSidebar })));
 const ProfileSelector = lazy(() => import('./components/ProfileSelector').then(m => ({ default: m.ProfileSelector })));
 const ToolsPanel = lazy(() => import('./components/ToolsPanel').then(m => ({ default: m.ToolsPanel })));
+const BuildPanel = lazy(() => import('./components/BuildPanel').then(m => ({ default: m.BuildPanel })));
 const McpPanel = lazy(() => import('./components/McpPanel').then(m => ({ default: m.McpPanel })));
 
 const PanelLoader = () => (
@@ -92,12 +93,17 @@ export default function App() {
   }, [fileStore]);
   const { selectedFile, setSelectedFile } = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools'>('preview');
+  const [bottomTab, setBottomTab] = useState<'preview' | 'tree' | 'tools' | 'debug'>('preview');
   const [isStreaming, setIsStreaming] = useState(false);
   const [systemModifier, setSystemModifier] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'chat' | 'editor' | 'preview'>('chat');
-  const [sidebarTab, setSidebarTab] = useState<'files' | 'search' | 'mcp'>('files');
+  
+  useEffect(() => {
+    (window as any).setBottomTab = setBottomTab;
+    (window as any).setMobileView = setMobileView;
+  }, []);
+  const [sidebarTab, setSidebarTab] = useState<'files' | 'search' | 'mcp' | 'build'>('files');
   const [showMcpModal, setShowMcpModal] = useState(false);
   const [settings, setSettings] = useState<Settings>(activeProfile?.settings || settingsStore.get());
   const lastPersonaRef = useRef(settings?.aiPersona);
@@ -1310,6 +1316,14 @@ export default function App() {
                     >
                       MCP
                     </button>
+                    <button
+                      onClick={() => setSidebarTab('build')}
+                      className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
+                        sidebarTab === 'build' ? 'text-[#007acc] border-[#007acc]' : 'text-[#858585] border-transparent hover:text-[#cccccc]'
+                      }`}
+                    >
+                      Build
+                    </button>
                   </div>
                   
                   <div className="flex-1 overflow-hidden">
@@ -1339,8 +1353,10 @@ export default function App() {
                               setMobileView('editor');
                             }} 
                           />
-                        ) : (
+                        ) : sidebarTab === 'mcp' ? (
                           <McpPanel />
+                        ) : (
+                          <BuildPanel />
                         )}
                       </Suspense>
                     </ErrorBoundary>

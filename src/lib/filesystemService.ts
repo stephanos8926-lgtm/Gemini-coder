@@ -128,7 +128,7 @@ export class FilesystemService {
     this._client = null; // Recreate client when token changes
   }
 
-  private get client() {
+  public get client() {
     if (!this._client) {
       this._client = ky.create({
         prefixUrl: API_BASE,

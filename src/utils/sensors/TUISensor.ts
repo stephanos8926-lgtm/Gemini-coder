@@ -1,4 +1,4 @@
-import { Sensor } from './Sensor';
+import { Sensor } from '../Sensor';
 
 export class TUISensor implements Sensor {
   public async handle(signal: any): Promise<boolean> {

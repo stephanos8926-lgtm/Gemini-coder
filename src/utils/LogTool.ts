@@ -1,12 +1,19 @@
 import winston from 'winston';
 import { ForgeGuard } from './ForgeGuard';
+import path from 'path';
+import fs from 'fs';
 
 export class LogTool {
   private logger: winston.Logger;
   private guard: ForgeGuard;
 
-  constructor(moduleName: string) {
+  constructor(moduleName: string, userId?: string) {
     this.guard = ForgeGuard.init(moduleName);
+
+    const logDir = userId ? path.join(process.cwd(), 'logs', `user_${userId}`) : path.join(process.cwd(), 'logs', 'system');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
 
     // Initialize Winston
     this.logger = winston.createLogger({
@@ -15,12 +22,18 @@ export class LogTool {
         winston.format.timestamp(),
         winston.format.json()
       ),
-      defaultMeta: { service: moduleName },
+      defaultMeta: { service: moduleName, userId },
       transports: [
         new winston.transports.Console({
           format: winston.format.simple(),
         }),
-        // We can add file transports here if needed, but ForgeGuard handles advanced routing
+        new winston.transports.File({
+          filename: path.join(logDir, 'error.log'),
+          level: 'error',
+        }),
+        new winston.transports.File({
+          filename: path.join(logDir, 'combined.log'),
+        }),
       ],
     });
   }

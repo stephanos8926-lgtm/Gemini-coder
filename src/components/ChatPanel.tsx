@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
+import { toast } from 'sonner';
 import { marked, Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
@@ -424,6 +425,32 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
 
       {/* Input Area */}
       <div className="p-4 bg-transparent shrink-0">
+        <div className="max-w-3xl mx-auto mb-2 flex justify-end">
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/logs?source=build');
+                const { logs } = await res.json();
+                if (logs && logs.length > 0) {
+                  const lastError = logs.reverse().find((l: any) => l.level === 'error');
+                  if (lastError) {
+                    onSendMessage(`I'm seeing this build error, can you fix it?\n\n\`\`\`\n${lastError.message}\n\`\`\``);
+                  } else {
+                    toast.info('No recent build errors found to fix.');
+                  }
+                } else {
+                  toast.info('No build logs available.');
+                }
+              } catch (e) {
+                toast.error('Failed to fetch logs');
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#007acc]/10 hover:bg-[#007acc]/20 text-[#007acc] border border-[#007acc]/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
+          >
+            <Zap className="w-3 h-3" />
+            Fix Build Error
+          </button>
+        </div>
         <form onSubmit={handleSubmit} className="relative group max-w-3xl mx-auto">
           <div className="relative flex items-end bg-[#252526] border border-[#3c3c3c] rounded-2xl focus-within:border-[#007acc] focus-within:ring-1 focus-within:ring-[#007acc]/20 transition-all shadow-lg">
             <textarea

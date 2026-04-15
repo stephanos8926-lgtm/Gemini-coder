@@ -13,22 +13,114 @@ const inMemoryCache = new Map<string, { text: string; functionCalls?: any[] }>()
 
 /**
  * Intelligent Conversation Manager
- * Handles token-aware truncation and prioritization
+ * Handles token-aware truncation, AST-based summarization, and advanced compression
  */
 class ConversationManager {
   private static readonly MAX_HISTORY_TOKENS = 30000; // Heuristic limit
   private static readonly RECENT_MESSAGES_COUNT = 10;
+  private static readonly CHARS_PER_TOKEN = 4;
 
-  public static truncateHistory(messages: Message[]): Message[] {
-    if (messages.length <= this.RECENT_MESSAGES_COUNT) return messages;
+  private static estimateTokens(text: string): number {
+    return Math.ceil(text.length / this.CHARS_PER_TOKEN);
+  }
 
-    // Always keep the first message (often context-setting) and the most recent ones
+  /**
+   * Pseudo-AST summarization using regex to extract signatures from large code blocks.
+   * This compresses file content while retaining structural relevance.
+   */
+  private static summarizeCodeBlocks(content: string): string {
+    if (content.length < 2000) return content; // Don't summarize small snippets
+
+    return content.replace(/```(?:typescript|javascript|ts|js)\n([\s\S]*?)```/g, (match, code) => {
+      if (code.length < 1000) return match;
+
+      const signatures: string[] = [];
+      const lines = code.split('\n');
+      let inFunction = false;
+      let braceDepth = 0;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('import ') || trimmed.startsWith('export interface ') || trimmed.startsWith('export type ')) {
+          signatures.push(line);
+        } else if (trimmed.match(/^(?:export )?(?:async )?(?:function|class) /) || trimmed.match(/^(?:export )?(?:const|let|var) .*=.*(?:=>|function)/)) {
+          signatures.push(line);
+          inFunction = true;
+        }
+
+        if (inFunction) {
+          braceDepth += (line.match(/\{/g) || []).length;
+          braceDepth -= (line.match(/\}/g) || []).length;
+          if (braceDepth <= 0) {
+            inFunction = false;
+            signatures.push('  // ... implementation elided by AST summarizer ...');
+            signatures.push('}');
+          }
+        }
+      }
+
+      return `\`\`\`typescript\n// [AST Summarized Code Block]\n${signatures.join('\n')}\n\`\`\``;
+    });
+  }
+
+  public static truncateHistory(messages: Message[], systemInstruction: string = ''): Message[] {
+    if (messages.length <= 2) return messages;
+
     const firstMessage = messages[0];
-    const recentMessages = messages.slice(-this.RECENT_MESSAGES_COUNT);
-    
-    // Filter out intermediate messages that might be too large or less relevant
-    // In a more advanced version, we would use token counting here
-    return [firstMessage, ...recentMessages];
+    let recentMessages = messages.slice(-this.RECENT_MESSAGES_COUNT);
+    let intermediateMessages = messages.slice(1, -this.RECENT_MESSAGES_COUNT);
+
+    // 1. Apply AST-based summarization to intermediate messages to compress them
+    intermediateMessages = intermediateMessages.map(msg => ({
+      ...msg,
+      content: this.summarizeCodeBlocks(msg.content)
+    }));
+
+    // 2. Token-aware truncation
+    const systemTokens = this.estimateTokens(systemInstruction);
+    let totalTokens = this.estimateTokens(firstMessage.content) + systemTokens;
+    const finalMessages: Message[] = [];
+
+    // Always include recent messages (they are most relevant)
+    for (let i = recentMessages.length - 1; i >= 0; i--) {
+      const msg = recentMessages[i];
+      const tokens = this.estimateTokens(msg.content);
+      if (totalTokens + tokens > this.MAX_HISTORY_TOKENS && finalMessages.length > 0) {
+        // We hit the limit even within recent messages. We must truncate the content of this message.
+        const allowedChars = (this.MAX_HISTORY_TOKENS - totalTokens) * this.CHARS_PER_TOKEN;
+        if (allowedChars > 100) {
+           finalMessages.unshift({
+             ...msg,
+             content: msg.content.substring(0, allowedChars) + '\n...[TRUNCATED DUE TO TOKEN LIMIT]...'
+           });
+           totalTokens += this.estimateTokens(finalMessages[0].content);
+        }
+        break;
+      }
+      finalMessages.unshift(msg);
+      totalTokens += tokens;
+    }
+
+    // 3. Add intermediate messages if we still have token budget
+    for (let i = intermediateMessages.length - 1; i >= 0; i--) {
+      if (totalTokens >= this.MAX_HISTORY_TOKENS) break;
+      const msg = intermediateMessages[i];
+      const tokens = this.estimateTokens(msg.content);
+      
+      if (totalTokens + tokens <= this.MAX_HISTORY_TOKENS) {
+        finalMessages.unshift(msg);
+        totalTokens += tokens;
+      } else {
+        // Compress the message into a tiny summary instead of dropping it completely
+        finalMessages.unshift({
+          role: msg.role,
+          content: `[Message compressed. Original length: ${msg.content.length} chars]`
+        });
+        totalTokens += 20; // Approx tokens for the summary string
+      }
+    }
+
+    return [firstMessage, ...finalMessages];
   }
 }
 
@@ -46,7 +138,7 @@ export async function streamGemini(
   onChunk: (text: string, functionCalls?: { name: string; args: any }[]) => void,
   temperature: number = 0.7
 ) {
-  const truncatedMessages = ConversationManager.truncateHistory(messages);
+  const truncatedMessages = ConversationManager.truncateHistory(messages, systemInstruction);
   const cacheKey = getCacheKey(truncatedMessages, model, systemInstruction, temperature);
   
   // SECURITY: Check in-memory cache only (session-bound)

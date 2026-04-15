@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { RefreshCw, Play, FolderTree, Terminal, Loader2 } from 'lucide-react';
+import { RefreshCw, Play, FolderTree, Terminal, Loader2, Bug } from 'lucide-react';
 import type { FileStore } from '../lib/fileStore';
 import { FileTree } from './FileTree';
+import { DebugDashboard } from './DebugDashboard';
 
 const ToolsPanel = lazy(() => import('./ToolsPanel').then(m => ({ default: m.ToolsPanel })));
 
 interface BottomPanelProps {
   files: FileStore;
-  activeTab: 'preview' | 'tree' | 'tools';
-  onTabChange: (tab: 'preview' | 'tree' | 'tools') => void;
+  activeTab: 'preview' | 'tree' | 'tools' | 'debug';
+  onTabChange: (tab: 'preview' | 'tree' | 'tools' | 'debug') => void;
   onSelectFile: (path: string) => void;
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
@@ -111,6 +112,17 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           <Terminal className="w-4 h-4" />
           Tools
         </button>
+        <button
+          onClick={() => onTabChange('debug')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+            activeTab === 'debug'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
+          }`}
+        >
+          <Bug className="w-4 h-4" />
+          Debugger
+        </button>
         <div className="flex-1" />
         {activeTab === 'preview' && hasPreviewableFiles && (
           <button
@@ -146,6 +158,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           }>
             <ToolsPanel />
           </Suspense>
+        ) : activeTab === 'debug' ? (
+          <DebugDashboard />
         ) : (
           <FileTree
             files={files}
