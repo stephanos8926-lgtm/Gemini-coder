@@ -14,7 +14,9 @@ import {
   Code2,
   Braces,
   Terminal,
-  Database
+  Database,
+  Key,
+  Shield
 } from 'lucide-react';
 
 interface FileIconProps {
@@ -70,6 +72,14 @@ export const FileIcon: React.FC<FileIconProps> = ({ filename, className }) => {
       return <Terminal className={`${className} text-green-500`} />;
     case 'py':
       return <Code2 className={`${className} text-blue-400`} />;
+    case 'env':
+    case 'example':
+      return <Key className={`${className} text-yellow-400`} />;
+    case 'lock':
+      return <Shield className={`${className} text-red-400`} />;
+    case 'yml':
+    case 'yaml':
+      return <FileJson className={`${className} text-purple-400`} />;
     default:
       return <File className={`${className} text-gray-400`} />;
   }

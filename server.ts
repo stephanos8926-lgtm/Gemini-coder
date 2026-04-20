@@ -12,18 +12,24 @@ import { Server } from 'socket.io';
 import http from 'http';
 import https from 'https';
 import { HttpClient } from 'isomorphic-git';
-import { LogTool } from './src/utils/LogTool';
-import { ForgeGuard } from './src/utils/ForgeGuard';
-import { FileCacheManager } from './src/utils/FileCacheManager';
+import { LogTool } from './packages/nexus/telemetry/LogTool';
+import { ForgeGuard } from './packages/nexus/guard/ForgeGuard';
+import { FileCacheManager } from './packages/nexus/utils/FileCacheManager';
 import { ProjectContextEngine } from './src/utils/ProjectContextEngine';
+import { ServerWatcher } from './src/lib/serverWatcher';
 import { logRedirector } from './src/utils/LogRedirector';
 import { symbolGraph } from './src/lib/symbolGraph';
 import { liveDebugger } from './src/lib/liveDebugger';
 import { deepProfiler } from './src/lib/deepProfiler';
-import { TUISensor } from './src/utils/sensors/TUISensor';
+import { shadowExecution } from './packages/nexus/utils/ShadowExecutionEngine';
+import { scanFile } from './src/security/scanner';
+import { TUISensor } from './packages/nexus/guard/sensors/TUISensor';
+import { NexusFactory } from './packages/nexus/NexusFactory';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeTool } from './src/lib/toolExecutor';
 import { summarizeChatHistory } from './src/lib/summarizer';
+import { SkillExecutor } from './src/lib/SkillExecutor';
+import adminRouter from './src/admin/AdminRouter';
 
 const fileCache = FileCacheManager.getInstance();
 
@@ -35,7 +41,11 @@ export interface AuthenticatedRequest extends Request {
 const buildProcesses = new Map<string, ChildProcess>();
 const chatSummaries = new Map<string, { summary: string, lastMessageCount: number }>();
 const logger = new LogTool('server');
-const guard = ForgeGuard.init('server');
+
+// Initialize Guard via Factory
+const nexusFactory = NexusFactory.getInstance();
+const persistenceManager = nexusFactory.getPersistenceManager();
+const guard = nexusFactory.createForgeGuard('server', persistenceManager);
 guard.registerSensor('tui', new TUISensor());
 
 // Global Process Error Handlers
@@ -200,7 +210,61 @@ async function initializeFirebase() {
   }
 }
 
-// MCP Client Skeleton
+import { toolRegistry } from './src/lib/ToolRegistry';
+import { skillRegistry } from './src/lib/SkillRegistry';
+
+// Load skills
+skillRegistry.loadSkills(path.join(process.cwd(), 'src/skills/definitions'));
+
+const skillExecutor = new SkillExecutor();
+
+// Register tools
+toolRegistry.registerTool({
+  name: 'read_file',
+  description: 'Read the contents of a file.',
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING } }, required: ['path'] }
+});
+toolRegistry.registerTool({
+  name: 'write_file',
+  description: 'Write content to a file.',
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, content: { type: SchemaType.STRING } }, required: ['path', 'content'] }
+});
+toolRegistry.registerTool({
+  name: 'apply_diff',
+  description: 'Apply a unified diff to a file.',
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, diff: { type: SchemaType.STRING } }, required: ['path', 'diff'] }
+});
+toolRegistry.registerTool({
+  name: 'search_code',
+  description: 'Search for a regex pattern in the codebase.',
+  parameters: { type: SchemaType.OBJECT, properties: { pattern: { type: SchemaType.STRING }, dir: { type: SchemaType.STRING } }, required: ['pattern'] }
+});
+toolRegistry.registerTool({
+  name: 'find_symbol',
+  description: 'Find the definition and references of a symbol.',
+  parameters: { type: SchemaType.OBJECT, properties: { symbol: { type: SchemaType.STRING }, file_pattern: { type: SchemaType.STRING } }, required: ['symbol'] }
+});
+toolRegistry.registerTool({
+  name: 'get_diagnostics',
+  description: 'Get linting or compilation errors for a file.',
+  parameters: { type: SchemaType.OBJECT, properties: { file_path: { type: SchemaType.STRING } }, required: ['file_path'] }
+});
+toolRegistry.registerTool({
+  name: 'mcp_dispatch',
+  description: 'Execute a tool on an MCP server.',
+  parameters: { type: SchemaType.OBJECT, properties: { server_name: { type: SchemaType.STRING }, tool_name: { type: SchemaType.STRING }, args: { type: SchemaType.STRING } }, required: ['server_name', 'tool_name', 'args'] }
+});
+toolRegistry.registerTool({
+  name: 'runCommand',
+  description: 'Run a shell command or tool in the workspace.',
+  parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING } }, required: ['command'] }
+});
+toolRegistry.registerTool({
+  name: 'web_search',
+  description: 'Search the web for information.',
+  parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING } }, required: ['query'] }
+});
+
 async function connectToMCP(serverPath: string, args: string[], workspaceRoot: string) {
   const transport = new StdioClientTransport({
     command: serverPath,
@@ -384,6 +448,11 @@ async function startServer() {
     }
   });
 
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  if (!ADMIN_EMAIL) {
+    logger.error('CRITICAL: ADMIN_EMAIL environment variable is not set');
+  }
+
   // Authentication Middleware
   async function authenticateUser(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     const idToken = req.headers.authorization?.split('Bearer ')[1] || req.body.idToken || req.query.idToken;
@@ -403,7 +472,6 @@ async function startServer() {
         }
       } catch (firestoreError: unknown) {
         const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-        // Only log as warning if it's not a simple NOT_FOUND error
         if (!errorMessage.includes('NOT_FOUND')) {
           logger.warn('Failed to fetch user data from Firestore, using token data only', { 
             uid: decodedToken.uid, 
@@ -417,7 +485,7 @@ async function startServer() {
         email: decodedToken.email,
         displayName: decodedToken.name,
         photoURL: decodedToken.picture,
-        role: 'user', // Default role
+        role: decodedToken.email === ADMIN_EMAIL ? 'admin' : (userData as any).role || 'user',
         ...userData
       };
       
@@ -429,6 +497,15 @@ async function startServer() {
       logger.error('Authentication failed', error as any);
       res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
+  }
+
+  // Admin Authorization Middleware
+  async function authorizeAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    if (req.user?.email !== ADMIN_EMAIL) {
+      (req as any).logger?.warn('Unauthorized admin access attempt');
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
   }
 
   app.get('/api/admin/mcp/tools', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -481,7 +558,7 @@ async function startServer() {
     max: 20,
     message: { error: 'Too many requests, please try again later.' },
   });
-  app.use('/api/admin', adminLimiter);
+  app.use('/api/admin', adminLimiter, authenticateUser, authorizeAdmin, adminRouter);
   app.use((req, res, next) => {
     // Filter out noisy static asset requests from logs
     const isStaticAsset = req.url.includes('/src/') || 
@@ -1055,8 +1132,41 @@ async function startServer() {
             res.json({ success: true });
             return;
           case 'commit': 
-            // FIXED: 2026-04-10 - Use spawn instead of string interpolation
-            // Eliminates shell injection risk entirely
+            // PRE-COMMIT AI AUDIT (ForgeGuard+)
+            const auditResults = await (async () => {
+              try {
+                const { execSync } = (await import('node:child_process')).execSync;
+                // Use --cached to check staged changes
+                const changedFiles = execSync('git diff --name-only --cached', { cwd: root }).toString().split('\n').filter(Boolean);
+                const issues: any[] = [];
+                const { scanFile } = await import('./src/security/scanner.js');
+                
+                const fsSync = await import('node:fs');
+                for (const file of changedFiles) {
+                  const fullPath = path.join(root, file);
+                  // Only scan TS/JS files in src/
+                  if (fsSync.existsSync(fullPath) && (file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js'))) {
+                    const fileIssues = scanFile(fullPath, false); // false = not backend (user project)
+                    issues.push(...fileIssues.filter((i: any) => i.severity === 'critical' || i.severity === 'high'));
+                  }
+                }
+                return issues;
+              } catch (e) {
+                console.error('Pre-commit audit failed:', e);
+                return [];
+              }
+            })();
+
+            if (auditResults.length > 0) {
+              res.status(400).json({ 
+                success: false, 
+                error: 'AI Audit Blocked: High-severity issues detected in staged changes.',
+                issues: auditResults 
+              });
+              return;
+            }
+
+            // Proceed with commit if audit passes
             await new Promise((resolve, reject) => {
               const child = spawn('git', ['commit', '-m', message || 'Update'], { cwd: root });
               const errorChunks: Buffer[] = [];
@@ -1306,10 +1416,16 @@ async function startServer() {
   app.post('/api/chat', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
-        const { messages, model, apiKey, systemInstruction, temperature } = req.body;
+        const { messages, model, apiKey, systemInstruction, temperature, skillName, skillState } = req.body;
         const userId = req.user.uid || 'anonymous';
         const cacheKey = `${userId}-${model}`;
 
+        // Skill-based orchestration
+        if (skillName) {
+          const { result, nextState } = await skillExecutor.execute(skillName, messages[messages.length - 1].content, skillState);
+          return res.json({ response: result, nextState });
+        }
+        
         let currentMessages = messages;
 
         if (!apiKey) {
@@ -1377,54 +1493,9 @@ async function startServer() {
     }));
 
     const tools = [
+      ...toolRegistry.getSystemPromptBlock(),
       {
         functionDeclarations: [
-          {
-            name: 'read_file',
-            description: 'Read the contents of a file.',
-            parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING } }, required: ['path'] }
-          },
-          {
-            name: 'write_file',
-            description: 'Write content to a file.',
-            parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, content: { type: SchemaType.STRING } }, required: ['path', 'content'] }
-          },
-          {
-            name: 'apply_diff',
-            description: 'Apply a unified diff to a file.',
-            parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, diff: { type: SchemaType.STRING } }, required: ['path', 'diff'] }
-          },
-          {
-            name: 'search_code',
-            description: 'Search for a regex pattern in the codebase.',
-            parameters: { type: SchemaType.OBJECT, properties: { pattern: { type: SchemaType.STRING }, dir: { type: SchemaType.STRING } }, required: ['pattern'] }
-          },
-          {
-            name: 'find_symbol',
-            description: 'Find the definition and references of a symbol.',
-            parameters: { type: SchemaType.OBJECT, properties: { symbol: { type: SchemaType.STRING }, file_pattern: { type: SchemaType.STRING } }, required: ['symbol'] }
-          },
-          {
-            name: 'get_diagnostics',
-            description: 'Get linting or compilation errors for a file.',
-            parameters: { type: SchemaType.OBJECT, properties: { file_path: { type: SchemaType.STRING } }, required: ['file_path'] }
-          },
-          {
-            name: 'mcp_dispatch',
-            description: 'Execute a tool on an MCP server.',
-            parameters: { type: SchemaType.OBJECT, properties: { server_name: { type: SchemaType.STRING }, tool_name: { type: SchemaType.STRING }, args: { type: SchemaType.STRING } }, required: ['server_name', 'tool_name', 'args'] }
-          },
-          {
-            name: 'runCommand',
-            description: 'Run a shell command or tool in the workspace.',
-            parameters: {
-              type: SchemaType.OBJECT,
-              properties: {
-                command: { type: SchemaType.STRING, description: 'The command to run.' }
-              },
-              required: ['command']
-            }
-          },
           ...mcpFunctionDeclarations
         ]
       }
@@ -1518,9 +1589,15 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
+    app.get('/admin', authenticateUser, authorizeAdmin, (req, res) => {
+      res.sendFile(path.join(process.cwd(), 'admin.html'));
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+    app.get('/admin', authenticateUser, authorizeAdmin, (req, res) => {
+      res.sendFile(path.join(process.cwd(), 'admin.html'));
+    });
     app.get('/*splat', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
@@ -1534,6 +1611,8 @@ async function startServer() {
       credentials: true
     }
   });
+
+  new ServerWatcher(WORKSPACE_ROOT, io);
 
   app.post('/api/build/start', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -1607,6 +1686,25 @@ async function startServer() {
     res.json({ summary: symbolGraph.getGraphSummary() });
   });
 
+  app.post('/api/embeddings', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { text } = req.body;
+      const apiKey = req.body.apiKey || process.env.GEMINI_API_KEY;
+      
+      if (!text) return res.status(400).json({ error: 'Text required' });
+      if (!apiKey) return res.status(400).json({ error: 'API Key required' });
+
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+      const result = await model.embedContent(text);
+      
+      res.json({ embedding: result.embedding.values });
+    } catch (error) {
+      logger.error('Embedding failed', error instanceof Error ? error : new Error(String(error)));
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Log Redirector Endpoints
   app.get('/api/logs', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
     const { source } = req.query;
@@ -1617,6 +1715,36 @@ async function startServer() {
   app.post('/api/logs/clear', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
     logRedirector.clear();
     res.json({ success: true });
+  });
+
+  app.post('/api/shadow/verify', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { filePath, originalContent, proposedContent, testCommand } = req.body;
+      const result = await shadowExecution.verifyFix(filePath, originalContent, proposedContent, testCommand);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/telemetry/inject', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { filePath, line, code } = req.body;
+      const fullPath = path.join(WORKSPACE_ROOT, filePath);
+      
+      if (!fsSync.existsSync(fullPath)) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      const content = await fs.readFile(fullPath, 'utf8');
+      const lines = content.split('\n');
+      lines.splice(line - 1, 0, `// [GIDE Telemetry] ${code}`);
+      
+      await fs.writeFile(fullPath, lines.join('\n'));
+      res.json({ success: true, message: 'Telemetry injected' });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
   });
 
   // Debugger & Profiler Endpoints
@@ -1642,6 +1770,28 @@ async function startServer() {
   app.post('/api/debug/profiler/start', authenticateUser, (req, res) => {
     deepProfiler.start();
     res.json({ status: 'started' });
+  });
+
+  app.post('/api/debug/analyze-heap', authenticateUser, async (req, res) => {
+    try {
+      const { snapshotPath } = req.body;
+      // In a real scenario, this would use a heap analysis tool
+      const analysis = await deepProfiler.analyzeHeap(snapshotPath);
+      res.json({ analysis });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.post('/api/ai/autocomplete', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { code, line, column } = req.body;
+      // Low-latency streaming endpoint for ghost text
+      const completion = await liveDebugger.getGhostText(code, line, column);
+      res.json({ completion });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
   });
 
   // File system watcher

@@ -1,6 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { ForgeGuard } from './ForgeGuard';
+import { symbolGraph } from '../lib/symbolGraph';
+import { embeddingEngine } from '../lib/embeddingEngine';
+import { activeTabTracker } from '../lib/activeTabTracker';
 
 export interface FileIndexEntry {
   path: string;
@@ -55,10 +58,22 @@ export class ProjectContextEngine {
             await scan(fullPath);
           } else if (entry.isFile()) {
             const stats = await fs.stat(fullPath);
+            const content = await fs.readFile(fullPath, 'utf8');
             
+            // Index symbols for TS/JS files
+            if (entry.name.match(/\.(ts|tsx|js|jsx)$/)) {
+              await symbolGraph.indexFile(relPath, content);
+            }
+
+            // Index embeddings for semantic search
+            try {
+              await embeddingEngine.indexFile(relPath, content);
+            } catch (e) {
+              console.warn(`[ContextEngine] Failed to embed ${relPath}:`, e);
+            }
+
             // Index documentation
             if (entry.name.toLowerCase().endsWith('.md') || entry.name.toLowerCase().includes('readme')) {
-              const content = await fs.readFile(fullPath, 'utf8');
               newDocIndex.set(relPath, content.substring(0, 2000)); // First 2k chars
             }
 
@@ -110,18 +125,57 @@ export class ProjectContextEngine {
    */
   /**
    * RAG-based Context Pruning
-   * Returns only the most relevant file contents based on the query.
+   * Returns only the most relevant file contents based on the query and optional skill context.
    * Mirrors patterns used by enterprise AI tools to avoid context bloat.
    */
-  public async getRelevantContext(query: string, limit: number = 5): Promise<{ path: string, content: string }[]> {
+  public async getRelevantContext(
+    query: string, 
+    limit: number = 5, 
+    skillContext?: { skillName: string, stepName: string }
+  ): Promise<{ path: string, content: string }[]> {
     const q = query.toLowerCase();
     
-    // 1. Keyword-based scoring
+    // 1. Active Tab Priority (Working Set)
+    const activeTab = activeTabTracker.getActiveTab();
+    const openTabs = new Set(activeTabTracker.getOpenTabs());
+
+    // 2. Symbol-based scoring (Advanced Context)
+    const relatedSymbols = symbolGraph.getRelatedSymbols(query);
+    const symbolPaths = new Set(relatedSymbols.map(s => s.file));
+
+    // 3. Semantic Search (Embeddings)
+    let semanticResults: string[] = [];
+    try {
+      const semanticMatches = await embeddingEngine.search(query, limit);
+      semanticResults = semanticMatches.map(m => m.path);
+    } catch (e) {
+      console.warn('[ContextEngine] Semantic search failed:', e);
+    }
+
+    // 4. Scoring logic
     const scored = Array.from(this.index.values()).map(entry => {
       let score = 0;
       const pathParts = entry.path.toLowerCase().split('/');
       const fileName = pathParts[pathParts.length - 1];
       
+      // Active Tab is highest priority
+      if (entry.path === activeTab) score += 50;
+      if (openTabs.has(entry.path)) score += 20;
+
+      // Symbol matches
+      if (symbolPaths.has(entry.path)) score += 30;
+
+      // Semantic matches
+      if (semanticResults.includes(entry.path)) score += 25;
+
+      // Skill-based context priority
+      if (skillContext) {
+        // Boost files that seem related to the skill step
+        if (entry.path.toLowerCase().includes(skillContext.skillName.toLowerCase())) score += 40;
+        if (entry.path.toLowerCase().includes(skillContext.stepName.toLowerCase())) score += 30;
+      }
+
+      // Keyword matches
       if (fileName.includes(q)) score += 10;
       if (entry.path.toLowerCase().includes(q)) score += 5;
       if (entry.intent?.toLowerCase().includes(q)) score += 3;
@@ -129,13 +183,13 @@ export class ProjectContextEngine {
       return { entry, score };
     });
 
-    // 2. Sort and take top results
+    // 5. Sort and take top results
     const top = scored
       .filter(s => s.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 
-    // 3. Fetch contents for top results
+    // 6. Fetch contents for top results
     const results = await Promise.all(top.map(async ({ entry }) => {
       try {
         // In a real enterprise tool, we'd use vector embeddings here.

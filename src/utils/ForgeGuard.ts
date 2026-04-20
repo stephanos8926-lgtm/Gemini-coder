@@ -5,8 +5,7 @@ import { resilienceMapper } from './ResilienceMapper';
 import { ErrorBoundary } from '../security/ErrorBoundary';
 import { PatchEngine } from '../security/patch-engine';
 import { scanSource, scanFile } from '../security/scanner';
-import path from 'path';
-import fs from 'fs';
+const isServer = typeof window === 'undefined';
 
 export interface TelemetryStats {
   totalSignals: number;
@@ -47,15 +46,16 @@ export class ForgeGuard {
     this.persistence.saveSensor(name, { registeredAt: Date.now() });
   }
 
-  public async protect<T>(fn: () => Promise<T>, ctx = {}): Promise<T> {
+  public async protect<T>(fn: () => T | Promise<T>, ctx = {}): Promise<T> {
     try {
-      return await this.boundary.capture(fn, { 
+      return await this.boundary.capture(async () => {
+        return await fn();
+      }, { 
         moduleName: this.moduleName, 
         ...ctx,
         snapshot: this.getRuntimeSnapshot()
       });
     } catch (e) {
-      // If an error occurs, we enrich the context with a runtime snapshot
       throw e;
     }
   }
@@ -122,6 +122,12 @@ export class ForgeGuard {
     this.lastHealAttempt = now;
 
     try {
+      if (!isServer) {
+        console.warn('[ForgeGuard] Self-healing is server-only.');
+        return;
+      }
+      const fs = eval('require')('fs');
+
       console.log('[ForgeGuard] Triggering Autonomous Patch Engine...');
       
       // If signal contains file path, scan it

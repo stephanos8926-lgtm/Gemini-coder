@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Play, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronRight, Command } from 'lucide-react';
+import { Terminal, Play, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronRight, Command, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { filesystemService } from '../lib/filesystemService';
+import { chatService } from '../lib/chatService';
 
 interface ToolResult {
   id: string;
@@ -57,6 +58,14 @@ export function ToolsPanel() {
   };
 
   const clearHistory = () => setResults([]);
+
+  const analyzeError = async (res: ToolResult) => {
+    const errorText = `${res.stdout}\n${res.stderr}`;
+    chatService.sendMessage({
+      type: 'fix_request',
+      content: `I encountered an error while running "${res.command}". Can you analyze this log and suggest a fix?\n\n\`\`\`\n${errorText}\n\`\`\``
+    });
+  };
 
   const commonTools = [
     { name: 'Lint', cmd: 'npm run lint' },
@@ -135,9 +144,18 @@ export function ToolsPanel() {
                     COMPLETED SUCCESSFULLY
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold">
-                    <AlertCircle className="w-3 h-3" />
-                    FAILED
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 text-[10px] text-red-500 font-bold">
+                      <AlertCircle className="w-3 h-3" />
+                      FAILED
+                    </div>
+                    <button
+                      onClick={() => analyzeError(res)}
+                      className="flex items-center gap-1.5 px-2 py-0.5 bg-[#007acc]/20 text-[#007acc] hover:bg-[#007acc]/30 rounded text-[10px] font-bold transition-all border border-[#007acc]/30"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      AI FIX
+                    </button>
                   </div>
                 )}
               </div>

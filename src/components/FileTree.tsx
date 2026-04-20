@@ -81,9 +81,12 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
 
   const handleContextMenu = (e: React.MouseEvent, path: string, isFile: boolean) => {
     e.preventDefault();
+    // Ensure menu stays within viewport
+    const x = Math.min(e.clientX, window.innerWidth - 180);
+    const y = Math.min(e.clientY, window.innerHeight - 200);
     setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x,
+      y,
       path,
       isFile
     });
@@ -321,9 +324,15 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
+      <div className="flex-1 overflow-y-auto py-2 custom-scrollbar">
         {Object.keys(files).length === 0 ? (
-          <div className="px-4 text-sm text-[#858585] italic">No files yet</div>
+          <div className="flex flex-col items-center justify-center h-full px-4 text-center space-y-3 opacity-50">
+            <Folder className="w-8 h-8 text-[#858585]" />
+            <div className="text-xs text-[#858585] italic">
+              No files in this workspace.<br/>
+              Create a file to get started.
+            </div>
+          </div>
         ) : (
           renderTree(tree)
         )}

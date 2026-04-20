@@ -1,25 +1,20 @@
-import * as ts from 'typescript';
+import fs from 'fs/promises';
 import path from 'path';
+import * as ts from 'typescript';
 
 export interface SymbolInfo {
   name: string;
-  type: 'function' | 'class' | 'interface' | 'type' | 'variable';
+  type: 'function' | 'class' | 'interface' | 'variable' | 'import';
   line: number;
-  isExported: boolean;
-  doc?: string;
-}
-
-export interface FileSymbols {
-  path: string;
-  exports: SymbolInfo[];
-  imports: { source: string; symbols: string[] }[];
+  file: string;
+  dependencies: string[]; // Names of other symbols referenced
+  source?: string; // Full source code of the symbol for semantic chunking
 }
 
 export class SymbolGraph {
   private static instance: SymbolGraph;
-  private graph: Map<string, FileSymbols> = new Map();
-
-  private constructor() {}
+  private symbols: Map<string, SymbolInfo[]> = new Map(); // file -> symbols
+  private graph: Map<string, Set<string>> = new Map(); // symbol -> dependent symbols
 
   public static getInstance(): SymbolGraph {
     if (!SymbolGraph.instance) {
@@ -28,76 +23,70 @@ export class SymbolGraph {
     return SymbolGraph.instance;
   }
 
-  public updateFile(filePath: string, code: string) {
-    const sourceFile = ts.createSourceFile(filePath, code, ts.ScriptTarget.Latest, true);
-    const exports: SymbolInfo[] = [];
-    const imports: { source: string; symbols: string[] }[] = [];
+  async indexFile(filePath: string, content: string) {
+    const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true);
+    const symbols: SymbolInfo[] = [];
 
     const visit = (node: ts.Node) => {
-      // Handle Imports
-      if (ts.isImportDeclaration(node)) {
-        const source = (node.moduleSpecifier as ts.StringLiteral).text;
-        const symbols: string[] = [];
-        if (node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings)) {
-          node.importClause.namedBindings.elements.forEach(el => symbols.push(el.name.text));
-        }
-        imports.push({ source, symbols });
-      }
-
-      // Handle Exports (Functions, Classes, etc.)
-      if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) {
-        const name = node.name?.text;
-        if (name) {
-          const isExported = !!(ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export);
-          const type = ts.isFunctionDeclaration(node) ? 'function' : 
-                       ts.isClassDeclaration(node) ? 'class' :
-                       ts.isInterfaceDeclaration(node) ? 'interface' : 'type';
-          
-          const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
-          
-          exports.push({
-            name,
-            type,
-            line: line + 1,
-            isExported
-          });
+      if (ts.isClassDeclaration(node) && node.name) {
+        symbols.push({ name: node.name.text, type: 'class', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
+      } else if (ts.isFunctionDeclaration(node) && node.name) {
+        symbols.push({ name: node.name.text, type: 'function', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
+      } else if (ts.isInterfaceDeclaration(node) && node.name) {
+        symbols.push({ name: node.name.text, type: 'interface', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
+      } else if (ts.isImportDeclaration(node)) {
+        const moduleSpecifier = node.moduleSpecifier.getText(sourceFile).replace(/['"]/g, '');
+        symbols.push({ name: moduleSpecifier, type: 'import', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
+      } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        if (node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
+          symbols.push({ name: node.name.text, type: 'function', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.parent.getText(sourceFile) });
         }
       }
-
       ts.forEachChild(node, visit);
     };
 
     visit(sourceFile);
-    this.graph.set(filePath, { path: filePath, exports, imports });
+    this.symbols.set(filePath, symbols);
+  }
+
+  private getLine(sourceFile: ts.SourceFile, node: ts.Node): number {
+    return sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+  }
+
+  public updateFile(filePath: string, content: string) {
+    this.indexFile(filePath, content);
   }
 
   public getDependencies(filePath: string): string[] {
-    const file = this.graph.get(filePath);
-    return file?.imports.map(i => i.source) || [];
+    const symbols = this.symbols.get(filePath) || [];
+    return symbols.filter(s => s.type === 'import').map(s => s.name);
   }
 
-  public getDependents(filePath: string): string[] {
-    const dependents: string[] = [];
-    this.graph.forEach((data, pathKey) => {
-      if (data.imports.some(i => i.source.includes(path.basename(filePath, path.extname(filePath))))) {
-        dependents.push(pathKey);
-      }
-    });
-    return dependents;
+  public getGraphSummary() {
+    return {
+      totalFiles: this.symbols.size,
+      totalSymbols: Array.from(this.symbols.values()).reduce((acc, s) => acc + s.length, 0)
+    };
   }
 
-  public getGraphSummary(): string {
-    let summary = "Symbol Graph Summary:\n";
-    this.graph.forEach((data, filePath) => {
-      summary += `- ${filePath}\n`;
-      if (data.exports.length > 0) {
-        summary += `  Exports: ${data.exports.map(e => e.name).join(', ')}\n`;
-      }
-      if (data.imports.length > 0) {
-        summary += `  Imports from: ${data.imports.map(i => i.source).join(', ')}\n`;
-      }
+  getRelatedSymbols(symbolName: string): SymbolInfo[] {
+    const related: SymbolInfo[] = [];
+    this.symbols.forEach(fileSymbols => {
+      fileSymbols.forEach(s => {
+        if (s.name === symbolName || s.dependencies.includes(symbolName)) {
+          related.push(s);
+        }
+      });
     });
-    return summary;
+    return related;
+  }
+
+  getSymbolMap() {
+    return Array.from(this.symbols.entries());
+  }
+
+  public getFileSymbols(filePath: string): SymbolInfo[] {
+    return this.symbols.get(filePath) || [];
   }
 }
 

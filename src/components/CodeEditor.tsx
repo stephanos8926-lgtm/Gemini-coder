@@ -3,6 +3,7 @@ import Editor, { OnMount } from '@monaco-editor/react';
 import { FolderTree, Sparkles, MessageSquare, Wand2, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as monaco from 'monaco-editor';
+import { activeTabTracker } from '../lib/activeTabTracker';
 
 interface CodeEditorProps {
   content: string;
@@ -29,6 +30,10 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
   const [toolbarPos, setToolbarPos] = useState<{ x: number; y: number } | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const selectionDisposable = useRef<monaco.IDisposable | null>(null);
+
+  useEffect(() => {
+    activeTabTracker.setActiveTab(filename);
+  }, [filename]);
 
   useEffect(() => {
     if (editorRef.current && targetLine) {

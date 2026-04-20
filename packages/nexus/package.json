@@ -1,0 +1,12 @@
+{
+  "name": "@nexus/core",
+  "version": "1.0.0",
+  "description": "Unified Resilience and Observability library",
+  "main": "index.ts",
+  "type": "module",
+  "dependencies": {
+    "winston": "^3.17.0",
+    "better-sqlite3": "^11.8.1",
+    "js-yaml": "^4.1.0"
+  }
+}

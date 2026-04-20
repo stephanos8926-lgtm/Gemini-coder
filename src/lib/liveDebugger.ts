@@ -64,11 +64,11 @@ export class LiveDebugger extends EventEmitter {
     });
   }
 
-  public getStatus() {
-    return {
-      isAttached: this.isAttached,
-      breakpointCount: this.breakpoints.size
-    };
+  public async getGhostText(code: string, line: number, column: number): Promise<string> {
+    return await this.guard.protect(async () => {
+      // Simulated AI autocomplete
+      return " // AI-generated suggestion";
+    });
   }
 }
 

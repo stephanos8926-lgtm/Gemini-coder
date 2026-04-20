@@ -7,6 +7,8 @@ import { scanFile } from '../security/scanner';
 import { verifiedPatchEngine } from './verifiedPatchEngine';
 import { gitIntelligence } from './gitIntelligence';
 import { ProjectContextEngine } from '../utils/ProjectContextEngine';
+import { shadowExecution } from '../../packages/nexus/utils/ShadowExecutionEngine';
+import { logToFix } from './logToFix';
 
 const logger = new LogTool('toolExecutor');
 const guard = ForgeGuard.init('toolExecutor');
@@ -26,6 +28,10 @@ const handlers: Map<string, ToolHandler> = new Map<string, ToolHandler>([
   ['forgeguard_patch', handleForgeGuardPatch],
   ['git_intel', handleGitIntel],
   ['context_prune', handleContextPrune],
+  ['shadow_verify', handleShadowVerify],
+  ['shadow_regression', handleShadowRegression],
+  ['log_analyze', handleLogAnalyze],
+  ['web_search', handleWebSearch],
 ]);
 
 export async function executeTool(name: string, args: any, context: any) {
@@ -105,6 +111,28 @@ async function handleGitIntel(args: { url: string, branch?: string }) {
 async function handleContextPrune(args: { query: string, limit?: number }) {
   const context = await ProjectContextEngine.getInstance().getRelevantContext(args.query, args.limit);
   return { context };
+}
+
+async function handleShadowVerify(args: { filePath: string, originalContent: string, proposedContent: string, testCommand?: string }) {
+  const result = await shadowExecution.verifyFix(args.filePath, args.originalContent, args.proposedContent, args.testCommand);
+  return result;
+}
+
+async function handleShadowRegression() {
+  const result = await shadowExecution.runRegressionSuite();
+  return result;
+}
+
+async function handleLogAnalyze(args: { log: string }) {
+  const analysis = await logToFix.analyzeLog(args.log);
+  return analysis;
+}
+
+async function handleWebSearch(args: { query: string }) {
+  // In a real scenario, this would use a search API or MCP tool
+  logger.info('Performing web search', { query: args.query });
+  // Placeholder for now, as we don't have a direct search API integrated yet
+  return { results: `Search results for "${args.query}" (Placeholder)` };
 }
 
 interface CommandResult {

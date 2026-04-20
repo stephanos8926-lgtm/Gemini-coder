@@ -62,8 +62,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             className="p-1.5 hover:bg-[#3c3c3c] rounded transition-colors text-[#858585] hover:text-white lg:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle Mobile Menu"
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="w-5 h-5" />
           </button>
         </div>
 
@@ -166,6 +167,17 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-[10px] font-bold text-white leading-none">{user.displayName || 'User'}</span>
               <span className="text-[9px] text-[#858585] leading-none mt-0.5">{user.email}</span>
             </div>
+            {user?.role === 'admin' && (
+              <a
+                href="/admin"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 bg-[#8b0000] hover:bg-[#a50000] rounded-full transition-all border border-[#a50000] text-white text-[10px] font-bold px-2"
+                title="Admin Dashboard"
+              >
+                ADMIN
+              </a>
+            )}
             <button
               onClick={onSignOut}
               className="p-1.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] rounded-full transition-all border border-[#4c4c4c]"

@@ -4,13 +4,27 @@ import { FileSaveSchema, FileCreateSchema } from './schemas';
 import { LRUCache } from 'lru-cache';
 import CryptoJS from 'crypto-js';
 
+class TinyEmitter {
+  private listeners: { [key: string]: Function[] } = {};
+
+  on(event: string, listener: Function) {
+    if (!this.listeners[event]) this.listeners[event] = [];
+    this.listeners[event].push(listener);
+  }
+
+  off(event: string, listener: Function) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter(l => l !== listener);
+  }
+
+  emit(event: string, data: any) {
+    if (!this.listeners[event]) return;
+    this.listeners[event].forEach(l => l(data));
+  }
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
-/**
- * High-performance Multi-Tier Cache Manager
- * Tier 1: In-memory LRU
- * Tier 2: IndexedDB (Persistent)
- */
 class FileCacheManager {
   private static instance: FileCacheManager;
   private l1Cache: LRUCache<string, string>;
@@ -18,10 +32,10 @@ class FileCacheManager {
 
   private constructor() {
     this.l1Cache = new LRUCache<string, string>({
-      max: 100, // Store up to 100 files in memory
-      maxSize: 5 * 1024 * 1024, // 5MB limit
+      max: 100,
+      maxSize: 5 * 1024 * 1024,
       sizeCalculation: (value) => value.length,
-      ttl: 1000 * 60 * 15, // 15 mins TTL
+      ttl: 1000 * 60 * 15,
     });
   }
 
@@ -37,24 +51,18 @@ class FileCacheManager {
   }
 
   private getCacheKey(workspace: string, path: string): string {
-    // Stable key based on workspace and path
     return `cache:${this.userId}:${workspace}:${path}`;
   }
 
   public async get(workspace: string, path: string): Promise<string | null> {
     const key = this.getCacheKey(workspace, path);
-    
-    // Check L1
     const cached = this.l1Cache.get(key);
     if (cached) return cached;
-
-    // Check L2
     const l2Key = `l2:${key}`;
     const l2Data = localStorage.getItem(l2Key);
     if (l2Data) {
       try {
         const { content, hash } = JSON.parse(l2Data);
-        // Verify hash integrity using a stable algorithm
         const currentHash = this.calculateHash(content);
         if (currentHash === hash) {
           this.l1Cache.set(key, content);
@@ -64,18 +72,13 @@ class FileCacheManager {
         localStorage.removeItem(l2Key);
       }
     }
-
     return null;
   }
 
   public set(workspace: string, path: string, content: string) {
     const key = this.getCacheKey(workspace, path);
     const hash = this.calculateHash(content);
-
-    // Update L1
     this.l1Cache.set(key, content);
-
-    // Update L2
     try {
       localStorage.setItem(`l2:${key}`, JSON.stringify({ content, hash, ts: Date.now() }));
     } catch (e) {
@@ -84,7 +87,6 @@ class FileCacheManager {
   }
 
   private calculateHash(content: string): string {
-    // Using SHA-256 for collision resistance
     return CryptoJS.SHA256(content).toString();
   }
 
@@ -96,20 +98,25 @@ class FileCacheManager {
 
   private cleanupL2() {
     const keys = Object.keys(localStorage).filter(k => k.startsWith('l2:cache:'));
-    // Simple cleanup: remove 20% oldest
     keys.sort().slice(0, Math.floor(keys.length * 0.2)).forEach(k => localStorage.removeItem(k));
   }
 }
 
 const cacheManager = FileCacheManager.getInstance();
 
-export class FilesystemService {
+export class FilesystemService extends TinyEmitter {
   private static instance: FilesystemService;
   private workspace: string = '';
   private idToken: string = '';
   private _client: any = null;
 
-  private constructor() {}
+  private constructor() {
+    super();
+  }
+
+  public get events() {
+    return this;
+  }
 
   public static getInstance(): FilesystemService {
     if (!FilesystemService.instance) {
@@ -125,7 +132,7 @@ export class FilesystemService {
   public setToken(token: string, uid?: string) {
     this.idToken = token;
     if (uid) cacheManager.setUserId(uid);
-    this._client = null; // Recreate client when token changes
+    this._client = null;
   }
 
   public get client() {
@@ -171,19 +178,14 @@ export class FilesystemService {
   }
 
   async getFileContent(path: string): Promise<string> {
-    // Check Cache First
     const cached = await cacheManager.get(this.workspace, path);
     if (cached) return cached;
-
     const searchParams = new URLSearchParams({
       path,
       ...(this.workspace ? { workspace: this.workspace } : {})
     });
     const data: { content: string } = await this.client.get(`/api/files/content?${searchParams}`).json();
-    
-    // Update Cache
     cacheManager.set(this.workspace, path, data.content);
-    
     return data.content;
   }
 
@@ -192,8 +194,8 @@ export class FilesystemService {
     await this.client.post('/api/files/save', {
       json: body,
     });
-    // Invalidate Cache
     cacheManager.invalidate(this.workspace, path);
+    this.emit('file-updated', { path, content });
   }
 
   async createFile(path: string, isDir: boolean = false): Promise<void> {
@@ -201,23 +203,24 @@ export class FilesystemService {
     await this.client.post('/api/files/create', {
       json: body,
     });
+    this.emit('file-created', { path, isDir });
   }
 
   async deleteFile(path: string): Promise<void> {
     await this.client.post('/api/files/delete', {
       json: { path, workspace: this.workspace },
     });
-    // Invalidate Cache
     cacheManager.invalidate(this.workspace, path);
+    this.emit('file-deleted', { path });
   }
 
   async renameFile(oldPath: string, newPath: string): Promise<void> {
     await this.client.post('/api/files/rename', {
       json: { oldPath, newPath, workspace: this.workspace },
     });
-    // Invalidate both
     cacheManager.invalidate(this.workspace, oldPath);
     cacheManager.invalidate(this.workspace, newPath);
+    this.emit('file-renamed', { oldPath, newPath });
   }
 
   async search(query: string): Promise<{ path: string, line: number, content: string }[]> {
@@ -228,24 +231,13 @@ export class FilesystemService {
     return this.client.get(`/api/search?${searchParams}`).json();
   }
 
-  /**
-   * Loads the root directory contents.
-   */
   async loadRootFiles(): Promise<FileStore> {
     const files = await this.listFiles('', false);
     const store: FileStore = {};
-    
     for (const file of files) {
       const isDir = file.isDir;
       const cleanPath = (isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
-      
-      store[cleanPath] = {
-        content: '', 
-        isNew: false,
-        isModified: false,
-        size: file.size,
-        isDir
-      };
+      store[cleanPath] = { content: '', isNew: false, isModified: false, size: file.size, isDir };
     }
     return store;
   }
@@ -253,18 +245,10 @@ export class FilesystemService {
   async loadAllFiles(): Promise<FileStore> {
     const files = await this.listFiles('', true);
     const store: FileStore = {};
-    
     for (const file of files) {
       const isDir = file.isDir;
       const cleanPath = (isDir && file.path.endsWith('/')) ? file.path.slice(0, -1) : file.path;
-      
-      store[cleanPath] = {
-        content: '', 
-        isNew: false,
-        isModified: false,
-        size: file.size,
-        isDir
-      };
+      store[cleanPath] = { content: '', isNew: false, isModified: false, size: file.size, isDir };
     }
     return store;
   }

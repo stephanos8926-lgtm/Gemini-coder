@@ -1,0 +1,8 @@
+name: debug_memory_leak
+description: Analyzes heap snapshots and identifies potential memory leaks.
+tools:
+  - deepProfiler.analyzeHeap
+  - logRedirector.push
+steps:
+  - analyze_heap
+  - report_findings

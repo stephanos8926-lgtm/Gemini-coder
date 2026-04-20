@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Loader2, X, RefreshCw, ArrowUp, ArrowDown, Plus, Check } from 'lucide-react';
+import { GitBranch, GitCommit, Loader2, X, RefreshCw, ArrowUp, ArrowDown, Plus, Check, Shield } from 'lucide-react';
 import { auth } from '../firebase';
 
 interface GitPanelProps {
@@ -15,9 +15,11 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
   const [currentBranch, setCurrentBranch] = useState<string>('unknown');
   const [remoteUrl, setRemoteUrl] = useState<string>('');
   const [isConfiguringRemote, setIsConfiguringRemote] = useState(false);
+  const [auditIssues, setAuditIssues] = useState<any[]>([]);
 
   const fetchStatus = async () => {
     try {
+      setAuditIssues([]); // Clear issues on refresh
       const idToken = await auth.currentUser?.getIdToken();
       if (!idToken) return;
 
@@ -72,10 +74,16 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
       
       if (result.success) {
         setOutput(`Success:\n${result.stdout || 'Command completed successfully'}`);
-        if (command === 'commit') setMessage('');
+        if (command === 'commit') {
+          setMessage('');
+          setAuditIssues([]);
+        }
         fetchStatus();
       } else {
         setOutput(`Error:\n${result.error}`);
+        if (result.issues) {
+          setAuditIssues(result.issues);
+        }
       }
     } catch (error) {
       setOutput(`Error: ${String(error)}`);
@@ -225,6 +233,30 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               </button>
             </div>
           </div>
+
+          {/* Audit Issues Section */}
+          {auditIssues.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+                <Shield className="w-3 h-3" /> AI Audit Blockers
+              </h3>
+              <div className="bg-red-500/10 border border-red-500/30 rounded-md overflow-hidden">
+                {auditIssues.map((issue, i) => (
+                  <div key={i} className="p-3 border-b border-red-500/20 last:border-0 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-red-400">{issue.type?.toUpperCase() || 'ISSUE'}</span>
+                      <span className="text-[10px] text-[#858585] font-mono">{issue.file}:{issue.line}</span>
+                    </div>
+                    <p className="text-xs text-[#cccccc]">{issue.message}</p>
+                    <pre className="text-[10px] bg-black/30 p-1.5 rounded text-[#858585] overflow-x-auto">
+                      {issue.snippet}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-[#858585] italic">Fix these issues to proceed with the commit.</p>
+            </div>
+          )}
 
           {/* Output Log */}
           {output && (

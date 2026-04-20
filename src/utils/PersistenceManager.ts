@@ -1,59 +1,34 @@
-import { Worker } from 'worker_threads';
-import fs from 'fs';
-import path from 'path';
+import { Worker } from 'node:worker_threads';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const workerCode = `
-  const { parentPort, workerData } = require('worker_threads');
-  const Database = require('better-sqlite3');
-  
-  let db;
-  try {
-    db = new Database(workerData.dbPath);
-    db.exec(\`
-      CREATE TABLE IF NOT EXISTS sensor_registry (name TEXT PRIMARY KEY, config TEXT);
-      CREATE TABLE IF NOT EXISTS signal_backlog (id INTEGER PRIMARY KEY AUTOINCREMENT, signal TEXT, ttl INTEGER, timestamp INTEGER);
-    \`);
-
-    const insertSensor = db.prepare('INSERT OR REPLACE INTO sensor_registry (name, config) VALUES (?, ?)');
-    const insertSignal = db.prepare('INSERT INTO signal_backlog (signal, ttl, timestamp) VALUES (?, ?, ?)');
-
-    parentPort.on('message', (msg) => {
-      try {
-        if (msg.type === 'saveSensor') {
-          insertSensor.run(msg.name, JSON.stringify(msg.config));
-        } else if (msg.type === 'saveSignal') {
-          insertSignal.run(JSON.stringify(msg.signal), msg.ttl, msg.timestamp);
-        }
-      } catch (err) {
-        console.error('[PersistenceWorker] DB Write Error:', err);
-      }
-    });
-  } catch (err) {
-    console.error('[PersistenceWorker] Initialization Error:', err);
-  }
-`;
+const isServer = typeof window === 'undefined';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class PersistenceManager {
-  private worker: Worker;
+  private worker: Worker | null = null;
 
   constructor(dbPath: string) {
+    if (!isServer) return;
+
     // Ensure the directory exists
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    // Initialize the worker using eval to avoid bundler path resolution issues
-    this.worker = new Worker(workerCode, { 
-      eval: true,
+    // Initialize the worker from the persistent file
+    this.worker = new Worker(path.join(__dirname, 'persistence-worker.js'), { 
       workerData: { dbPath }
     });
 
-    this.worker.on('error', (err) => {
+    this.worker.on('error', (err: any) => {
       console.error('[PersistenceManager] Worker Error:', err);
     });
     
-    this.worker.on('exit', (code) => {
+    this.worker.on('exit', (code: number) => {
       if (code !== 0) {
         console.error(`[PersistenceManager] Worker stopped with exit code ${code}`);
       }
@@ -61,10 +36,12 @@ export class PersistenceManager {
   }
 
   public saveSensor(name: string, config: any) {
+    if (!isServer || !this.worker) return;
     this.worker.postMessage({ type: 'saveSensor', name, config });
   }
 
   public saveSignal(signal: any, ttl: number) {
+    if (!isServer || !this.worker) return;
     this.worker.postMessage({ type: 'saveSignal', signal, ttl, timestamp: Date.now() });
   }
 }

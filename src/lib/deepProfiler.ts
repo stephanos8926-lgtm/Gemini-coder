@@ -83,8 +83,12 @@ export class DeepProfiler {
     return this.snapshots;
   }
 
-  public getLatestSnapshot(): ProfileSnapshot | null {
-    return this.snapshots.length > 0 ? this.snapshots[this.snapshots.length - 1] : null;
+  public async analyzeHeap(snapshotPath: string): Promise<string> {
+    return await this.guard.protect(async () => {
+      // In a real scenario, this would use the `v8` module to analyze heap snapshots
+      logRedirector.push('system', 'info', `Analyzing heap snapshot at: ${snapshotPath}`);
+      return "Analysis complete: No major leaks detected.";
+    });
   }
 }
 

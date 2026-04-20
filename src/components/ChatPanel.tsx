@@ -8,13 +8,33 @@ import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
 import { Settings } from '../lib/settingsStore';
+import { chatService, ChatMessage } from '../lib/chatService';
 
 // Configure marked with highlight.js using a custom renderer
 const renderer = new Renderer();
 renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
   const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
   const highlighted = hljs.highlight(text, { language }).value;
-  return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`;
+  const isLarge = text.split('\n').length > 10;
+  
+  return `
+    <div class="code-block-wrapper relative group my-4 rounded-lg overflow-hidden border border-[#3c3c3c] bg-[#0d0d0d]" data-large="${isLarge}">
+      <div class="flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] border-b border-[#3c3c3c]">
+        <span class="text-[10px] font-bold text-[#858585] uppercase tracking-widest">${language}</span>
+        <button class="copy-btn p-1 hover:bg-[#3c3c3c] rounded transition-colors" data-code="${encodeURIComponent(text)}">
+          <svg class="w-3 h-3 text-[#858585]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+      </div>
+      <div class="code-content ${isLarge ? 'max-h-[300px] overflow-y-auto' : ''} p-4 text-[12px] font-mono leading-relaxed">
+        <pre><code class="hljs language-${language}">${highlighted}</code></pre>
+      </div>
+      ${isLarge ? `
+        <button class="expand-btn absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-[#0d0d0d] to-transparent text-[10px] font-bold text-[#007acc] hover:text-[#3794ff] transition-all flex items-center justify-center gap-1">
+          <span>Show More</span>
+        </button>
+      ` : ''}
+    </div>
+  `;
 };
 
 marked.setOptions({
@@ -89,6 +109,13 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   const [expandedThinking, setExpandedThinking] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const unsubscribe = chatService.subscribe((msg: ChatMessage) => {
+      onSendMessage(msg.content);
+    });
+    return () => { unsubscribe(); };
+  }, [onSendMessage]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -120,9 +147,38 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
 
   const renderMarkdown = (content: string) => {
     const rawHtml = marked.parse(content) as string;
-    const cleanHtml = DOMPurify.sanitize(rawHtml);
+    const cleanHtml = DOMPurify.sanitize(rawHtml, {
+      ADD_ATTR: ['data-code', 'data-large'],
+      ADD_TAGS: ['svg', 'path', 'rect']
+    });
     return { __html: cleanHtml };
   };
+
+  useEffect(() => {
+    const handleCodeActions = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const copyBtn = target.closest('.copy-btn');
+      const expandBtn = target.closest('.expand-btn');
+
+      if (copyBtn) {
+        const code = decodeURIComponent(copyBtn.getAttribute('data-code') || '');
+        navigator.clipboard.writeText(code);
+        toast.success('Code copied to clipboard');
+      }
+
+      if (expandBtn) {
+        const wrapper = expandBtn.closest('.code-block-wrapper');
+        const content = wrapper?.querySelector('.code-content');
+        if (content) {
+          content.classList.toggle('max-h-[300px]');
+          expandBtn.querySelector('span')!.textContent = content.classList.contains('max-h-[300px]') ? 'Show More' : 'Show Less';
+        }
+      }
+    };
+
+    document.addEventListener('click', handleCodeActions);
+    return () => document.removeEventListener('click', handleCodeActions);
+  }, []);
 
   const formatContent = (content: string) => {
     const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
@@ -190,8 +246,8 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-        <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 scroll-smooth">
+        <div className="max-w-4xl mx-auto p-4 space-y-6 pb-12">
           {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
             <div className="w-16 h-16 bg-[#252526] rounded-2xl flex items-center justify-center border border-[#3c3c3c] shadow-xl">
@@ -237,7 +293,7 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
                 )}
               </div>
 
-              <div className={`flex flex-col max-w-[95%] sm:max-w-[85%] min-w-0 space-y-2 ${isUser ? 'items-end' : 'items-start'}`}>
+              <div className={`flex flex-col max-w-[95%] sm:max-w-[85%] min-w-0 space-y-1 ${isUser ? 'items-end' : 'items-start'}`}>
                 {/* Thinking Block */}
                 {thinking && (
                   <div className="w-full space-y-2 my-2">
@@ -304,10 +360,10 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
                 )}
 
                 {/* Main Message Bubble */}
-                <div className={`px-4 py-2 rounded-xl text-sm leading-relaxed relative group break-words max-w-full overflow-hidden ${
+                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative group break-words max-w-full overflow-hidden shadow-sm ${
                   isUser 
-                    ? 'bg-[#2d2d2d] text-white border border-[#3c3c3c]' 
-                    : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c]'
+                    ? 'bg-[#007acc] text-white border border-[#007acc]/50 rounded-tr-none' 
+                    : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'
                 }`}>
                   <div 
                     className="markdown-body prose prose-invert prose-sm max-w-none overflow-x-auto break-words prose-pre:bg-[#0d0d0d] prose-pre:border prose-pre:border-[#2d2d2d] prose-a:text-[#3794ff] prose-a:no-underline hover:prose-a:underline prose-p:leading-relaxed"
