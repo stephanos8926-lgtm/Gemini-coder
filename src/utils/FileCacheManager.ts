@@ -2,6 +2,7 @@ import { LRUCache } from 'lru-cache';
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
 
 export interface CacheEntry {
@@ -27,7 +28,13 @@ export class FileCacheManager {
 
     // Tier 2: SQLite Persistent Cache
     const dbPath = path.join(process.cwd(), 'logs', 'file_cache.db');
-    this.db = new Database(dbPath);
+    try {
+        this.db = new Database(dbPath);
+    } catch (e) {
+        console.error('[FileCacheManager] Database corrupt. Recreating...', e);
+        if (fsSync.existsSync(dbPath)) fsSync.unlinkSync(dbPath);
+        this.db = new Database(dbPath);
+    }
     this.db.pragma('journal_mode = WAL');
     
     this.db.exec(`

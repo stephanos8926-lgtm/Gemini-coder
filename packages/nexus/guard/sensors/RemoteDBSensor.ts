@@ -1,9 +1,15 @@
-import { Sensor } from '../Sensor';
+import { BaseSensor } from '../BaseSensor';
+import { Signal } from '../Sensor';
 
-export class RemoteDBSensor implements Sensor {
-  constructor(private connectionString: string) {}
+export class RemoteDBSensor extends BaseSensor {
+  public readonly name = 'RemoteDBSensor';
+  public readonly capabilities = ['remote-db'];
 
-  public async handle(signal: any): Promise<boolean> {
+  constructor(private connectionString: string) {
+    super();
+  }
+
+  public async handle(signal: Signal): Promise<boolean> {
     try {
       // Simulated remote DB connection/insertion
       // In a real scenario, this would use a connection pool to write to PostgreSQL/MySQL

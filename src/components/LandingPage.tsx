@@ -1,5 +1,6 @@
 import React from 'react';
 import { Github, Sparkles } from 'lucide-react';
+import { RW_APP_NAME, RW_APP_DESCRIPTION } from '../constants/app';
 
 export const LandingPage: React.FC<{ onSignInGoogle: () => void; onSignInGithub: () => void }> = ({ onSignInGoogle, onSignInGithub }) => {
   return (
@@ -7,9 +8,9 @@ export const LandingPage: React.FC<{ onSignInGoogle: () => void; onSignInGithub:
       <div className="mb-8 p-4 bg-[#007acc]/10 rounded-2xl border border-[#007acc]/20">
         <Sparkles className="w-12 h-12 text-[#007acc]" />
       </div>
-      <h1 className="text-4xl font-bold text-white mb-4">Welcome to GIDE</h1>
+      <h1 className="text-4xl font-bold text-white mb-4">Welcome to {RW_APP_NAME}</h1>
       <p className="text-[#858585] max-w-md mb-8">
-        Your AI-powered development environment. Build, refactor, and deploy faster than ever.
+        {RW_APP_DESCRIPTION}
       </p>
       <div className="flex flex-col gap-4">
         <button

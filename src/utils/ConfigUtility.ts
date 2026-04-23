@@ -1,7 +1,5 @@
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const fs = require('fs');
-const yaml = require('js-yaml');
+import fs from 'fs';
+import yaml from 'js-yaml';
 
 const isServer = typeof window === 'undefined';
 

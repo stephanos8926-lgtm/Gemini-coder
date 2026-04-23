@@ -4,10 +4,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const isServer = typeof window === 'undefined';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export class PersistenceManager {
+  private static instance: PersistenceManager | null = null;
   private worker: Worker | null = null;
   private workerPath: string;
 
@@ -36,6 +35,16 @@ export class PersistenceManager {
         console.error(`[PersistenceManager] Worker stopped with exit code ${code}`);
       }
     });
+
+    PersistenceManager.instance = this;
+  }
+
+  public static getInstance(): PersistenceManager {
+    if (!PersistenceManager.instance) {
+      // Create a default instance if none exists
+      return new PersistenceManager('nexus_telemetry.db', path.join(process.cwd(), 'packages/nexus/workers/dbWorker.js'));
+    }
+    return PersistenceManager.instance;
   }
 
   public saveSensor(name: string, config: any) {

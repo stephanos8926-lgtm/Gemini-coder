@@ -2,22 +2,20 @@
 import { scanFile } from '../security/scanner';
 import path from 'path';
 
-const filesToAudit = [
-  'src/App.tsx',
-  'src/hooks/useAppChat.ts'
-];
-
 async function runAudit() {
-  console.log('Running audit...');
-  let allIssues = [];
+  const filePath = process.argv[2];
+  if (!filePath) return;
+
+  const absolutePath = path.resolve(process.cwd(), filePath);
   
-  for (const file of filesToAudit) {
-    const filePath = path.resolve(process.cwd(), file);
-    const issues = scanFile(filePath, true);
-    allIssues.push(...issues);
+  // Quick check for supported files
+  if (!absolutePath.endsWith('.ts') && !absolutePath.endsWith('.tsx')) return;
+
+  const issues = scanFile(absolutePath, true);
+  
+  if (issues.length > 0 && process.send) {
+    process.send(issues);
   }
-  
-  console.log(JSON.stringify(allIssues, null, 2));
 }
 
 runAudit();

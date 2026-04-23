@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { GitBranch, GitCommit, Loader2, X, RefreshCw, ArrowUp, ArrowDown, Plus, Check, Shield } from 'lucide-react';
+import { GitBranch, GitCommit, Loader2, X, RefreshCw, ArrowUp, ArrowDown, Plus, Check, Shield, Sparkles } from 'lucide-react';
 import { auth } from '../firebase';
+import { useAuthStore } from '../store/useAuthStore';
+import { useChatStore } from '../store/useChatStore';
+import { callGemini } from '../lib/gemini';
 
 interface GitPanelProps {
   onClose: () => void;
@@ -55,7 +58,8 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
 
   const runGitCommand = async (command: string) => {
     setIsLoading(true);
-    setOutput(`Running: git ${command}...`);
+    const cmdDisplay = command === 'init' ? 'git init' : `git ${command}`;
+    setOutput(`Running: ${cmdDisplay}...`);
     
     try {
       const idToken = await auth.currentUser?.getIdToken();
@@ -78,6 +82,9 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
           setMessage('');
           setAuditIssues([]);
         }
+        if (command === 'init') {
+          fetchStatus();
+        }
         fetchStatus();
       } else {
         setOutput(`Error:\n${result.error}`);
@@ -92,6 +99,52 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
     }
   };
 
+  const { RW_apiKey } = useAuthStore();
+  const { RW_activeModel } = useChatStore();
+
+  const handleAiSummarize = async () => {
+    if (!RW_apiKey) {
+      setOutput('Error: Gemini API Key required for summarization. Add it in Settings.');
+      return;
+    }
+
+    setIsLoading(true);
+    setOutput('Analyzing staged changes with AI...');
+    
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) return;
+
+      const response = await fetch('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, command: 'diff', workspace }),
+      });
+      const result = await response.json();
+      
+      if (!result.success || !result.stdout) {
+        setOutput('No staged changes found to summarize. Stage your files first.');
+        return;
+      }
+
+      const summary = await callGemini(
+        [{ role: 'user', content: `Summarize the following git diff into a professional, concise commit message (one line, max 72 chars):\n\n${result.stdout}` }],
+        RW_activeModel,
+        RW_apiKey,
+        "You are an expert software engineer specialized in writing perfect git commit messages."
+      );
+
+      setMessage(summary.replace(/^"|"$/g, '').trim());
+      setOutput(`AI Summary Generated:\n${summary}`);
+    } catch (error) {
+      setOutput(`Summarization Failed: ${String(error)}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isUninitialized = currentBranch === 'unknown' || !status && output.includes('not a git repository');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-[#252526] border border-[#454545] rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]">
@@ -102,8 +155,10 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               Source Control
             </h2>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-[#858585]">Current Branch:</span>
-              <span className="text-xs font-mono text-[#007acc] bg-[#007acc]/10 px-2 py-0.5 rounded">{currentBranch}</span>
+              <span className="text-xs text-[#858585]">Status:</span>
+              <span className={`text-xs font-mono ${isUninitialized ? 'text-amber-400 bg-amber-400/10' : 'text-[#007acc] bg-[#007acc]/10'} px-2 py-0.5 rounded`}>
+                {isUninitialized ? 'Uninitialized' : `Branch: ${currentBranch}`}
+              </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -121,9 +176,30 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
         </div>
         
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Uninitialized State Banner */}
+          {isUninitialized && (
+             <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex flex-col items-center gap-3 text-center">
+                <div className="p-3 bg-amber-500/20 rounded-full">
+                  <GitBranch className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white">Initialize Repository</h4>
+                  <p className="text-xs text-[#858585] mt-1">This workspace is not yet a Git repository. Initialize it to start tracking changes.</p>
+                </div>
+                <button 
+                  onClick={() => runGitCommand('init')}
+                  disabled={isLoading}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-black py-2 rounded-md text-sm font-bold transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? 'Initializing...' : 'Git Init'}
+                </button>
+             </div>
+          )}
+
           {/* Status Section */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Changes</h3>
+          {!isUninitialized && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Changes</h3>
             {status ? (
               <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-md overflow-hidden">
                 {status.split('\n').filter(line => line.trim()).map((line, i) => {
@@ -149,11 +225,23 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
                 No changes detected
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           {/* Commit Section */}
           <div className="space-y-3">
-            <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Commit</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Commit</h3>
+              <button 
+                onClick={handleAiSummarize}
+                disabled={isLoading}
+                className="text-[10px] text-[#007acc] hover:text-white flex items-center gap-1 transition-colors disabled:opacity-50"
+                title="AI Summarize Changes"
+              >
+                <Sparkles className="w-3 h-3" />
+                AI Summarize
+              </button>
+            </div>
             <textarea 
               value={message} 
               onChange={e => setMessage(e.target.value)} 

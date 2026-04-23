@@ -1,5 +1,5 @@
 import winston from 'winston';
-import { ForgeGuard } from './ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 import path from 'path';
 import fs from 'fs';
 

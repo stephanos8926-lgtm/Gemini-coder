@@ -1,7 +1,8 @@
 import React from 'react';
-import { Terminal, Key, Plus, Menu, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Sparkles, Download, FolderOpen, Github } from 'lucide-react';
+import { Terminal, Key, Plus, Menu, Search, Settings as SettingsIcon, LogIn, LogOut, GitBranch, Sparkles, Download, FolderOpen, Github, Code2, Play, PanelLeft, PanelRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import type { Profile } from '../lib/profileStore';
+import { RW_APP_NAME, RW_APP_SUBTITLE, RW_MODELS } from '../constants/app';
 
 interface HeaderProps {
   user: any;
@@ -24,6 +25,13 @@ interface HeaderProps {
   activeProfile: Profile | null;
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
+  onShowExplorer: () => void;
+  mobileView: 'chat' | 'editor' | 'preview';
+  setMobileView: (view: 'chat' | 'editor' | 'preview') => void;
+  isLeftSidebarOpen: boolean;
+  onToggleLeftSidebar: () => void;
+  isRightSidebarOpen: boolean;
+  onToggleRightSidebar: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -46,25 +54,40 @@ export const Header: React.FC<HeaderProps> = ({
   onSaveAll,
   activeProfile,
   isMobileMenuOpen,
-  setIsMobileMenuOpen
+  setIsMobileMenuOpen,
+  onShowExplorer,
+  mobileView,
+  setMobileView,
+  isLeftSidebarOpen,
+  onToggleLeftSidebar,
+  isRightSidebarOpen,
+  onToggleRightSidebar
 }) => {
   return (
     <header className="h-12 border-b border-[#3c3c3c] bg-[#2d2d2d] flex items-center justify-between px-4 shrink-0 z-50">
       <div className="flex items-center gap-4">
+        <button
+          onClick={onToggleLeftSidebar}
+          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+          title="Toggle Side Bar (Ctrl+B)"
+        >
+          <PanelLeft className="w-5 h-5" />
+        </button>
+
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#007acc] rounded-lg flex items-center justify-center shadow-lg shadow-[#007acc]/20">
+          <div className="w-8 h-8 bg-[#007acc] rounded-lg flex items-center justify-center shadow-lg shadow-[#007acc]/20 shrink-0">
             <Terminal className="w-5 h-5 text-white" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-white tracking-tight leading-none">GIDE</span>
-            <span className="text-[9px] text-[#858585] font-bold uppercase tracking-widest leading-none mt-1">v2.5.0</span>
+          <div className="hidden sm:flex flex-col">
+            <h1 className="text-sm font-bold text-white tracking-tight leading-none">{RW_APP_NAME}</h1>
+            <span className="text-[10px] text-[#858585] font-medium uppercase tracking-wider mt-1">{RW_APP_SUBTITLE}</span>
           </div>
           <button
-            className="p-1.5 hover:bg-[#3c3c3c] rounded transition-colors text-[#858585] hover:text-white lg:hidden"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label="Toggle Mobile Menu"
+            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors text-[#007acc] sm:hidden"
+            onClick={() => onShowExplorer()}
+            aria-label="Toggle Project Explorer"
           >
-            <Menu className="w-5 h-5" />
+            <FolderOpen className="w-5 h-5" />
           </button>
         </div>
 
@@ -91,26 +114,39 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1 sm:gap-3">
+        {/* Mobile View Toggles */}
+        <div className="flex sm:hidden items-center gap-1 bg-[#1e1e1e] p-1 rounded-lg border border-[#3c3c3c] mr-1">
+          <button
+            onClick={() => setMobileView('chat')}
+            className={`p-1.5 rounded transition-all ${mobileView === 'chat' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setMobileView('editor')}
+            className={`p-1.5 rounded transition-all ${mobileView === 'editor' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => setMobileView('preview')}
+            className={`p-1.5 rounded transition-all ${mobileView === 'preview' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+          >
+            <Play className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <div className="hidden md:flex items-center gap-1 bg-[#1e1e1e] p-1 rounded-lg border border-[#3c3c3c]">
-          <button
-            onClick={() => setModel('gemini-2.5-flash-lite')}
-            className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${model === 'gemini-2.5-flash-lite' ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
-          >
-            LITE
-          </button>
-          <button
-            onClick={() => setModel('gemini-2.5-flash')}
-            className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${model === 'gemini-2.5-flash' ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
-          >
-            FLASH
-          </button>
-          <button
-            onClick={() => setModel('gemini-2.5-pro')}
-            className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${model === 'gemini-2.5-pro' ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
-          >
-            PRO
-          </button>
+          {RW_MODELS.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => setModel(m.id)}
+              className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${model === m.id ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
+            >
+              {m.name.split(' ').pop()?.toUpperCase()}
+            </button>
+          ))}
           
           <div className="w-px h-3 bg-[#3c3c3c] mx-1" />
           
@@ -156,6 +192,14 @@ export const Header: React.FC<HeaderProps> = ({
             title="Settings"
           >
             <SettingsIcon className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={onToggleRightSidebar}
+            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+            title="Toggle AI Assistant"
+          >
+            <PanelRight className="w-5 h-5" />
           </button>
         </div>
 

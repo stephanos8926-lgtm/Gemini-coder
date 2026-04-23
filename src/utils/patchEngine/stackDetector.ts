@@ -1,9 +1,22 @@
-import fs from 'fs'
+import fs from 'fs';
 
-export function detectStack() {
-  const files = fs.readdirSync('.')
+export interface StackConfig {
+  hasNode: boolean;
+  hasTS: boolean;
+  hasPython: boolean;
+  hasGo: boolean;
+  hasRust: boolean;
+  hasC: boolean;
+  hasCpp: boolean;
+  hasShell: boolean;
+  hasMake: boolean;
+  hasCMake: boolean;
+}
 
-  const has = (name: string) => files.includes(name)
+export function detectStack(): StackConfig {
+  const files = fs.readdirSync('.');
+
+  const has = (name: string) => files.includes(name);
 
   return {
     hasNode: has('package.json'),
@@ -16,5 +29,5 @@ export function detectStack() {
     hasShell: files.some(f => f.endsWith('.sh')),
     hasMake: has('Makefile'),
     hasCMake: has('CMakeLists.txt')
-  }
+  };
 }

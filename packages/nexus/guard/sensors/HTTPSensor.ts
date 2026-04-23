@@ -1,9 +1,15 @@
-import { Sensor } from '../Sensor';
+import { BaseSensor } from '../BaseSensor';
+import { Signal } from '../Sensor';
 
-export class HTTPSensor implements Sensor {
-  constructor(private endpoint: string) {}
+export class HTTPSensor extends BaseSensor {
+  public readonly name = 'HTTPSensor';
+  public readonly capabilities = ['http-transmit'];
 
-  public async handle(signal: any): Promise<boolean> {
+  constructor(private endpoint: string) {
+    super();
+  }
+
+  public async handle(signal: Signal): Promise<boolean> {
     try {
       const response = await fetch(this.endpoint, {
         method: 'POST',

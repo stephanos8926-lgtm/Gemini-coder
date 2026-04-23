@@ -21,7 +21,7 @@ if (isBrowser) {
     // @ts-ignore
     const serverWrappers = require('../utils/LogTool');
     // @ts-ignore
-    const serverGuard = require('../utils/ForgeGuard');
+    const serverGuard = require('../../packages/nexus/guard/ForgeGuard');
     LogTool = serverWrappers.LogTool;
     ForgeGuard = serverGuard.ForgeGuard;
   } catch (e) {

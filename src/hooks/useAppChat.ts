@@ -83,6 +83,25 @@ export function useAppChat({
       try {
         let fullResponse = '';
         let finalFunctionCalls: { name: string; args: any }[] | undefined;
+
+        const latestQuery = currentMessages.length > 0 ? currentMessages[currentMessages.length - 1].content : '';
+        
+        let relevantContextItems: { path: string, content: string }[] = [];
+        try {
+          relevantContextItems = await filesystemService.getRelevantContext(latestQuery, 5);
+        } catch (e) {
+          console.warn('[useAppChat] Context engine unreachable:', e);
+        }
+
+        const mentionRegex = /@([a-zA-Z0-9_./-]+)/g;
+        const mentions = Array.from(latestQuery.matchAll(mentionRegex)).map(m => m[1]);
+        for (const mention of mentions) {
+          if (currentFileStore[mention] && !relevantContextItems.find(i => i.path === mention)) {
+            relevantContextItems.push({ path: mention, content: currentFileStore[mention].content });
+          } else if (!relevantContextItems.find(i => i.path === mention)) {
+            relevantContextItems.push({ path: mention, content: `(File referenced via @mention not loaded in memory)` });
+          }
+        }
         
         const fileTree = Object.entries(currentFileStore).map(([path, file]) => {
           const skeleton = generateAstSkeleton(file.content, path);
@@ -96,6 +115,11 @@ export function useAppChat({
           ? settings.customPersona 
           : `Act as a ${settings.aiPersona}.`;
 
+        let relevantContextString = relevantContextItems.length > 0 
+          ? `\n\n[RELEVANT CONTEXT & MENTIONS]\nBased on the user's query and explicit @mentions, here are detailed snippets of the most relevant files/symbols:\n` +
+            relevantContextItems.map(m => `--- ${m.path} ---\n${m.content}\n`).join('\n')
+          : '';
+
         const systemPrompt = getSystemInstruction(enabledTools) + 
           `\n\n[CURRENT WORKSPACE CONTEXT]\n` +
           `Workspace Name: ${workspaceName}\n` +
@@ -105,6 +129,7 @@ export function useAppChat({
           `a structural AST summary is provided to help you understand the codebase without reading every file. ` +
           `Use these summaries to identify relevant functions, classes, and types.\n\n` +
           `${fileTree || 'No files yet.'}\n` +
+          relevantContextString +
           `\n\n[AI PERSONA: ${settings.aiPersona.toUpperCase()}]\n${personaInstruction}\n` +
           (settings.aiChainOfThought ? "\n[CHAIN OF THOUGHT]\nYou MUST wrap your internal reasoning process in <thinking> tags before providing your final response. This reasoning should include your plan, file manifest, and any complexity estimates.\n" : "") +
           systemModifier;

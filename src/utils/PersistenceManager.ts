@@ -4,8 +4,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const isServer = typeof window === 'undefined';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export class PersistenceManager {
   private worker: Worker | null = null;
@@ -20,7 +18,8 @@ export class PersistenceManager {
     }
 
     // Initialize the worker from the persistent file
-    this.worker = new Worker(path.join(__dirname, 'persistence-worker.js'), { 
+    const workerPath = path.join(process.cwd(), 'src/utils/persistence-worker.js');
+    this.worker = new Worker(workerPath, { 
       workerData: { dbPath }
     });
 

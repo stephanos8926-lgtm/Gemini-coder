@@ -1,10 +1,9 @@
-import { safeExec } from './utils/safeExec.js';
-import { detectStack } from './detectStack.js';
-import { runAutoFix } from './autoFix.js';
-import { runBuild } from './buildRunner.js';
 import fs from 'fs';
+import { detectStack } from './stackDetector';
+import { runAutoFix } from './autoFix';
+import { runBuild } from './buildRunner';
 
-export function attemptSelfHeal(errorLogPath: string) {
+export function attemptSelfHeal(errorLogPath: string): boolean {
   console.log(`[PatchEngine] Attempting self-heal for error log: ${errorLogPath}`);
   
   if (!fs.existsSync(errorLogPath)) {
@@ -31,15 +30,5 @@ export function attemptSelfHeal(errorLogPath: string) {
   } else {
     console.error('[PatchEngine] Self-heal failed. Build still broken.');
     return false;
-  }
-}
-
-// Allow running directly via CLI
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const logPath = process.argv[2];
-  if (logPath) {
-    attemptSelfHeal(logPath);
-  } else {
-    console.error('Usage: node heal.js <path-to-error-log.json>');
   }
 }

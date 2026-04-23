@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { spawn } from 'child_process';
 import { diff_match_patch } from 'diff-match-patch';
 import { LogTool } from '../utils/LogTool';
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 import { scanFile } from '../security/scanner';
 import { verifiedPatchEngine } from './verifiedPatchEngine';
 import { gitIntelligence } from './gitIntelligence';

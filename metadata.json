@@ -1,5 +1,5 @@
 {
-  "name": "GIDE - AI-Powered IDE",
-  "description": "A full-stack AI-powered IDE with real-time filesystem access, AI code assistance, and workspace management.",
+  "name": "RapidForge IDE",
+  "description": "Professional AI-driven IDE for full-stack web development with real-time filesystem synchronization and semantic code intelligence.",
   "requestFramePermissions": ["camera", "microphone", "geolocation"]
 }

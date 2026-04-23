@@ -96,6 +96,7 @@ const gitHttpClient: HttpClient = {
     });
   }
 };
+import { fork } from 'child_process';
 import chokidar from 'chokidar';
 import admin from 'firebase-admin';
 import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
@@ -1135,7 +1136,7 @@ async function startServer() {
             // PRE-COMMIT AI AUDIT (ForgeGuard+)
             const auditResults = await (async () => {
               try {
-                const { execSync } = (await import('node:child_process')).execSync;
+                const { execSync } = await import('node:child_process');
                 // Use --cached to check staged changes
                 const changedFiles = execSync('git diff --name-only --cached', { cwd: root }).toString().split('\n').filter(Boolean);
                 const issues: any[] = [];
@@ -1202,6 +1203,10 @@ async function startServer() {
           case 'pull': 
             await execAsync('git pull', { cwd: root });
             res.json({ success: true });
+            return;
+          case 'diff':
+            const diff = await execAsync('git diff --cached', { cwd: root });
+            res.json({ success: true, stdout: diff.stdout });
             return;
           default: 
             res.status(400).json({ error: 'Invalid git command' });
@@ -1672,6 +1677,19 @@ async function startServer() {
     res.json({ results });
   });
 
+  app.post('/api/context/relevant', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { query, limit, skillContext } = req.body;
+      if (typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
+      
+      const results = await ProjectContextEngine.getInstance().getRelevantContext(query, limit, skillContext);
+      res.json({ results });
+    } catch (error) {
+      logger.error('Failed to get relevant context', error as any);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get('/api/context/index', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
     const index = ProjectContextEngine.getInstance().getIndex();
     res.json({ index });
@@ -1810,6 +1828,16 @@ async function startServer() {
       try {
         const content = await fs.readFile(filePath, 'utf-8');
         symbolGraph.updateFile(filePath, content);
+
+        // Proactive Security Scan
+        const scanner = fork('./src/scripts/run-audit.ts', [filePath]);
+        scanner.on('message', (issues: any) => {
+            io.emit('security-alert', { path: filePath, issues });
+        });
+        scanner.on('close', (code) => {
+            if (code !== 0) logger.error(`Scanner failed for ${filePath}`);
+        });
+
       } catch (e) {
         logger.error(`Failed to update symbol graph for ${filePath}`, e instanceof Error ? e : new Error(String(e)));
       }

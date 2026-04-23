@@ -1,6 +1,9 @@
 // ForgeGuard Patch Engine v2.0.0 - AI Enhanced
 import { ScanIssue } from './scanner';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { detectStack } from '../utils/patchEngine/stackDetector';
+import { runBuild } from '../utils/patchEngine/buildRunner';
+import { runAutoFix } from '../utils/patchEngine/autoFix';
 
 export interface PatchSuggestion {
   file: string;
@@ -16,6 +19,25 @@ export class PatchEngine {
   constructor() {
     if (process.env.GEMINI_API_KEY) {
       this.ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    }
+  }
+
+  async runFullRemediationCycle() {
+    const stack = detectStack();
+    console.log('[PatchEngine] Starting automated remediation cycle...');
+    
+    // 1. Auto-fix (Linting/Formatting)
+    runAutoFix(stack);
+    
+    // 2. Validate/Build
+    const buildResult = runBuild(stack);
+    
+    if (buildResult.success) {
+      console.log('[PatchEngine] Remediation cycle successful.');
+      return true;
+    } else {
+      console.error('[PatchEngine] Remediation cycle failed. Manual intervention required.');
+      return false;
     }
   }
 

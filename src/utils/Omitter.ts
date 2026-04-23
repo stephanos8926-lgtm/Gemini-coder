@@ -1,4 +1,4 @@
-import { ForgeGuard } from './ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 
 export interface Signal {
   type: 'error' | 'warn' | 'info';

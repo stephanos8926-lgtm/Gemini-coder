@@ -1,7 +1,7 @@
 import { PatchEngine, PatchSuggestion } from '../security/patch-engine';
 import { testRunner, TestResult } from './testRunner';
 import { filesystemService } from './filesystemService';
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 
 export interface VerifiedPatchResult {
   patch: PatchSuggestion;

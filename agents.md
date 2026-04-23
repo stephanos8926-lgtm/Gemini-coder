@@ -6,6 +6,12 @@
 
 ## META-INSTRUCTIONS (How to Use This File)
 
+### Core Operational Principles
+- **Cost Optimization Principle**: Cost minimization is a non-negotiable project requirement. 
+  - Always prefer the least cost-inducing architecture/implementation.
+  - Minimize Cloud/API egress, storage, and compute overhead by default (e.g., batching I/O, local-first processing, optimizing data structures).
+  - Before proposing expensive infrastructure changes, explicitly document the expected cost and propose lower-cost alternatives.
+
 ### Purpose
 This file serves as your persistent memory across sessions. It contains:
 1. **Meta-instructions** (this section) — how to use the .docs/ planning system
@@ -96,8 +102,15 @@ This file serves as your persistent memory across sessions. It contains:
 ### API & Routing
 <!-- Append API patterns here -->
 
+### Architecture
+[2026-04-22] ARCHITECTURE: Migrated to professional 3-column IDE layout (Explorer | Editor/Utility | AI Assistant) for desktop; Handset-optimized switcher for mobile.
+[2026-04-22] CONVENTION: Standardized `RW_` (RapidForge Workspace) prefix for global constants, metadata, and state to ensure codebase maintainability and easy identification of shared vs local state.
+[2026-04-22] GOTCHA: `react-resizable-panels@^4.8.0` in this environment uses non-standard exports (`Group`, `Separator`) and lacks standard types. Resolved via `any` casts in `App.tsx` to maintain layout integrity. [SUCCESSFUL BUILD: 2026-04-22]
+[2026-04-23] SWARM-BLOCKER: Client-side storage (IndexedDB for embeddings, Zustand `useChatStore` for sessions) blocks headless agent execution. Memory must be migrated server-side before long-horizon autonomous tasks can run. See `.docs/adrs/adr-2026-04-23-swarm-context-engineering.md`.
+
 ### Frontend & UI
-<!-- Append React/UI patterns here -->
+[2026-04-22] UI-PATTERN: Integrated `AdaptiveBottomSheet` for handset utility panels (Terminal, Explorer) to maximize screen real estate on constrained devices.
+[2026-04-22] UI-PATTERN: Unified AI Assistance interface with a persistent right sidebar on desktop, accessible via a collapsible toggle in the Header.
 
 ### Build & Deployment
 <!-- Append tooling patterns here -->
@@ -112,19 +125,27 @@ This file serves as your persistent memory across sessions. It contains:
 
 ## REFLECTION CHECKPOINTS
 
-### Checkpoint 1 — [Date]
-**Tasks Completed:** [count]  
+### Checkpoint 1 — [2026-04-22]
+**Tasks Completed:** 10+ major UI/Logic refactors
 **Key Achievements:**
-- [bullet list of major completions]
+- Refactored App.tsx to a standard 3-column professional IDE layout using `react-resizable-panels`.
+- Implemented mobile ergonomics with a tabbed view switcher and bottom sheets for utility panels.
+- Centralized all application metadata and tuning constants into `src/constants/app.ts`.
+- Standardized project branding as **RapidForge IDE** across components, metadata, and landing pages.
+- Verified and audited the multi-tier filesystem caching system (Memory/SQLite/IndexedDB).
+- Integrated AI-driven Git commit summarization into the Source Control panel.
 
 **Blockers Identified:**
-- [bullet list of unresolved issues]
+- `web-tree-sitter` types are currently bypassed with `any` in `astParser.ts` due to namespace export issues in the AI Studio environment.
 
 **Architectural Insights:**
-- [patterns or decisions that should inform future work]
+- A persistent sidebar structure significantly improves "flow" on desktop compared to a purely tabbed/bottom-panel approach.
+- Handset ergonomics required decoupling status (active file) from view (what's visible: chat vs editor), leading to the `RW_mobileView` state.
 
 **Next Focus:**
-- [next 3-5 high-priority tasks]
+- Semantic Intelligence: Implement Tree-Sitter based code navigation and better AST skeletons.
+- Persistence: Ensure panel sizes and visibility states are preserved in `localStorage`.
+- Stability: Final comprehensive linting and unit test coverage for core filesystem hooks.
 
 ---
 

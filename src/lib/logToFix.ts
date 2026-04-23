@@ -1,5 +1,5 @@
 import { ProjectContextEngine } from '../utils/ProjectContextEngine';
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 
 export interface LogAnalysis {
   rootCause: string;

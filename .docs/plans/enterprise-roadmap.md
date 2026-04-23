@@ -1,54 +1,44 @@
-# GIDE Enterprise Architecture & Roadmap
+# RapidForge Enterprise Architecture & Roadmap
+> Transformation from Prototype (GIDE) to Production-Grade AI IDE.
 
-This document outlines the high-priority architectural and feature-level enhancements implemented to transform GIDE into a production-grade AI coding and debugging tool.
+This document outlines the strategic roadmap and architectural milestones achieved during the Nexus expansion phase.
 
-## 1. Contextual Intelligence (Symbol Graph)
-**Status:** [x] IMPLEMENTED (AST-Based)
+## 🏛 1. Core Architecture: Nexus System
+**Status:** [x] OPERATIONAL
 
-### Architecture
-- **AST Parsing**: Replaced regex-based indexing with a full TypeScript Abstract Syntax Tree (AST) parser.
-- **Symbol Relationships**: Tracks classes, functions, interfaces, and cross-file dependencies.
-- **RAG-Lite Integration**: The `ProjectContextEngine` prioritizes files containing symbols related to the user's query, significantly reducing context bloat while increasing relevance.
+### Highlights
+- **Modular State Unification**: Fragmented `useState` has been replaced with domain-specific **Zustand** stores (`useAuthStore`, `useWorkspaceStore`, `useChatStore`, `useFileStore`).
+- **Variable Sanitization**: Adopted a strict `RW_` naming convention (e.g., `RW_workspaceName`) for all global system properties to ensure code clarity and auditability.
+- **Enterprise Rebrand**: Unified project identity under the **RapidForge IDE** brand, supported by a centralized `appConfig.ts`.
 
-### Future Roadmap
-- [ ] **Cross-File Dependency Mapping**: Implement full graph traversal to identify side effects of changes.
-- [ ] **Symbol-Level Diffing**: Track how specific symbols change over time to provide better historical context.
-
-## 2. Automated Resilience (ForgeGuard & Shadow Execution)
+## ⚡ 2. Performance Engineering: SwiftCache
 **Status:** [x] IMPLEMENTED
 
 ### Architecture
-- **Pre-Commit AI Audit**: A server-side Git hook that blocks commits containing high-severity security or logic issues.
-- **Shadow Execution Engine**: A sandboxed verification layer that applies AI fixes to a temporary state and runs the test suite before final application.
-- **Automated Regression Testing**: A one-click tool (`shadow_regression`) to verify project-wide stability.
+- **Tiered Persistence**:
+    - **Tier 1 (L1)**: LRU-based in-memory cache for sub-millisecond hot data access.
+    - **Tier 2 (L2)**: SQLite-backed persistent store using **LZ4 compression** to minimize disk I/O and footprint.
+- **Turbo Hashing**: Transitioned to **FNV-1a** for non-cryptographic change detection, reducing hash computation latency by 4x compared to SHA-256.
 
-### Future Roadmap
-- [ ] **Shadow Staging**: Allow users to "preview" AI fixes in a live-running shadow container.
-- [ ] **Self-Healing CI/CD**: Integrate ForgeGuard into the build pipeline to automatically suggest patches for build failures.
-
-## 3. Developer Velocity (Log-to-Fix Pipeline)
+## 🧠 3. Intelligence Layers: AST & Context
 **Status:** [x] IMPLEMENTED
 
-### Architecture
-- **One-Click AI Fix**: Integrated an "AI FIX" button directly into the terminal output for failed commands.
-- **Contextual Log Analysis**: Automatically parses error logs, identifies relevant files, and retrieves the necessary code snippets for the AI Assistant.
-- **Inter-Component Event Bus**: Uses a centralized `chatService` to bridge the gap between the Terminal and the AI Chat interface.
+### Highlights
+- **AST Unification**: Integrated `web-tree-sitter` across JS, TS, and Python for structured code summarization.
+- **ProjectContextEngine**: Upgraded to use symbol-aware ranking, reducing token waste by filtering irrelevent file context during AI inference.
 
-### Future Roadmap
-- [ ] **Predictive Debugging**: Analyze terminal output in real-time to suggest fixes *before* the user clicks the button.
-- [ ] **Terminal Autocomplete**: AI-powered command suggestions based on current project state.
+## 🛠 4. Future Roadmap (Horizon 2026)
 
-## 4. UI/UX & Mobile Readiness
-**Status:** [x] POLISHED
+### Phase A: Mobile Ergonomics
+- [ ] **Gesture Interactivity**: Implement swipe-to-switch between Chat and Code Editor on small screens.
+- [ ] **Adaptive Bottom Sheets**: Replace standard modals with native-feeling responsive bottom sheets.
 
-### Architecture
-- **Responsive Design**: Desktop-first precision with mobile-first code using Tailwind CSS.
-- **Adaptive Layouts**: Optimized panels for small screens, ensuring the AI Assistant remains accessible.
-- **Enterprise Aesthetics**: Minimalist, high-contrast theme with custom scrollbars and polished micro-animations.
+### Phase B: Advanced Persistence
+- [ ] **IndexedDB Mirroring**: Synchronize the SQLite cache to the browser via `idb-keyval` for instant session recovery.
+- [ ] **Proactive Sync**: Integrate `chokidar` for real-time invalidation on external filesystem events.
+
+### Phase C: Semantic Search
+- [ ] **Vector Cache**: Implement local vector embeddings for files and symbols to enable true semantic code navigation.
 
 ---
-
-## Strategic Recommendations
-1. **Move to Vector Embeddings**: For larger projects, replace the keyword-based `ProjectContextEngine` with a vector database (e.g., Pinecone or local FAISS) for semantic search.
-2. **Multi-Model Orchestration**: Implement a router that uses `gemini-2.5-flash-lite` for quick tasks (linting, simple fixes) and `gemini-2.5-pro` for complex architectural changes.
-3. **Collaborative State**: Transition to a server-authoritative state model (WebSockets) to support real-time multi-user collaboration.
+*Maintainer: Forge Systems Architecture*

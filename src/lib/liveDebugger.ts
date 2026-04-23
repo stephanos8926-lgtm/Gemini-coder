@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { PersistenceManager } from '../../packages/nexus/utils/PersistenceManager';
 import { logRedirector } from '../utils/LogRedirector';
 
 export interface DebugEvent {
@@ -15,7 +16,7 @@ export interface DebugEvent {
  */
 export class LiveDebugger extends EventEmitter {
   private static instance: LiveDebugger;
-  private guard = ForgeGuard.init('live-debugger');
+  private guard = ForgeGuard.init('live-debugger', {}, PersistenceManager.getInstance());
   private breakpoints: Set<string> = new Set();
   private isAttached: boolean = false;
 

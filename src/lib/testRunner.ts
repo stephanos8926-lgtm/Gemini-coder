@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 
 export interface TestResult {
   success: boolean;

@@ -1,7 +1,12 @@
 import { ConversationManager } from './ConversationManager';
+import { SYSTEM_CONSTANTS } from '../constants/systemConstants';
 
-const API_BASE = (typeof window !== 'undefined' ? import.meta.env.VITE_API_BASE : process.env.VITE_API_BASE) || '';
+const RW_API_BASE = SYSTEM_CONSTANTS.RW_API_BASE;
 
+/**
+ * @interface Message
+ * @description Standardized interface for conversational messages between user and AI model.
+ */
 export type Message = {
   id?: string;
   role: 'user' | 'model' | 'function';
@@ -10,56 +15,63 @@ export type Message = {
   functionResponses?: { name: string; response: any }[];
 };
 
-// In-memory cache for current session only - cleared on page refresh
-const inMemoryCache = new Map<string, { text: string; functionCalls?: any[]; timestamp: number }>();
-const MAX_CACHE_SIZE = 50;
+/** In-memory cache for current session only - cleared on page refresh */
+const RW_inMemoryCache = new Map<string, { text: string; functionCalls?: any[]; timestamp: number }>();
+const RW_MAX_CACHE_SIZE = SYSTEM_CONSTANTS.RW_MAX_CHAT_CACHE_SIZE;
 
+/**
+ * @function pruneCache
+ * @description Implements LRU (Least Recently Used) pruning for the in-memory chat cache.
+ */
 function pruneCache() {
-  if (inMemoryCache.size <= MAX_CACHE_SIZE) return;
+  if (RW_inMemoryCache.size <= RW_MAX_CACHE_SIZE) return;
   
-  // LRU Pruning: Sort by timestamp and remove oldest
-  const entries = Array.from(inMemoryCache.entries())
+  const entries = Array.from(RW_inMemoryCache.entries())
     .sort((a, b) => a[1].timestamp - b[1].timestamp);
   
-  const toRemove = entries.slice(0, inMemoryCache.size - MAX_CACHE_SIZE);
-  toRemove.forEach(([key]) => inMemoryCache.delete(key));
+  const toRemove = entries.slice(0, RW_inMemoryCache.size - RW_MAX_CACHE_SIZE);
+  toRemove.forEach(([key]) => RW_inMemoryCache.delete(key));
 }
 
+/**
+ * @function getCacheKey
+ * @description Generates a deterministic cache key based on conversation history and generation parameters.
+ */
 function getCacheKey(messages: Message[], model: string, systemInstruction: string, temperature: number): string {
   const base = JSON.stringify({ model, systemInstruction, temperature });
   const msgHash = messages.length + '_' + (messages[messages.length - 1]?.content?.length || 0);
   return `gemini_cache_${base}_${msgHash}`;
 }
 
+/**
+ * @function streamGemini
+ * @description Orchestrates the streaming interaction with the Gemini AI model via the RapidForge backend API.
+ */
 export async function streamGemini(
   messages: Message[],
   model: string,
   apiKey: string,
   systemInstruction: string,
   onChunk: (text: string, functionCalls?: { name: string; args: any }[]) => void,
-  temperature: number = 0.7
+  temperature: number = SYSTEM_CONSTANTS.RW_DEFAULT_TEMPERATURE
 ) {
   const manager = new ConversationManager(systemInstruction);
   messages.forEach(msg => manager.addMessage(msg));
   const truncatedMessages = manager.getTruncatedHistory();
   const cacheKey = getCacheKey(truncatedMessages, model, systemInstruction, temperature);
   
-  // SECURITY: Check in-memory cache only (session-bound)
-  const cached = inMemoryCache.get(cacheKey);
+  const cached = RW_inMemoryCache.get(cacheKey);
   if (cached) {
-    // Update timestamp for LRU
     cached.timestamp = Date.now();
     try {
       onChunk(cached.text, cached.functionCalls);
     } catch (e) {
-      // If cache is corrupt, clear it and fetch fresh
-      console.warn('Invalid cache detected, clearing...');
-      inMemoryCache.delete(cacheKey);
+      RW_inMemoryCache.delete(cacheKey);
     }
     return;
   }
 
-  const response = await fetch(`${API_BASE}/api/chat`, {
+  const response = await fetch(`${RW_API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages: truncatedMessages, model, apiKey, systemInstruction, temperature }),
@@ -76,12 +88,12 @@ export async function streamGemini(
   
   if (!reader) throw new Error("No reader");
 
-  let buffer = '';
   let fullResponse = '';
   let chunkBuffer = '';
   let allFunctionCalls: { name: string; args: any }[] = [];
   let lastCallCount = 0;
   
+  let buffer = '';
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -101,7 +113,7 @@ export async function streamGemini(
           let hasNewFunctionCall = false;
           for (const part of parts) {
             if (part.text) {
-              if (fullResponse.length < 500000) {
+              if (fullResponse.length < SYSTEM_CONSTANTS.RW_MAX_RESPONSE_CHUNK_LENGTH) {
                 fullResponse += part.text;
               }
               chunkBuffer += part.text;
@@ -113,7 +125,6 @@ export async function streamGemini(
           }
 
           if (chunkBuffer.length > 50 || hasNewFunctionCall) {
-            // FIXED: Only send NEW function calls to prevent re-executing previous ones
             const newCalls = allFunctionCalls.slice(lastCallCount);
             lastCallCount = allFunctionCalls.length;
             
@@ -121,10 +132,7 @@ export async function streamGemini(
             chunkBuffer = '';
           }
         } catch (e) {
-          console.error("STREAM PARSE FAILURE", {
-            error: e,
-            raw: dataStr
-          });
+          console.error("STREAM PARSE FAILURE", { error: e });
         }
       }
     }
@@ -135,13 +143,10 @@ export async function streamGemini(
     onChunk(chunkBuffer, newCalls.length > 0 ? newCalls : undefined);
   }
   
-  // Cache in memory only for this session
-  // Note: This cache is cleared when the page refreshes or browser closes
-  // For persistence, implement server-side session storage with encryption
   try {
     const payload = JSON.stringify({ text: fullResponse, functionCalls: allFunctionCalls });
     if (payload.length < 1000000) {
-      inMemoryCache.set(cacheKey, { 
+      RW_inMemoryCache.set(cacheKey, { 
         text: fullResponse, 
         functionCalls: allFunctionCalls,
         timestamp: Date.now()
@@ -151,4 +156,30 @@ export async function streamGemini(
   } catch (e) {
     console.warn("Cache write skipped:", e);
   }
+}
+
+/**
+ * @function callGemini
+ * @description Standard non-streaming POST request to Gemini for short responses.
+ */
+export async function callGemini(
+  messages: Message[],
+  model: string,
+  apiKey: string,
+  systemInstruction: string,
+  temperature: number = SYSTEM_CONSTANTS.RW_DEFAULT_TEMPERATURE
+): Promise<string> {
+  const response = await fetch(`${RW_API_BASE}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, model, apiKey, systemInstruction, temperature, stream: false }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`HTTP ${response.status}: ${err}`);
+  }
+
+  const result = await response.json();
+  return result.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }

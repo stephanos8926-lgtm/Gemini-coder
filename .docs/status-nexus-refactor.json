@@ -8,7 +8,9 @@
   "in_progress": [
     "NexusFactory implementation",
     "Import path finalization",
-    "Testing framework integration"
+    "Testing framework integration",
+    "Multi-tier File Caching (LRU + SQLite)",
+    "Infrastructure Upgrades (LZ4 + FNV-1a)"
   ],
   "blocked": [],
   "next": [

@@ -1,5 +1,5 @@
 import React from 'react';
-import DiffEditor, { DiffEditorProps } from '@monaco-editor/react';
+import { DiffEditor } from '@monaco-editor/react';
 import { useScratchpadStore } from '../store/useScratchpadStore';
 
 export const DiffStagingPanel: React.FC = () => {
@@ -40,7 +40,7 @@ export const DiffStagingPanel: React.FC = () => {
             options={{
               readOnly: true,
               renderSideBySide: true,
-            }}
+            } as any}
           />
         </div>
       </div>

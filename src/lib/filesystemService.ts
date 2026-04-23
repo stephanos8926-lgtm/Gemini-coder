@@ -25,19 +25,14 @@ class TinyEmitter {
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
+import { fileCache } from '../../packages/nexus/utils/FileCacheManager';
+import { get, set, del } from 'idb-keyval';
+
 class FileCacheManager {
   private static instance: FileCacheManager;
-  private l1Cache: LRUCache<string, string>;
   private userId: string = 'anonymous';
 
-  private constructor() {
-    this.l1Cache = new LRUCache<string, string>({
-      max: 100,
-      maxSize: 5 * 1024 * 1024,
-      sizeCalculation: (value) => value.length,
-      ttl: 1000 * 60 * 15,
-    });
-  }
+  private constructor() {}
 
   public static getInstance(): FileCacheManager {
     if (!FileCacheManager.instance) {
@@ -50,55 +45,49 @@ class FileCacheManager {
     this.userId = uid;
   }
 
-  private getCacheKey(workspace: string, path: string): string {
-    return `cache:${this.userId}:${workspace}:${path}`;
-  }
-
   public async get(workspace: string, path: string): Promise<string | null> {
-    const key = this.getCacheKey(workspace, path);
-    const cached = this.l1Cache.get(key);
+    const key = `${this.userId}:${workspace}:${path}`;
+    
+    // Tier 1: In-Memory (from proxy FileCacheManager)
+    const cached = await fileCache.getFile(this.userId, `${workspace}:${path}`);
     if (cached) return cached;
-    const l2Key = `l2:${key}`;
-    const l2Data = localStorage.getItem(l2Key);
-    if (l2Data) {
-      try {
-        const { content, hash } = JSON.parse(l2Data);
-        const currentHash = this.calculateHash(content);
-        if (currentHash === hash) {
-          this.l1Cache.set(key, content);
-          return content;
-        }
-      } catch (e) {
-        localStorage.removeItem(l2Key);
+
+    // Tier 3: Client-Side IndexedDB (Local Recovery)
+    try {
+      const idbContent = await get(key);
+      if (idbContent) {
+        // Backfill Tier 1/2
+        await fileCache.setFile(this.userId, `${workspace}:${path}`, idbContent);
+        return idbContent;
       }
+    } catch (e) {
+      console.warn('[L3 Cache] idb-get failed', e);
     }
+
     return null;
   }
 
-  public set(workspace: string, path: string, content: string) {
-    const key = this.getCacheKey(workspace, path);
-    const hash = this.calculateHash(content);
-    this.l1Cache.set(key, content);
+  public async set(workspace: string, path: string, content: string) {
+    const key = `${this.userId}:${workspace}:${path}`;
+    // Tier 1/2: In-Memory/Server-SQLite
+    await fileCache.setFile(this.userId, `${workspace}:${path}`, content);
+    
+    // Tier 3: Client-Side IndexedDB
     try {
-      localStorage.setItem(`l2:${key}`, JSON.stringify({ content, hash, ts: Date.now() }));
+      await set(key, content);
     } catch (e) {
-      this.cleanupL2();
+      console.warn('[L3 Cache] idb-set failed', e);
     }
   }
 
-  private calculateHash(content: string): string {
-    return CryptoJS.SHA256(content).toString();
-  }
-
-  public invalidate(workspace: string, path: string) {
-    const key = this.getCacheKey(workspace, path);
-    this.l1Cache.delete(key);
-    localStorage.removeItem(`l2:${key}`);
-  }
-
-  private cleanupL2() {
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('l2:cache:'));
-    keys.sort().slice(0, Math.floor(keys.length * 0.2)).forEach(k => localStorage.removeItem(k));
+  public async invalidate(workspace: string, path: string) {
+    const key = `${this.userId}:${workspace}:${path}`;
+    fileCache.invalidate(this.userId, `${workspace}:${path}`);
+    try {
+      await del(key);
+    } catch (e) {
+      console.warn('[L3 Cache] idb-del failed', e);
+    }
   }
 }
 
@@ -229,6 +218,12 @@ export class FilesystemService extends TinyEmitter {
       ...(this.workspace ? { workspace: this.workspace } : {})
     });
     return this.client.get(`/api/search?${searchParams}`).json();
+  }
+
+  async getRelevantContext(query: string, limit: number = 5, skillContext?: any): Promise<{ path: string, content: string }[]> {
+    return this.client.post('/api/context/relevant', {
+      json: { query, limit, skillContext }
+    }).json<{ results: { path: string, content: string }[] }>().then((data: any) => data.results);
   }
 
   async loadRootFiles(): Promise<FileStore> {

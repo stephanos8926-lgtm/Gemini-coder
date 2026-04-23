@@ -25,8 +25,8 @@ export class ForgeGuard {
 
   public static init(moduleName: string, configOverrides: Record<string, any> = {}, persistence?: PersistenceManager): ForgeGuard {
     if (!ForgeGuard.instances.has(moduleName)) {
-      if (!persistence) throw new Error('PersistenceManager required for initialization');
-      ForgeGuard.instances.set(moduleName, new ForgeGuard(moduleName, configOverrides, persistence));
+      const pm = persistence || PersistenceManager.getInstance();
+      ForgeGuard.instances.set(moduleName, new ForgeGuard(moduleName, configOverrides, pm));
     }
     return ForgeGuard.instances.get(moduleName)!;
   }
@@ -72,6 +72,29 @@ export class ForgeGuard {
         // Delegate to protocol (GIDE implementation) instead of hardcoded scanFile
         await this.protocol.onDangerousIssue(signal.filePath, []); 
       }
+    }
+  }
+
+  /**
+   * @method protect
+   * @description Automated error wrapping primitive. Executes the provided function within a protective barrier,
+   * emitting telemetry signals upon detecting failures.
+   */
+  public async protect<T>(fn: () => Promise<T> | T, context?: any): Promise<T> {
+    try {
+      const result = fn();
+      if (result instanceof Promise) {
+        return await result;
+      }
+      return result;
+    } catch (error) {
+      await this.emitSignal({
+        type: 'error',
+        payload: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+        timestamp: Date.now(),
+        context
+      });
+      throw error;
     }
   }
 

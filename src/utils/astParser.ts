@@ -44,13 +44,80 @@ export async function generateAstSkeleton(code: string, filename: string): Promi
   }
 }
 
-// TODO: Refactor extraction logic based on Tree-Sitter node types
-function extractAstNodes(node: Parser.SyntaxNode, code: string, lang: string): AstNodeInfo[] {
-  // This needs to be implemented for each language mapped in AstNodeInfo
-  return [];
+// Using any for SyntaxNode to bypass CORTEX_STEP_TYPE_LINT issues with web-tree-sitter namespace exports
+function extractAstNodes(node: any, code: string, lang: string): AstNodeInfo[] {
+  const nodes: AstNodeInfo[] = [];
+
+  const visit = (curr: any) => {
+    let info: AstNodeInfo | null = null;
+
+    // TypeScript/JavaScript Mapping
+    if (lang === 'typescript' || lang === 'javascript') {
+      if (curr.type === 'function_declaration' || curr.type === 'method_definition') {
+        const nameNode = curr.childForFieldName('name');
+        if (nameNode) {
+          info = {
+            name: code.substring(nameNode.startIndex, nameNode.endIndex),
+            type: curr.type === 'method_definition' ? 'method' : 'function',
+            isExported: curr.parent?.type === 'export_statement'
+          };
+        }
+      } else if (curr.type === 'class_declaration') {
+        const nameNode = curr.childForFieldName('name');
+        if (nameNode) {
+          info = { name: code.substring(nameNode.startIndex, nameNode.endIndex), type: 'class', children: [] };
+        }
+      }
+    }
+
+    // Python Mapping
+    if (lang === 'python') {
+      if (curr.type === 'function_definition') {
+        const nameNode = curr.childForFieldName('name');
+        if (nameNode) {
+          info = { name: code.substring(nameNode.startIndex, nameNode.endIndex), type: 'function' };
+        }
+      } else if (curr.type === 'class_definition') {
+        const nameNode = curr.childForFieldName('name');
+        if (nameNode) {
+          info = { name: code.substring(nameNode.startIndex, nameNode.endIndex), type: 'class', children: [] };
+        }
+      }
+    }
+
+    if (info) {
+      nodes.push(info);
+      // For classes, extract members
+      if (info.type === 'class') {
+        for (let i = 0; i < curr.childCount; i++) {
+          const child = curr.child(i);
+          if (child) {
+            const members = extractAstNodes(child, code, lang);
+            info.children?.push(...members);
+          }
+        }
+        return; // Skip walking children again via recursion
+      }
+    }
+
+    for (let i = 0; i < curr.childCount; i++) {
+      const child = curr.child(i);
+      if (child) visit(child);
+    }
+  };
+
+  visit(node);
+  return nodes;
 }
 
 function formatSkeleton(nodes: AstNodeInfo[], indent: string = ''): string {
-  // Same as before
-  return ""; 
+  let result = '';
+  for (const node of nodes) {
+    const exportPrefix = node.isExported ? 'export ' : '';
+    result += `${indent}${exportPrefix}${node.type} ${node.name}${node.type === 'function' || node.type === 'method' ? '()' : ''}\n`;
+    if (node.children && node.children.length > 0) {
+      result += formatSkeleton(node.children, indent + '  ');
+    }
+  }
+  return result;
 }

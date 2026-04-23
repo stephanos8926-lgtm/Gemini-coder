@@ -1,4 +1,4 @@
-import { ForgeGuard } from '../utils/ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 import { logRedirector } from '../utils/LogRedirector';
 
 export interface ProfileSnapshot {

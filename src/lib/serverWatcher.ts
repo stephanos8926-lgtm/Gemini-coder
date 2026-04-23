@@ -28,9 +28,9 @@ export class ServerWatcher {
 
   private setupListeners() {
     this.watcher
-      .on('add', path => this.handleEvent('add', path))
-      .on('change', path => this.handleEvent('change', path))
-      .on('unlink', path => this.handleEvent('unlink', path));
+      .on('add', (path: string) => this.handleEvent('add', path))
+      .on('change', (path: string) => this.handleEvent('change', path))
+      .on('unlink', (path: string) => this.handleEvent('unlink', path));
   }
 
   private handleEvent(event: string, filePath: string) {

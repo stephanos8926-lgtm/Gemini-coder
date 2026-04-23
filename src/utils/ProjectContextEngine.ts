@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { ForgeGuard } from './ForgeGuard';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 import { symbolGraph } from '../lib/symbolGraph';
 import { embeddingEngine } from '../lib/embeddingEngine';
 import { activeTabTracker } from '../lib/activeTabTracker';
