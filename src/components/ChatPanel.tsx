@@ -43,9 +43,11 @@ marked.setOptions({
   gfm: true
 });
 
+import { getAvailableAgents, AgentConfig } from '../utils/agentPool';
+
 interface ChatPanelProps {
   messages: Message[];
-  onSendMessage: (msg: string) => void;
+  onSendMessage: (msg: string, options?: { agentId?: string }) => void;
   onNewChat: () => void;
   onReviewChange?: (filename: string, content: string) => void;
   isStreaming: boolean;
@@ -107,7 +109,13 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   const [input, setInput] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThinking, setExpandedThinking] = useState<number | null>(null);
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState('default-coder');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getAvailableAgents().then(setAgents);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = chatService.subscribe((msg: ChatMessage) => {
@@ -127,7 +135,7 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (input.trim() && !isStreaming) {
-      onSendMessage(input.trim());
+      onSendMessage(input.trim(), { agentId: selectedAgentId });
       setInput('');
     }
   };
@@ -481,7 +489,23 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
 
       {/* Input Area */}
       <div className="p-4 bg-transparent shrink-0">
-        <div className="max-w-3xl mx-auto mb-2 flex justify-end">
+        <div className="max-w-3xl mx-auto mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {agents.length > 0 && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-[#252526] border border-[#3c3c3c] rounded-md transition-all">
+                <span className="text-[9px] font-bold text-[#858585] uppercase tracking-widest">Agent:</span>
+                <select 
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="bg-transparent text-[10px] text-[#cccccc] font-medium focus:outline-none cursor-pointer"
+                >
+                  {agents.map(a => (
+                    <option key={a.id} value={a.id} className="bg-[#252526]">{a.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
           <button
             onClick={async () => {
               try {

@@ -94,10 +94,25 @@ This file serves as your persistent memory across sessions. It contains:
 [UPDATED 2026-04-20] ~~Initial workaround with preprocessor~~ → Use native .transform() in v4.2+
 
 ### Authentication & Security
-<!-- Append security patterns here -->
+[2026-04-23] ARCHITECTURE: Implemented the **ForgeGuard AI Interceptor Pipeline**.
+- **Pattern**: Intercepting Filter Pattern applied to raw LLM requests and responses.
+- **Components**:
+  - `PIIFilter`: Automatic redaction of emails, credit cards, and phone numbers.
+  - `SecurityFilter`: Heuristic audit for prompt injection (e.g., "ignore previous instructions") and system prompt leak detection.
+  - `BudgetFilter`: Token usage audit and cost estimation (length-based metrics).
+  - `ValidatorFilter`: Post-processing validation layer that intercepts code blocks and runs them through a syntax validator (e.g., `new Function()` syntax check) to catch broken generation before user interaction.
+- **Workflow**: All AI calls now route through `ForgeAI.ts` gateway rather than legacy `streamGemini` direct imports.
+- **Benefit**: Centralized control over security, privacy, and technical quality of AI outputs without bloating standard chat logic.
 
 ### Database & Data Layer
-<!-- Append database gotchas here -->
+[2026-04-23] BUG-PATTERN: SQLite `SQLITE_CORRUPT` failures on Cloud Run revisions.
+- **Root Cause**: Corrupt persistence files in the `/logs` directory (likely due to unexpected container termination or underlying filesystem quirks) cause immediate process crash during top-level singleton initialization in `server.ts`.
+- **Resolution**: Promoted `FileCacheManager` from the ForgeGuard package (Nexus) to the core application tier (`/src/utils/FileCacheManager.ts`).
+  - 1. Automated directory creation logic (`logs/` dir).
+  - 2. Double try-catch for `initDb` covering both opening and schema execution.
+  - 3. Automatic `unlinkSync` of corrupted db file AND associated `-wal`/`-shm` files + retry attempt.
+  - 4. Final fallback to `:memory:` storage to prevent process termination. Global cache singleton now guaranteed to be functional.
+  - 5. Unified API: Standardized on `getFile` and `updateFile` with mandatory path parameters for better observability.
 
 ### API & Routing
 <!-- Append API patterns here -->
@@ -119,7 +134,11 @@ This file serves as your persistent memory across sessions. It contains:
 <!-- Append test patterns here -->
 
 ### Performance & Optimization
-<!-- Append perf discoveries here -->
+[2026-04-23] PERFORMANCE: Multi-tier AI Caching via `CacheFilter`.
+- **L1 (Memory)**: Instant session hit for exact prompt hashes.
+- **L3 (IndexedDB)**: Cross-session persistent cache for expensive AI responses using `idb-keyval` and `fnv-plus` non-cryptographic hashing for speed.
+- **Upstream (Context)**: Infrastructure readiness for Gemini `cachedContents` API to handle large file context reuse across long conversations. 
+- **Tool Caching**: `CacheFilter` is architected to cache tool call results for deterministic operations (e.g., reading static config files), significantly reducing unnecessary AI reasoning cycles.
 
 ---
 

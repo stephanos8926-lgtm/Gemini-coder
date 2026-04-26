@@ -1,8 +1,7 @@
 import { LRUCache } from 'lru-cache';
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
-import fs from 'fs/promises';
-import fsSync from 'fs';
+import fs from 'fs';
 import path from 'path';
 
 export interface CacheEntry {
@@ -13,41 +12,82 @@ export interface CacheEntry {
   updatedAt: number;
 }
 
+/**
+ * FileCacheManager (App Tier)
+ * Re-established at the application level to ensure full observability and
+ * integration with build mode telemetry.
+ */
 export class FileCacheManager {
   private static instance: FileCacheManager;
   private memoryCache: LRUCache<string, CacheEntry>;
-  private db: Database.Database;
+  private db: Database.Database | null = null;
 
   private constructor() {
-    // Tier 1: In-memory LRU Cache (e.g., max 500 files or 50MB)
+    // Tier 1: In-memory LRU Cache (max 500 files or 50MB)
     this.memoryCache = new LRUCache<string, CacheEntry>({
       max: 500,
-      maxSize: 50 * 1024 * 1024, // 50MB
+      maxSize: 50 * 1024 * 1024,
       sizeCalculation: (value) => value.content.length,
     });
 
     // Tier 2: SQLite Persistent Cache
-    const dbPath = path.join(process.cwd(), 'logs', 'file_cache.db');
-    try {
-        this.db = new Database(dbPath);
-    } catch (e) {
-        console.error('[FileCacheManager] Database corrupt. Recreating...', e);
-        if (fsSync.existsSync(dbPath)) fsSync.unlinkSync(dbPath);
-        this.db = new Database(dbPath);
-    }
-    this.db.pragma('journal_mode = WAL');
+    const logsDir = path.join(process.cwd(), 'logs');
+    const dbPath = path.join(logsDir, 'file_cache.db');
     
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS file_cache (
-        id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        filePath TEXT NOT NULL,
-        hash TEXT NOT NULL,
-        content TEXT NOT NULL,
-        updatedAt INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_user_file ON file_cache(userId, filePath);
-    `);
+    // Ensure logs directory exists
+    if (!fs.existsSync(logsDir)) {
+      try {
+        fs.mkdirSync(logsDir, { recursive: true });
+      } catch (err) {
+        console.error('[FileCacheManager] Failed to create logs directory:', err);
+      }
+    }
+
+    const initDb = (loc: string) => {
+      const sqlite = new Database(loc, { timeout: 5000 });
+      sqlite.pragma('journal_mode = WAL');
+      sqlite.pragma('synchronous = NORMAL');
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS file_cache (
+          id TEXT PRIMARY KEY,
+          userId TEXT NOT NULL,
+          filePath TEXT NOT NULL,
+          hash TEXT NOT NULL,
+          content TEXT NOT NULL,
+          updatedAt INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_file ON file_cache(userId, filePath);
+      `);
+      return sqlite;
+    };
+
+    try {
+      this.db = initDb(dbPath);
+      console.log('[FileCacheManager] Persistent cache initialized.');
+    } catch (e) {
+      console.error('[FileCacheManager] Initialization failed. Attempting recovery...', e);
+      
+      try {
+        // Unlink potentially corrupt files
+        const filesToDelete = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`];
+        filesToDelete.forEach(f => {
+          if (fs.existsSync(f)) {
+            try { fs.unlinkSync(f); } catch {}
+          }
+        });
+        
+        this.db = initDb(dbPath);
+        console.log('[FileCacheManager] Persistent cache recovered.');
+      } catch (retryErr) {
+        console.error('[FileCacheManager] Critical failure: Fallback to in-memory.', retryErr);
+        try {
+          this.db = initDb(':memory:');
+        } catch (memErr) {
+          console.error('[FileCacheManager] Total failure: SQLite disabled.', memErr);
+          this.db = null;
+        }
+      }
+    }
   }
 
   public static getInstance(): FileCacheManager {
@@ -57,58 +97,48 @@ export class FileCacheManager {
     return FileCacheManager.instance;
   }
 
-  private getCacheKey(userId: string, filePath: string): string {
-    return `${userId}:${filePath}`;
+  private generateHash(content: string): string {
+    return crypto.createHash('sha256').update(content).digest('hex');
   }
 
-  // Fallback to blake2b512 since blake3 package failed to install native bindings
-  private generateHash(content: string): string {
-    return crypto.createHash('blake2b512').update(content).digest('hex');
+  private getCacheKey(userId: string, filePath: string): string {
+    return `${userId}:${filePath}`;
   }
 
   public async getFile(userId: string, filePath: string, absolutePath: string): Promise<string> {
     const cacheKey = this.getCacheKey(userId, filePath);
 
-    // 1. Check Tier 1 (Memory)
+    // 1. Memory Check
     const memEntry = this.memoryCache.get(cacheKey);
     if (memEntry) {
-      // Fast invalidation check via fs.stat
+      return memEntry.content;
+    }
+
+    // 2. Database Check
+    if (this.db) {
       try {
-        const stats = await fs.stat(absolutePath);
-        if (stats.mtimeMs <= memEntry.updatedAt) {
-          return memEntry.content;
+        const row = this.db.prepare('SELECT * FROM file_cache WHERE id = ?').get(cacheKey) as any;
+        if (row) {
+          this.memoryCache.set(cacheKey, {
+            userId: row.userId,
+            filePath: row.filePath,
+            hash: row.hash,
+            content: row.content,
+            updatedAt: row.updatedAt
+          });
+          return row.content;
         }
       } catch (e) {
-        // File might be deleted
-        this.invalidate(userId, filePath);
-        throw e;
+        console.error('[FileCacheManager] Database read failed.', e);
       }
     }
 
-    // 2. Check Tier 2 (SQLite)
-    const stmt = this.db.prepare('SELECT * FROM file_cache WHERE id = ?');
-    const dbEntry = stmt.get(cacheKey) as CacheEntry | undefined;
-    
-    if (dbEntry) {
-      try {
-        const stats = await fs.stat(absolutePath);
-        if (stats.mtimeMs <= dbEntry.updatedAt) {
-          // Promote to Tier 1
-          this.memoryCache.set(cacheKey, dbEntry);
-          return dbEntry.content;
-        }
-      } catch (e) {
-        this.invalidate(userId, filePath);
-        throw e;
-      }
-    }
-
-    // 3. Cache Miss or Invalidated - Read from disk
-    const content = await fs.readFile(absolutePath, 'utf8');
-    const stats = await fs.stat(absolutePath);
+    // 3. Disk Read (Source of Truth)
+    const content = await fs.promises.readFile(absolutePath, 'utf8');
+    const stats = await fs.promises.stat(absolutePath);
     const hash = this.generateHash(content);
-    
-    const newEntry: CacheEntry = {
+
+    const entry: CacheEntry = {
       userId,
       filePath,
       hash,
@@ -116,51 +146,53 @@ export class FileCacheManager {
       updatedAt: stats.mtimeMs
     };
 
-    // Update Tier 1
-    this.memoryCache.set(cacheKey, newEntry);
-
-    // Update Tier 2
-    const insertStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO file_cache (id, userId, filePath, hash, content, updatedAt)
-      VALUES (@id, @userId, @filePath, @hash, @content, @updatedAt)
-    `);
-    insertStmt.run({
-      id: cacheKey,
-      ...newEntry
-    });
+    this.memoryCache.set(cacheKey, entry);
+    if (this.db) {
+      try {
+        this.db.prepare(`
+          INSERT OR REPLACE INTO file_cache (id, userId, filePath, hash, content, updatedAt)
+          VALUES (@id, @userId, @filePath, @hash, @content, @updatedAt)
+        `).run({ id: cacheKey, ...entry });
+      } catch (e) {
+        console.error('[FileCacheManager] Database write failed.', e);
+      }
+    }
 
     return content;
   }
 
   public async updateFile(userId: string, filePath: string, absolutePath: string, content: string): Promise<void> {
-    await fs.writeFile(absolutePath, content, 'utf8');
-    const stats = await fs.stat(absolutePath);
+    await fs.promises.writeFile(absolutePath, content, 'utf8');
+    const stats = await fs.promises.stat(absolutePath);
     const hash = this.generateHash(content);
     const cacheKey = this.getCacheKey(userId, filePath);
 
-    const newEntry: CacheEntry = {
-      userId,
-      filePath,
-      hash,
-      content,
-      updatedAt: stats.mtimeMs
-    };
+    const entry: CacheEntry = { userId, filePath, hash, content, updatedAt: stats.mtimeMs };
 
-    this.memoryCache.set(cacheKey, newEntry);
-    const insertStmt = this.db.prepare(`
-      INSERT OR REPLACE INTO file_cache (id, userId, filePath, hash, content, updatedAt)
-      VALUES (@id, @userId, @filePath, @hash, @content, @updatedAt)
-    `);
-    insertStmt.run({
-      id: cacheKey,
-      ...newEntry
-    });
+    this.memoryCache.set(cacheKey, entry);
+    if (this.db) {
+      try {
+        this.db.prepare(`
+          INSERT OR REPLACE INTO file_cache (id, userId, filePath, hash, content, updatedAt)
+          VALUES (@id, @userId, @filePath, @hash, @content, @updatedAt)
+        `).run({ id: cacheKey, ...entry });
+      } catch (e) {
+        console.error('[FileCacheManager] Database update failed.', e);
+      }
+    }
   }
 
   public invalidate(userId: string, filePath: string): void {
     const cacheKey = this.getCacheKey(userId, filePath);
     this.memoryCache.delete(cacheKey);
-    const stmt = this.db.prepare('DELETE FROM file_cache WHERE id = ?');
-    stmt.run(cacheKey);
+    if (this.db) {
+      try {
+        this.db.prepare('DELETE FROM file_cache WHERE id = ?').run(cacheKey);
+      } catch (e) {
+        console.error('[FileCacheManager] Database delete failed.', e);
+      }
+    }
   }
 }
+
+export const fileCache = FileCacheManager.getInstance();

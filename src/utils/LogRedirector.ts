@@ -27,8 +27,9 @@ class LogRedirector extends EventEmitter {
   }
 
   public push(source: LogSource, level: LogEntry['level'], message: string) {
+    const now = Date.now();
     const entry: LogEntry = {
-      timestamp: Date.now(),
+      timestamp: now,
       source,
       level,
       message,
@@ -36,8 +37,12 @@ class LogRedirector extends EventEmitter {
     };
 
     this.logs.push(entry);
+    
+    // Prune logs older than 1 hour or exceed MAX_LOGS
+    const ONE_HOUR = 60 * 60 * 1000;
+    this.logs = this.logs.filter(l => (now - l.timestamp) < ONE_HOUR);
     if (this.logs.length > this.MAX_LOGS) {
-      this.logs.shift();
+      this.logs = this.logs.slice(-this.MAX_LOGS);
     }
 
     this.emit('log', entry);

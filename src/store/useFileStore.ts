@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { type FileStore } from '../lib/fileStore';
 
 /**
@@ -24,30 +25,45 @@ interface FileState {
 
 /**
  * @store useFileStore
- * @description Manages industrial-scale virtual filesystem synchronization and active editor state.
+ * @description Manages industrial-scale virtual filesystem synchronization and active editor state with persistence.
  */
-export const useFileStore = create<FileState>((set) => ({
-  RW_fileStore: {},
-  RW_activeFile: null,
-  RW_stagedDiffs: [],
-  RW_isMobileTerminalOpen: false,
-  RW_isMobileExplorerOpen: false,
-  RW_mobileView: 'chat',
+export const useFileStore = create<FileState>()(
+  persist(
+    (set) => ({
+      RW_fileStore: {},
+      RW_activeFile: null,
+      RW_stagedDiffs: [],
+      RW_isMobileTerminalOpen: false,
+      RW_isMobileExplorerOpen: false,
+      RW_mobileView: 'chat',
 
-  setFileStore: (store) => set({ RW_fileStore: store }),
-  setActiveFile: (path) => set({ RW_activeFile: path }),
-  setStagedDiffs: (diffs) => set({ RW_stagedDiffs: diffs }),
-  updateFileContent: (path, content) => set((state) => ({
-    RW_fileStore: {
-      ...state.RW_fileStore,
-      [path]: {
-        ...state.RW_fileStore[path],
-        content,
-        isModified: true
-      }
+      setFileStore: (store) => set({ RW_fileStore: store }),
+      setActiveFile: (path) => set({ RW_activeFile: path }),
+      setStagedDiffs: (diffs) => set({ RW_stagedDiffs: diffs }),
+      updateFileContent: (path, content) => set((state) => ({
+        RW_fileStore: {
+          ...state.RW_fileStore,
+          [path]: {
+            ...state.RW_fileStore[path],
+            content,
+            isModified: true
+          }
+        }
+      })),
+      setMobileTerminalOpen: (open) => set({ RW_isMobileTerminalOpen: open }),
+      setMobileExplorerOpen: (open) => set({ RW_isMobileExplorerOpen: open }),
+      setMobileView: (view) => set({ RW_mobileView: view }),
+    }),
+    {
+      name: 'forge-file-storage',
+      // Explicitly exclude RW_fileStore content from localStorage to avoid 5MB limit
+      partialize: (state) => ({
+        RW_activeFile: state.RW_activeFile,
+        RW_stagedDiffs: state.RW_stagedDiffs,
+        RW_isMobileTerminalOpen: state.RW_isMobileTerminalOpen,
+        RW_isMobileExplorerOpen: state.RW_isMobileExplorerOpen,
+        RW_mobileView: state.RW_mobileView,
+      }),
     }
-  })),
-  setMobileTerminalOpen: (open) => set({ RW_isMobileTerminalOpen: open }),
-  setMobileExplorerOpen: (open) => set({ RW_isMobileExplorerOpen: open }),
-  setMobileView: (view) => set({ RW_mobileView: view }),
-}));
+  )
+);

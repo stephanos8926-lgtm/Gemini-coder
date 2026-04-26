@@ -1,4 +1,4 @@
-import Parser from 'web-tree-sitter';
+import * as Parser from 'web-tree-sitter';
 
 export class TreeSitterManager {
   private static instance: TreeSitterManager;

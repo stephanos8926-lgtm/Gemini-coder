@@ -36,6 +36,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: 'rapidforge-workspace-storage',
+      partialize: (state) => ({
+        RW_workspaceName: state.RW_workspaceName,
+        RW_workspaces: state.RW_workspaces,
+        RW_currentProjectId: state.RW_currentProjectId,
+      }),
     }
   )
 );

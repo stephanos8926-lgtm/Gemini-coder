@@ -3,6 +3,7 @@ import { Settings as SettingsIcon, X, Monitor, Cpu, Layout, Save, RotateCcw, Typ
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, DEFAULT_SETTINGS, settingsStore } from '../lib/settingsStore';
 import AdminPage from './AdminPage';
+import { ErudaToggle } from './ui/ErudaToggle';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -354,6 +355,9 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
                       />
                       <span className="text-sm text-[#cccccc] group-hover:text-white transition-colors">Compact Mode (Smaller Text)</span>
                     </label>
+                    <div className="pt-4">
+                      <ErudaToggle />
+                    </div>
                   </div>
                 )}
 

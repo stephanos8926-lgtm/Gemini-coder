@@ -1,8 +1,10 @@
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
 import ky from 'ky';
 import { FileStore } from './fileStore';
 import { FileSaveSchema, FileCreateSchema } from './schemas';
 import { LRUCache } from 'lru-cache';
 import CryptoJS from 'crypto-js';
+import path from 'path';
 
 class TinyEmitter {
   private listeners: { [key: string]: Function[] } = {};
@@ -25,7 +27,7 @@ class TinyEmitter {
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
-import { fileCache } from '../../packages/nexus/utils/FileCacheManager';
+import { fileCache } from '../utils/FileCacheManager';
 import { get, set, del } from 'idb-keyval';
 
 class FileCacheManager {
@@ -45,19 +47,25 @@ class FileCacheManager {
     this.userId = uid;
   }
 
-  public async get(workspace: string, path: string): Promise<string | null> {
-    const key = `${this.userId}:${workspace}:${path}`;
+  public async get(workspace: string, filePath: string): Promise<string | null> {
+    const key = `${this.userId}:${workspace}:${filePath}`;
+    const absolutePath = path.join(process.cwd(), workspace, filePath);
     
-    // Tier 1: In-Memory (from proxy FileCacheManager)
-    const cached = await fileCache.getFile(this.userId, `${workspace}:${path}`);
-    if (cached) return cached;
+    // Tier 1/2: App Cache
+    try {
+      const cached = await fileCache.getFile(this.userId, `${workspace}:${filePath}`, absolutePath);
+      if (cached) return cached;
+    } catch (e) {
+      console.warn('[Cache] App tier get failed', e);
+    }
 
     // Tier 3: Client-Side IndexedDB (Local Recovery)
     try {
       const idbContent = await get(key);
       if (idbContent) {
         // Backfill Tier 1/2
-        await fileCache.setFile(this.userId, `${workspace}:${path}`, idbContent);
+        const absolutePath = path.join(process.cwd(), workspace, filePath);
+        await fileCache.updateFile(this.userId, `${workspace}:${filePath}`, absolutePath, idbContent);
         return idbContent;
       }
     } catch (e) {
@@ -67,10 +75,12 @@ class FileCacheManager {
     return null;
   }
 
-  public async set(workspace: string, path: string, content: string) {
-    const key = `${this.userId}:${workspace}:${path}`;
-    // Tier 1/2: In-Memory/Server-SQLite
-    await fileCache.setFile(this.userId, `${workspace}:${path}`, content);
+  public async set(workspace: string, filePath: string, content: string) {
+    const key = `${this.userId}:${workspace}:${filePath}`;
+    const absolutePath = path.join(process.cwd(), workspace, filePath);
+    
+    // Tier 1/2: App Cache
+    await fileCache.updateFile(this.userId, `${workspace}:${filePath}`, absolutePath, content);
     
     // Tier 3: Client-Side IndexedDB
     try {
@@ -98,9 +108,11 @@ export class FilesystemService extends TinyEmitter {
   private workspace: string = '';
   private idToken: string = '';
   private _client: any = null;
+  private guard: ForgeGuard;
 
   private constructor() {
     super();
+    this.guard = ForgeGuard.init('FilesystemService');
   }
 
   public get events() {
@@ -148,43 +160,49 @@ export class FilesystemService extends TinyEmitter {
   }
 
   async listWorkspaces(): Promise<string[]> {
-    return this.client.get('/api/workspaces').json();
+    return this.guard.protect(() => this.client.get('/api/workspaces').json(), { method: 'listWorkspaces' });
   }
 
   async listFiles(path: string = '', recursive: boolean = false): Promise<{ path: string, isDir: boolean, size: number }[]> {
-    const searchParams = new URLSearchParams({
-      workspace: this.workspace,
-      path,
-      recursive: recursive.toString()
-    });
-    return this.client.get(`/api/files?${searchParams}`).json();
+    return this.guard.protect(() => {
+        const searchParams = new URLSearchParams({
+          workspace: this.workspace,
+          path,
+          recursive: recursive.toString()
+        });
+        return this.client.get(`/api/files?${searchParams}`).json();
+    }, { method: 'listFiles', path });
   }
 
   async runTool(command: string): Promise<{ stdout: string, stderr: string, success: boolean }> {
-    return this.client.post('/api/tools/run', {
+    return this.guard.protect(() => this.client.post('/api/tools/run', {
       json: { command, workspace: this.workspace },
-    }).json();
+    }).json(), { method: 'runTool', command });
   }
 
   async getFileContent(path: string): Promise<string> {
-    const cached = await cacheManager.get(this.workspace, path);
-    if (cached) return cached;
-    const searchParams = new URLSearchParams({
-      path,
-      ...(this.workspace ? { workspace: this.workspace } : {})
-    });
-    const data: { content: string } = await this.client.get(`/api/files/content?${searchParams}`).json();
-    cacheManager.set(this.workspace, path, data.content);
-    return data.content;
+    return this.guard.protect(async () => {
+        const cached = await cacheManager.get(this.workspace, path);
+        if (cached) return cached;
+        const searchParams = new URLSearchParams({
+          path,
+          ...(this.workspace ? { workspace: this.workspace } : {})
+        });
+        const data: { content: string } = await this.client.get(`/api/files/content?${searchParams}`).json();
+        cacheManager.set(this.workspace, path, data.content);
+        return data.content;
+    }, { method: 'getFileContent', path });
   }
 
   async saveFile(path: string, content: string): Promise<void> {
-    const body = FileSaveSchema.parse({ path, content, workspace: this.workspace });
-    await this.client.post('/api/files/save', {
-      json: body,
-    });
-    cacheManager.invalidate(this.workspace, path);
-    this.emit('file-updated', { path, content });
+    return this.guard.protect(async () => {
+        const body = FileSaveSchema.parse({ path, content, workspace: this.workspace });
+        await this.client.post('/api/files/save', {
+          json: body,
+        });
+        cacheManager.invalidate(this.workspace, path);
+        this.emit('file-updated', { path, content });
+    }, { method: 'saveFile', path });
   }
 
   async createFile(path: string, isDir: boolean = false): Promise<void> {
@@ -221,9 +239,9 @@ export class FilesystemService extends TinyEmitter {
   }
 
   async getRelevantContext(query: string, limit: number = 5, skillContext?: any): Promise<{ path: string, content: string }[]> {
-    return this.client.post('/api/context/relevant', {
+    return (this.client.post('/api/context/relevant', {
       json: { query, limit, skillContext }
-    }).json<{ results: { path: string, content: string }[] }>().then((data: any) => data.results);
+    }).json() as Promise<any>).then((data: any) => data.results);
   }
 
   async loadRootFiles(): Promise<FileStore> {

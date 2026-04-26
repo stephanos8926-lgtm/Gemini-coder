@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { RW_DEFAULT_MODEL } from '../constants/app';
 
 interface AppState {
@@ -21,32 +22,39 @@ interface AppState {
   setRightSidebarOpen: (open: boolean) => void;
   
   // Bottom Panel State
-  activeBottomTab: 'preview' | 'tree' | 'tools' | 'debug';
-  setActiveBottomTab: (tab: 'preview' | 'tree' | 'tools' | 'debug') => void;
+  activeBottomTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge';
+  setActiveBottomTab: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge') => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  workspaceName: '',
-  setWorkspaceName: (workspaceName) => set({ workspaceName }),
-  workspaces: [],
-  setWorkspaces: (workspaces) => set({ workspaces }),
-  openedFiles: [],
-  activeFile: null,
-  isLeftSidebarOpen: true,
-  isRightSidebarOpen: true,
-  activeBottomTab: 'tools',
-  openFile: (path) => set((state) => ({ 
-    openedFiles: state.openedFiles.includes(path) ? state.openedFiles : [...state.openedFiles, path],
-    activeFile: path
-  })),
-  closeFile: (path) => set((state) => ({ 
-    openedFiles: state.openedFiles.filter((p) => p !== path),
-    activeFile: state.activeFile === path ? (state.openedFiles[0] || null) : state.activeFile
-  })),
-  setActiveFile: (path) => set({ activeFile: path }),
-  model: RW_DEFAULT_MODEL,
-  setModel: (model) => set({ model }),
-  setLeftSidebarOpen: (isLeftSidebarOpen) => set({ isLeftSidebarOpen }),
-  setRightSidebarOpen: (isRightSidebarOpen) => set({ isRightSidebarOpen }),
-  setActiveBottomTab: (activeBottomTab) => set({ activeBottomTab }),
-}));
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      workspaceName: '',
+      setWorkspaceName: (workspaceName) => set({ workspaceName }),
+      workspaces: [],
+      setWorkspaces: (workspaces) => set({ workspaces }),
+      openedFiles: [],
+      activeFile: null,
+      isLeftSidebarOpen: true,
+      isRightSidebarOpen: true,
+      activeBottomTab: 'tools',
+      openFile: (path) => set((state) => ({ 
+        openedFiles: state.openedFiles.includes(path) ? state.openedFiles : [...state.openedFiles, path],
+        activeFile: path
+      })),
+      closeFile: (path) => set((state) => ({ 
+        openedFiles: state.openedFiles.filter((p) => p !== path),
+        activeFile: state.activeFile === path ? (state.openedFiles[0] || null) : state.activeFile
+      })),
+      setActiveFile: (path) => set({ activeFile: path }),
+      model: RW_DEFAULT_MODEL,
+      setModel: (model) => set({ model }),
+      setLeftSidebarOpen: (isLeftSidebarOpen) => set({ isLeftSidebarOpen }),
+      setRightSidebarOpen: (isRightSidebarOpen) => set({ isRightSidebarOpen }),
+      setActiveBottomTab: (activeBottomTab) => set({ activeBottomTab }),
+    }),
+    {
+      name: 'forge-app-storage',
+    }
+  )
+);

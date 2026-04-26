@@ -88,6 +88,20 @@ export class SymbolGraph {
   public getFileSymbols(filePath: string): SymbolInfo[] {
     return this.symbols.get(filePath) || [];
   }
+
+  public getIndexStats() {
+    let totalSymbols = 0;
+    this.symbols.forEach(syms => totalSymbols += syms.length);
+    return {
+      files: this.symbols.size,
+      symbols: totalSymbols
+    };
+  }
+
+  public getRecentSymbols(limit: number = 20) {
+    const all = Array.from(this.symbols.values()).flat();
+    return all.slice(-limit).reverse();
+  }
 }
 
 export const symbolGraph = SymbolGraph.getInstance();

@@ -2,178 +2,59 @@
 
 > **Purpose:** Lightweight file/line reference map for large codebases  
 > **Usage:** Cache this file + system prompt, then reference entries by ID in queries  
-> **Reindex Triggers:** After major refactors, new file additions, or every 50 commits
-
----
-
-## HOW TO USE THIS FILE (Meta-Instructions for Gemini)
-
-### When to Read SEMINDEX.md
-- ✓ Session start (if codebase >10 files)
-- ✓ User asks "where is X implemented?"
-- ✓ Before architectural decisions touching multiple files
-- ✓ When debugging cross-file issues
-
-### When to Update SEMINDEX.md
-- ✓ After creating new files (add entry)
-- ✓ After major refactors (update line ranges)
-- ✓ After deleting files (remove entry)
-- ✓ User says "reindex" or "update semindex"
-
-### Update Strategy: In-Place Curation
-- Update existing entries when files change
-- Remove entries for deleted files
-- Consolidate duplicate descriptions
-- Keep line ranges current (use `git diff` to detect drift)
-
-### Index Format
-Each entry follows this structure:
-```
-[ID] path/to/file.ts:START-END | Brief description
-```
-
-Example:
-```
-[AUTH-001] src/middleware/auth.ts:15-45 | JWT validation middleware with refresh token logic
-[AUTH-002] src/routes/users.ts:89-120 | User login endpoint, calls AUTH-001
-```
 
 ---
 
 ## INDEX ENTRIES
 
-### Authentication & Authorization
-[AUTH-001] src/middleware/auth.ts:15-45 | JWT validation middleware with refresh token logic
-[AUTH-002] src/middleware/auth.ts:47-72 | Role-based access control (RBAC) checker
-[AUTH-003] src/routes/users.ts:89-120 | User login endpoint, returns JWT pair
-[AUTH-004] src/routes/users.ts:122-145 | Token refresh endpoint, validates refresh token
+### Entry Points
+[INIT-001] src/main.tsx:1-20 | React application entry point, context provider wrapping
+[INIT-002] server.ts:1-1931 | Main Express backend, WebSocket server, build orchestrator, LLM proxy
 
-### Database & Models
-[DB-001] src/db/userRepo.ts:20-55 | User CRUD operations, Prisma ORM
-[DB-002] src/db/schema.prisma:10-35 | User model definition with relations
-[DB-003] src/db/migrations/001_init.sql:1-50 | Initial schema setup
+### Central Orchestration (Frontend)
+[APP-001] src/App.tsx:60-150 | Main layout component, global state initialization, socket listeners
+[APP-002] src/App.tsx:160-205 | Proxy hooks wiring (authHook, projectHook, fileOperationsHook)
+[APP-003] src/App.tsx:238-340 | Desktop 3-column routing (react-resizable-panels)
+[APP-004] src/App.tsx:342-370 | Mobile responsive viewer routing (RW_mobileView)
 
-### API Endpoints
-[API-001] src/routes/users.ts:15-40 | GET /users — list with pagination
-[API-002] src/routes/users.ts:42-68 | POST /users — create with validation
-[API-003] src/routes/users.ts:70-87 | PATCH /users/:id — update
+### Global State Modules (Zustand)
+[STATE-001] src/store/useAppStore.ts:1-25 | UI layout state (sidebars, bottom panels)
+[STATE-002] src/store/useAuthStore.ts:1-25 | Session keys, auth state
+[STATE-003] src/store/useChatStore.ts:1-39 | Chat messages, streaming state, system modifiers
+[STATE-004] src/store/useFileStore.ts:1-40 | Active file tracking, filesystem representation
+[STATE-005] src/store/useWorkspaceStore.ts:1-35 | Current project/workspace tracking
 
-### Validation & Schemas
-[VAL-001] src/validators/userSchema.ts:5-18 | Zod schema for user creation
-[VAL-002] src/validators/userSchema.ts:20-30 | Zod schema for user update
+### Core IDE Components
+[UI-EDITOR] src/components/CodeEditor.tsx | Monaco editor integration and diff displays
+[UI-TREE] src/components/FileTree.tsx | Sidebar filesystem explorer
+[UI-CHAT] src/components/ChatPanel.tsx | Right sidebar AI conversation panel
+[UI-TERM] src/components/TerminalPanel.tsx | XTerm.js integration for local shell execution
+[UI-BOT] src/components/BottomPanel.tsx | Desktop bottom panel wrapper (Terminal/Search/Problems)
+[UI-HDR] src/components/Header.tsx | Top navigation, auth controls, layout toggles
+[UI-MOB] src/components/AdaptiveBottomSheet.tsx | Mobile handset utility sheet (Vaul wrapper)
 
-### Utilities
-[UTIL-001] src/utils/logger.ts:10-45 | Winston logger with structured JSON output
-[UTIL-002] src/utils/errorHandler.ts:8-35 | Global Express error handler
+### Core Hooks
+[HOOK-001] src/hooks/useAppChat.ts | Connects UI to `streamGemini` and patch engine
+[HOOK-002] src/hooks/useAppFileOperations.ts | File creation, saves, and deletes
+[HOOK-003] src/hooks/useSocket.ts | WebSocket listener abstractions
+[HOOK-004] src/hooks/useFileSystem.ts | Interaction with `filesystemService`
 
-### Configuration
-[CFG-001] src/config/env.ts:5-25 | Environment variable validation with Zod
-[CFG-002] src/config/database.ts:10-30 | Prisma client singleton
+### Frontend Services & Intelligence
+[SV-FILE] src/lib/filesystemService.ts | Interacts with server file manipulation APIs
+[SV-GEM] src/lib/gemini.ts | Interfaces with LLM API, local streaming orchestration
+[SV-AST] src/utils/astParser.ts | web-tree-sitter integration for AST code parsing
+[SV-CTX] src/utils/ProjectContextEngine.ts | Multi-modal context retrieval for AI
 
-### Tests
-[TEST-001] tests/routes/users.test.ts:15-60 | User creation integration tests
-[TEST-002] tests/middleware/auth.test.ts:10-85 | Auth middleware unit tests
+### Automation & Security (Server/Isomorphic)
+[SEC-001] src/security/patch-engine.ts | AST-aware automated code fixer / auto-linter wrapper
+[SEC-002] src/scripts/run-audit.ts | Background security scanner
+[SEC-003] src/utils/patchEngine/ | Utilities for patch validation, compiling, classification
 
----
-
-## REINDEX PROTOCOL
-
-When the user says "reindex" or when 50+ files have changed:
-
-1. **Scan project structure**
-   ```bash
-   find src -type f \( -name "*.ts" -o -name "*.js" -o -name "*.py" \) | sort
-   ```
-
-2. **For each file:**
-   - Identify key functions/classes/exports
-   - Note line ranges (use `wc -l` and manual inspection)
-   - Write concise description (what, not how)
-
-3. **Update SEMINDEX.md:**
-   - Add new files
-   - Update changed line ranges
-   - Remove deleted files
-   - Consolidate duplicates
-
-4. **Verify:**
-   - Each ID is unique
-   - Line ranges are current
-   - Descriptions are actionable
+### Backend & Middleware
+[BE-FILE] src/utils/FileCacheManager.ts | SQLite multi-tiered cache for workspaces
+[BE-TEL] src/utils/PersistenceManager.ts | Telemetry/Log SQLite backing store
+[BE-TOOL] src/lib/toolExecutor.ts | Executes local system tools on behalf of AI
 
 ---
 
-## USAGE EXAMPLES
-
-### Example 1: User asks "Where is the auth logic?"
-**AI response:**
-```
-Auth logic spans multiple files:
-- [AUTH-001] JWT validation middleware (src/middleware/auth.ts:15-45)
-- [AUTH-002] RBAC checker (src/middleware/auth.ts:47-72)
-- [AUTH-003] Login endpoint (src/routes/users.ts:89-120)
-
-Would you like me to view any of these?
-```
-
-### Example 2: User says "Debug the login flow"
-**AI workflow:**
-1. Read SEMINDEX.md
-2. Identify relevant IDs: AUTH-003 (login endpoint), AUTH-001 (JWT middleware)
-3. Use `view` tool to read actual files
-4. Debug with full context
-
-### Example 3: User says "Reindex after refactor"
-**AI workflow:**
-1. Scan file tree
-2. Compare with current SEMINDEX.md
-3. Detect new files: src/services/emailService.ts
-4. Add entry: `[SVC-001] src/services/emailService.ts:10-55 | SendGrid email service wrapper`
-5. Confirm: "Reindexed. Added 1 new entry, updated 3 line ranges."
-
----
-
-## BENEFITS
-
-**Token Efficiency:**
-- This index (~2KB) replaces reading 50+ full files (~500KB)
-- Cached with system prompt (90% discount on subsequent calls)
-
-**Faster Navigation:**
-- Jump directly to relevant code sections
-- No blind grep/search needed
-
-**Context Preservation:**
-- Survives session resets (if cached)
-- Human-readable git history of codebase evolution
-
----
-
-## LIMITATIONS
-
-**Not a replacement for:**
-- Full file content (use `view` tool when needed)
-- Git blame (for authorship/history)
-- AST analysis (for deep code understanding)
-
-**Best for:**
-- Large codebases (50+ files)
-- Long-running projects (multi-week development)
-- Complex cross-file dependencies
-
----
-
-## MAINTENANCE
-
-**Auto-update triggers:**
-- After `git commit` if >5 files changed
-- User explicit "reindex" command
-- New file creation (add entry immediately)
-
-**Manual review:**
-- Every 100 commits (ensure line ranges accurate)
-- After major refactors (consolidate moved code)
-
----
-
-*Last indexed: 2026-04-18 | Total entries: 15 | Coverage: src/ directory*
+*Last indexed: 2026-04-23 | Target: Next-Gen GUI Audit*

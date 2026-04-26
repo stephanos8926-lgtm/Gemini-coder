@@ -1,26 +1,34 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { RefreshCw, Play, FolderTree, Terminal, Loader2, Bug } from 'lucide-react';
+import { RefreshCw, Play, FolderTree, Terminal, Loader2, Bug, Code2 } from 'lucide-react';
 import type { FileStore } from '../lib/fileStore';
 import { FileTree } from './FileTree';
 import { DebugDashboard } from './DebugDashboard';
+import { ForgeDashboard } from './ForgeDashboard';
+import { detectLanguage, getExecutionMode } from '../utils/languageUtils';
+import { ExecutionTerminal } from './ExecutionTerminal';
+import { StaticLanguageNotice } from './StaticLanguageNotice';
 
 const ToolsPanel = lazy(() => import('./ToolsPanel').then(m => ({ default: m.ToolsPanel })));
 
 interface BottomPanelProps {
   files: FileStore;
-  activeTab: 'preview' | 'tree' | 'tools' | 'debug';
-  onTabChange: (tab: 'preview' | 'tree' | 'tools' | 'debug') => void;
+  activeTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge';
+  onTabChange: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge') => void;
   onSelectFile: (path: string) => void;
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
   onImportZip: () => void;
   onDeleteFile?: (path: string) => void;
   hasPreviewableFiles?: boolean;
+  activeFile?: string;
 }
 
-export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDownloadFile, onDownloadZip, onImportZip, onDeleteFile, hasPreviewableFiles = true }: BottomPanelProps) {
+export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDownloadFile, onDownloadZip, onImportZip, onDeleteFile, hasPreviewableFiles = true, activeFile }: BottomPanelProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const lang = activeFile ? detectLanguage(activeFile) : 'html';
+  const mode = getExecutionMode(lang);
 
   const refreshPreview = () => {
     // Find the most recently generated .html file, or index.html
@@ -86,8 +94,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
                 : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
             }`}
           >
-            <Play className="w-4 h-4" />
-            Preview
+            {mode === 'preview' ? <Play className="w-4 h-4" /> : mode === 'execute' ? <Terminal className="w-4 h-4" /> : <Code2 className="w-4 h-4" />}
+            {mode === 'preview' ? 'Preview' : mode === 'execute' ? 'Run' : 'Build'}
           </button>
         )}
         <button
@@ -123,6 +131,17 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           <Bug className="w-4 h-4" />
           Debugger
         </button>
+        <button
+          onClick={() => onTabChange('forge')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+            activeTab === 'forge'
+              ? 'bg-[#1e1e1e] text-[#ce9178] border-t-2 border-[#ce9178]'
+              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
+          }`}
+        >
+          <RefreshCw className="w-4 h-4" />
+          Forge Intelligence
+        </button>
         <div className="flex-1" />
         {activeTab === 'preview' && hasPreviewableFiles && (
           <button
@@ -137,18 +156,27 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
 
       <div className="flex-1 overflow-hidden relative">
         {activeTab === 'preview' && hasPreviewableFiles ? (
-          previewUrl ? (
-            <iframe
-              ref={iframeRef}
-              src={previewUrl}
-              className="w-full h-full border-none bg-white"
-              sandbox="allow-scripts allow-same-origin"
-              title="Preview"
+          mode === 'preview' ? (
+            previewUrl ? (
+              <iframe
+                ref={iframeRef}
+                src={previewUrl}
+                className="w-full h-full border-none bg-white"
+                sandbox="allow-scripts allow-same-origin"
+                title="Preview"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-[#858585] italic text-xs">
+                No local preview available for this configuration.
+              </div>
+            )
+          ) : mode === 'execute' ? (
+            <ExecutionTerminal 
+              code={activeFile ? files[activeFile]?.content || '' : ''} 
+              language={lang} 
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-[#858585] italic">
-              No HTML file found to preview. Ask GIDE to create an index.html.
-            </div>
+            <StaticLanguageNotice language={lang} />
           )
         ) : activeTab === 'tools' ? (
           <Suspense fallback={
@@ -160,6 +188,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           </Suspense>
         ) : activeTab === 'debug' ? (
           <DebugDashboard />
+        ) : activeTab === 'forge' ? (
+          <ForgeDashboard />
         ) : (
           <FileTree
             files={files}

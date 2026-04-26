@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { Message } from '../lib/gemini';
 
 /**
@@ -21,18 +22,30 @@ interface ChatState {
 
 /**
  * @store useChatStore
- * @description Centralized communication state for AI interactions and conversation context.
+ * @description Centralized communication state for AI interactions and conversation context with persistence.
  */
-export const useChatStore = create<ChatState>((set) => ({
-  RW_messages: [],
-  RW_isStreaming: false,
-  RW_activeModel: 'gemini-2.0-flash-exp',
-  RW_systemModifier: '',
+export const useChatStore = create<ChatState>()(
+  persist(
+    (set) => ({
+      RW_messages: [],
+      RW_isStreaming: false,
+      RW_activeModel: 'gemini-2.0-flash-exp',
+      RW_systemModifier: '',
 
-  setMessages: (messages) => set({ RW_messages: messages }),
-  addMessage: (message) => set((state) => ({ RW_messages: [...state.RW_messages, message] })),
-  setStreaming: (isStreaming) => set({ RW_isStreaming: isStreaming }),
-  setActiveModel: (model) => set({ RW_activeModel: model }),
-  setSystemModifier: (modifier) => set({ RW_systemModifier: modifier }),
-  clearHistory: () => set({ RW_messages: [] }),
-}));
+      setMessages: (messages) => set({ RW_messages: messages }),
+      addMessage: (message) => set((state) => ({ RW_messages: [...state.RW_messages, message] })),
+      setStreaming: (isStreaming) => set({ RW_isStreaming: isStreaming }),
+      setActiveModel: (model) => set({ RW_activeModel: model }),
+      setSystemModifier: (modifier) => set({ RW_systemModifier: modifier }),
+      clearHistory: () => set({ RW_messages: [] }),
+    }),
+    {
+      name: 'forge-chat-storage',
+      partialize: (state) => ({ 
+        RW_messages: state.RW_messages, 
+        RW_activeModel: state.RW_activeModel,
+        RW_systemModifier: state.RW_systemModifier
+      }),
+    }
+  )
+);

@@ -1,5 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
+import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+
+const guard = ForgeGuard.init('ErrorBoundary');
 
 interface Props {
   children: ReactNode;
@@ -23,7 +26,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error(`Uncaught error in ${this.props.name || 'Component'}:`, error, errorInfo);
+    guard.protect(() => {
+        throw error;
+    }, { method: 'ErrorBoundary', name: this.props.name || 'Component', componentStack: errorInfo.componentStack });
   }
 
   public render() {

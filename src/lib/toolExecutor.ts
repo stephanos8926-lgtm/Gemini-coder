@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import { spawn } from 'child_process';
+import path from 'path';
 import { diff_match_patch } from 'diff-match-patch';
 import { LogTool } from '../utils/LogTool';
 import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
@@ -50,12 +51,20 @@ export async function executeTool(name: string, args: any, context: any) {
 }
 
 async function handleReadFile(args: { path: string }) {
-  const content = await fs.readFile(args.path, 'utf-8');
+  // toolExecutor needs WORKSPACE_ROOT context.
+  // Assuming relative path from current user's workspace
+  const workspaceRoot = process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces');
+  const { getSafePath } = await import('../utils/pathUtility');
+  const safePath = getSafePath(args.path, { role: 'user' }, workspaceRoot, ''); // Needs user context
+  const content = await fs.readFile(safePath, 'utf-8');
   return { content };
 }
 
 async function handleWriteFile(args: { path: string, content: string }) {
-  await fs.writeFile(args.path, args.content, 'utf-8');
+  const workspaceRoot = process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces');
+  const { getSafePath } = await import('../utils/pathUtility');
+  const safePath = getSafePath(args.path, { role: 'user' }, workspaceRoot, '');
+  await fs.writeFile(safePath, args.content, 'utf-8');
   return { result: 'File written successfully' };
 }
 
@@ -90,7 +99,20 @@ async function handleGetDiagnostics(args: { file_path: string }) {
 }
 
 async function handleRunCommand(args: { command: string }) {
-  return await runCommand(args.command);
+  const [tool, ...commandArgs] = args.command.split(' ');
+  const { allowedTools } = await import('../constants/allowedTools');
+
+  if (!allowedTools.includes(tool)) {
+    throw new Error(`Tool '${tool}' is not allowed for security reasons.`);
+  }
+
+  const { spawnAsync } = await import('../utils/spawnUtility');
+  try {
+    const result = await spawnAsync(tool, commandArgs);
+    return { stdout: result.stdout, stderr: result.stderr, code: 0 };
+  } catch (e: any) {
+    return { stdout: '', stderr: e.message, code: 1 };
+  }
 }
 
 async function handleForgeGuardScan(args: { path: string, isBackend?: boolean }) {
@@ -141,18 +163,6 @@ interface CommandResult {
   code: number | null;
 }
 
-async function runCommand(command: string): Promise<CommandResult> {
-  return new Promise((resolve) => {
-    const child = spawn(command, { shell: true });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (data) => stdout += data);
-    child.stderr.on('data', (data) => stderr += data);
-    child.on('close', (code) => {
-      resolve({ stdout, stderr, code });
-    });
-  });
-}
 
 async function runCommandArray(command: string, args: string[]): Promise<CommandResult> {
   return new Promise((resolve) => {

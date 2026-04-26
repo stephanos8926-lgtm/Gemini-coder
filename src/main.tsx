@@ -5,6 +5,10 @@ import App from './App';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FirebaseProvider } from './contexts/FirebaseContext';
+import { initEruda } from './utils/ErudaManager';
+
+// Initialize Eruda based on environment
+initEruda();
 
 const queryClient = new QueryClient({
   defaultOptions: {

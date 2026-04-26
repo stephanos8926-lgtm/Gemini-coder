@@ -11,6 +11,5 @@ export * from './guard/sensors/RemoteDBSensor';
 export * from './utils/ConfigUtility';
 export * from './utils/PersistenceManager';
 export * from './utils/ShadowExecutionEngine';
-export * from './utils/FileCacheManager';
 export * from './telemetry/LogTool';
 export * from './telemetry/Omitter';

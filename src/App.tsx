@@ -10,11 +10,14 @@ import { useProjects } from './hooks/useProjects';
 import { useSocket } from './hooks/useSocket';
 import { TabBar } from './components/TabBar';
 import { DiffStagingPanel } from './components/DiffStagingPanel';
+import { TaskMonitorPanel } from './components/TaskMonitorPanel';
+import { SwarmMonitorPanel } from './components/SwarmMonitorPanel';
 import { Header } from './components/Header';
 import { StatusBar } from './components/StatusBar';
 import { LandingPage } from './components/LandingPage';
 import { BottomPanel } from './components/BottomPanel';
 import { AdaptiveBottomSheet } from './components/AdaptiveBottomSheet';
+import { MobileIDE } from './components/layout/MobileIDE';
 import { FileTree } from './components/FileTree';
 import { profileStore, type Profile } from './lib/profileStore';
 import { useAppAuth } from './hooks/useAppAuth';
@@ -34,6 +37,7 @@ import { useFileStore } from './store/useFileStore';
 // Branding & System Constants
 import { APP_CONFIG } from './constants/appConfig';
 
+import { generateId } from './lib/projectStore';
 import { type Message } from './lib/gemini';
 import { type FileStore } from './lib/fileStore';
 
@@ -126,17 +130,25 @@ export default function App() {
   const { data: workspacesData, isLoading: isWorkspacesLoading } = useWorkspaces();
 
   // Real-time filesystem sync via WebSockets
-  useSocket((data: { event: string, path: string }) => {
+  const { socket } = useSocket((data: { event: string, path: string }) => {
     filesystemService.loadAllFiles().then(setFileStore);
   });
 
   // Proactive Security Alerts
-  useSocket((data: { path: string, issues: any[] }) => {
-    if (data.issues && data.issues.length > 0) {
-        const issueMsg = `[SECURITY ALERT] Issues detected in ${data.path}:\n${data.issues.map(i => `- ${i.message}`).join('\n')}`;
-        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: issueMsg }]);
-    }
-  }, 'security-alert');
+  useEffect(() => {
+    if (!socket) return;
+    
+    socket.on('security-alert', (data: { path: string, issues: any[] }) => {
+      if (data.issues && data.issues.length > 0) {
+          const issueMsg = `[SECURITY ALERT] Issues detected in ${data.path}:\n${data.issues.map(i => `- ${i.message}`).join('\n')}`;
+          useChatStore.getState().setMessages([...useChatStore.getState().RW_messages, { id: generateId(), role: 'model', content: issueMsg }]);
+      }
+    });
+
+    return () => {
+      socket.off('security-alert');
+    };
+  }, [socket]);
 
 
   // Type Compatibility Wrappers for Legacy Hooks
@@ -335,22 +347,38 @@ export default function App() {
 
               {/* Mobile Adaptive Handset View */}
               <div className="sm:hidden flex-1 h-full relative">
-                {RW_mobileView === 'chat' && (
-                  <ErrorBoundary name="Mobile Chat">
-                    <Suspense fallback={<PanelLoader />}>
-                      <ChatPanel
-                        messages={RW_messages}
-                        onSendMessage={handleSendMessage}
-                        onNewChat={() => setMessages([])}
-                        isStreaming={RW_isStreaming}
-                        settings={settings}
-                      />
-                    </Suspense>
-                  </ErrorBoundary>
-                )}
-                
-                {RW_mobileView === 'editor' && (
-                  <ErrorBoundary name="Mobile Editor">
+                <MobileIDE
+                  messages={RW_messages}
+                  onSendMessage={handleSendMessage}
+                  isStreaming={RW_isStreaming}
+                  files={RW_fileStore}
+                  workspaceName={RW_workspaceName}
+                  settings={settings}
+                  showSidebar={RW_isMobileExplorerOpen}
+                  setShowSidebar={setMobileExplorerOpen}
+                  showPreview={RW_mobileView === 'preview'}
+                  setShowPreview={(v) => setMobileView(v ? 'preview' : 'chat')}
+                  showSettings={showSettingsModal}
+                  setShowSettings={setShowSettingsModal}
+                  mobileView={RW_mobileView}
+                  setMobileView={setMobileView}
+                  fileTreeComponent={
+                    <FileTree
+                      files={RW_fileStore}
+                      selectedFile={RW_activeFile}
+                      onSelect={(path) => {
+                        setActiveFile(path);
+                        setMobileExplorerOpen(false);
+                        setMobileView('editor');
+                      }}
+                      onDownload={fileOperationsHook.handleDownloadFile}
+                      onDownloadZip={fileOperationsHook.handleDownloadZip}
+                      onImportZip={() => {}}
+                      workspaceName={RW_workspaceName}
+                      onDelete={fileOperationsHook.handleDeleteFile}
+                    />
+                  }
+                  editorComponent={
                     <Suspense fallback={<PanelLoader />}>
                       <CodeEditor
                         content={RW_activeFile ? RW_fileStore[RW_activeFile]?.content || '' : ''}
@@ -358,23 +386,21 @@ export default function App() {
                         settings={settings}
                       />
                     </Suspense>
-                  </ErrorBoundary>
-                )}
-
-                {RW_mobileView === 'preview' && (
-                  <ErrorBoundary name="Mobile Preview">
+                  }
+                  previewComponent={
                     <BottomPanel
                       files={RW_fileStore}
                       activeTab="preview"
-                      onTabChange={() => {}} // Tab change handled by mobile header
+                      onTabChange={() => {}}
                       onSelectFile={setActiveFile}
                       onDownloadFile={fileOperationsHook.handleDownloadFile}
                       onDownloadZip={fileOperationsHook.handleDownloadZip}
                       onImportZip={() => {}}
                       onDeleteFile={fileOperationsHook.handleDeleteFile}
+                      activeFile={RW_activeFile || undefined}
                     />
-                  </ErrorBoundary>
-                )}
+                  }
+                />
               </div>
             </div>
           ) : (
@@ -396,6 +422,8 @@ export default function App() {
             workspace={RW_workspaceName}
         />
         <DiffStagingPanel />
+        <TaskMonitorPanel projectId={RW_currentProjectId || 'default'} />
+        <SwarmMonitorPanel projectId={RW_currentProjectId || 'default'} />
 
         {/* Mobile Ergonomics: Bottom Sheets */}
         <AdaptiveBottomSheet 
@@ -407,28 +435,6 @@ export default function App() {
             <Suspense fallback={<PanelLoader />}>
               <TerminalPanel />
             </Suspense>
-          </div>
-        </AdaptiveBottomSheet>
-
-        <AdaptiveBottomSheet 
-          isOpen={RW_isMobileExplorerOpen} 
-          onClose={() => setMobileExplorerOpen(false)}
-          title="Project Explorer"
-        >
-          <div className="h-full bg-[#252526]">
-            <FileTree
-              files={RW_fileStore}
-              selectedFile={RW_activeFile}
-              onSelect={(path) => {
-                setActiveFile(path);
-                setMobileExplorerOpen(false);
-                setMobileView('editor');
-              }}
-              onDownload={fileOperationsHook.handleDownloadFile}
-              onDownloadZip={fileOperationsHook.handleDownloadZip}
-              onImportZip={() => {}}
-              workspaceName={RW_workspaceName}
-            />
           </div>
         </AdaptiveBottomSheet>
 

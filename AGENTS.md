@@ -12,3 +12,8 @@ For any detected runtime failure, build error, or unexpected behavior:
 2.  **MUST** proactively read system/user logs (`/logs/system/error.log`, `/logs/system/combined.log`) immediately upon detecting an issue.
 3.  **MUST** query RapidForge telemetry (check SQLite logs database if possible) to correlate the error with system state triggers before suggesting a fix.
 4.  If manual log reading is insufficient, create a diagnostic script (as used previously) to extract the relevant context.
+
+# Learned Patterns
+[2026-04-23] SQLITE-CORRUPTION: Cloud Run deployments may fail with 'SQLITE_CORRUPT' if the persistence file in /logs/ is malformed. 
+- **Resolution**: Implement a robust initialization wrapper that wraps `new Database()`, `pragma()`, and `exec(schema)` in a try-catch. If any step fails, close the handle, unlink the file, and re-initialize from scratch.
+

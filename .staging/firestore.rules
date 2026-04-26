@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isAdmin() { 
+      return isSignedIn() && 
+        (request.auth.token.email == "stedor7@gmail.com" || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin");
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // --- User Profiles ---
+    match /users/{uid} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email', 'role', 'no_sandbox']) &&
+               data.keys().size() == 4 &&
+               data.uid == uid &&
+               data.email is string &&
+               data.role in ['user', 'admin'] &&
+               data.no_sandbox is bool;
+      }
+
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid) && isValidUser(incoming()) && incoming().role == 'user';
+      allow update: if (isOwner(uid) || isAdmin()) && isValidUser(incoming()) && (
+        isAdmin() || (incoming().diff(existing()).affectedKeys().hasOnly(['no_sandbox']))
+      );
+    }
+
+    // --- Tasks ---
+    match /tasks/{taskId} {
+      function isValidTask(data) {
+        return data.keys().hasAll(['status', 'type', 'userId', 'projectId', 'prompt', 'createdAt']) &&
+               data.status in ['queued', 'running', 'completed', 'failed'] &&
+               data.type in ['foreground', 'background'] &&
+               data.userId == request.auth.uid &&
+               data.projectId is string &&
+               data.prompt is string &&
+               data.prompt.size() <= 5000 &&
+               data.createdAt == request.time;
+      }
+
+      allow get: if isOwner(existing().userId) || isAdmin();
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidTask(incoming());
+      
+      // Technically roadmap says "only cloud functions can update tasks"
+      // In this environment, the server is "admin" from the rules' perspective if it uses admin SDK
+      // But if we want to allow some client-side progress reporting (not recommended), we'd add it here.
+      // We'll keep it strict: only admin (server) can update.
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- Swarms ---
+    match /swarms/{swarmId} {
+      function isValidSwarm(data) {
+        return data.keys().hasAll(['status', 'userId', 'projectId', 'originalPrompt', 'createdAt']) &&
+               data.status in ['planning', 'executing', 'merging', 'completed', 'failed'] &&
+               data.userId == request.auth.uid &&
+               data.projectId is string &&
+               data.originalPrompt is string &&
+               data.createdAt == request.time;
+      }
+
+      allow get: if isOwner(existing().userId) || isAdmin();
+      allow list: if isVerified() && resource.data.userId == request.auth.uid;
+      allow create: if isVerified() && isValidSwarm(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

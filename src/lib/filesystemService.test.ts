@@ -12,6 +12,20 @@ vi.mock('ky', () => {
   return { default: mockKy };
 });
 
+vi.mock('../utils/FileCacheManager', () => ({
+    fileCache: {
+        getFile: vi.fn(),
+        updateFile: vi.fn(),
+        invalidate: vi.fn()
+    }
+}));
+
+vi.mock('idb-keyval', () => ({
+    get: vi.fn(),
+    set: vi.fn(),
+    del: vi.fn()
+}));
+
 describe('filesystemService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,5 +42,24 @@ describe('filesystemService', () => {
     filesystemService.setWorkspace('test-workspace');
     await filesystemService.listFiles('path/to/files', true);
     expect(mockClient.get).toHaveBeenCalledWith(expect.stringContaining('/api/files?workspace=test-workspace&path=path%2Fto%2Ffiles&recursive=true'));
+  });
+
+  it('getFileContent returns cached content', async () => {
+    const { fileCache } = await import('../utils/FileCacheManager');
+    vi.mocked(fileCache.getFile).mockResolvedValue('cached content');
+    
+    const content = await filesystemService.getFileContent('test.ts');
+    expect(content).toBe('cached content');
+    expect(fileCache.getFile).toHaveBeenCalled();
+  });
+
+  it('saveFile invalidates cache', async () => {
+    const mockClient = filesystemService.client;
+    const { fileCache } = await import('../utils/FileCacheManager');
+    vi.mocked(mockClient.post).mockReturnValue({ json: vi.fn().mockResolvedValue({}) } as any);
+    
+    await filesystemService.saveFile('test.ts', 'new content');
+    expect(mockClient.post).toHaveBeenCalledWith('/api/files/save', expect.any(Object));
+    expect(fileCache.invalidate).toHaveBeenCalled();
   });
 });

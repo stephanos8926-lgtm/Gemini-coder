@@ -1,6 +1,8 @@
 import { ConfigUtility } from '../utils/ConfigUtility';
 import { PersistenceManager } from '../utils/PersistenceManager';
-import { Sensor } from './Sensor';
+import { Sensor, Signal } from './Sensor';
+import { SignalTagger } from './SignalTagger';
+import { ContextTagger } from './taggers/ContextTagger';
 import { resilienceMapper } from './ResilienceMapper';
 import { ForgeGuardProtocol } from './ForgeGuardProtocol';
 
@@ -15,6 +17,7 @@ export class ForgeGuard {
   public config: ConfigUtility;
   public persistence: PersistenceManager;
   private sensors: Map<string, Sensor> = new Map();
+  private taggers: SignalTagger[] = [];
   private stats: TelemetryStats = { totalSignals: 0, errors: 0, lastErrorAt: null };
   private protocol?: ForgeGuardProtocol;
 
@@ -26,7 +29,9 @@ export class ForgeGuard {
   public static init(moduleName: string, configOverrides: Record<string, any> = {}, persistence?: PersistenceManager): ForgeGuard {
     if (!ForgeGuard.instances.has(moduleName)) {
       const pm = persistence || PersistenceManager.getInstance();
-      ForgeGuard.instances.set(moduleName, new ForgeGuard(moduleName, configOverrides, pm));
+      const guard = new ForgeGuard(moduleName, configOverrides, pm);
+      guard.registerTagger(new ContextTagger({ moduleName }));
+      ForgeGuard.instances.set(moduleName, guard);
     }
     return ForgeGuard.instances.get(moduleName)!;
   }
@@ -40,37 +45,53 @@ export class ForgeGuard {
     this.persistence.saveSensor(name, { registeredAt: Date.now() });
   }
 
+  public registerTagger(tagger: SignalTagger) {
+    this.taggers.push(tagger);
+  }
+
   public async emitSignal(signal: any) {
+    let s: Signal = {
+      type: 'info',
+      payload: signal,
+      timestamp: Date.now(),
+      ...signal
+    };
+
+    // Apply Taggers
+    for (const tagger of this.taggers) {
+      s = tagger.tag(s);
+    }
+
     this.stats.totalSignals++;
-    if (signal.type === 'error') {
+    if (s.type === 'error') {
       this.stats.errors++;
       this.stats.lastErrorAt = Date.now();
     }
 
-    if (signal.source) {
-      const profile = resilienceMapper.getProfile(signal.source);
+    if (s.source) {
+      const profile = resilienceMapper.getProfile(s.source);
       if (profile) {
-        signal.astContext = profile;
-        if (profile.riskLevel === 'high') signal.priority = 'CRITICAL';
+        s.context = { ...s.context, astContext: profile };
+        if (profile.riskLevel === 'high') s.priority = 'CRITICAL';
       }
     }
 
     let handled = false;
     for (const [name, sensor] of this.sensors.entries()) {
       try {
-        const success = await sensor.handle(signal);
+        const success = await sensor.handle(s);
         if (success) handled = true;
       } catch (e) {
         console.error(`[ForgeGuard] Sensor ${name} failed to handle signal.`);
       }
     }
 
-    if ((!handled || signal.priority === 'CRITICAL') && this.protocol) {
-      this.persistence.saveSignal(signal, 86400000);
+    if ((!handled || s.priority === 'CRITICAL') && this.protocol) {
+      this.persistence.saveSignal(s, 86400000);
       
-      if (signal.priority === 'CRITICAL' && signal.filePath) {
+      if (s.priority === 'CRITICAL' && (s.payload as any)?.filePath) {
         // Delegate to protocol (GIDE implementation) instead of hardcoded scanFile
-        await this.protocol.onDangerousIssue(signal.filePath, []); 
+        await this.protocol.onDangerousIssue((s.payload as any).filePath, []); 
       }
     }
   }

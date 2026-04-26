@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Message, streamGemini } from '../lib/gemini';
+import { Message } from '../lib/gemini';
+import { ForgeAI } from '../lib/forgeAI';
+import { AIRuntimeState } from '../services/ai/types';
 import { extractFiles, type FileStore } from '../lib/fileStore';
 import { applyDiff } from '../lib/diff';
 import { filesystemService } from '../lib/filesystemService';
-import { generateAstSkeleton } from '../utils/astChunker';
+import { generateAstSkeleton } from '../lib/astManager';
 import { getSystemInstruction } from '../constants/systemInstruction';
 import { generateId } from '../lib/projectStore';
 import { Settings } from '../lib/settingsStore';
 import { ForgeGuard } from '../utils/ForgeWrappers';
+import { submitTask, submitSwarm } from '../lib/taskManager';
 
 interface UseAppChatProps {
   apiKey: string | null;
@@ -53,6 +56,35 @@ export function useAppChat({
     if (msg.startsWith('/files')) {
       const tree = Object.keys(fileStore).map(p => `- ${p}`).join('\n');
       setMessages(prev => [...prev, { id: generateId(), role: 'user', content: msg }, { id: generateId(), role: 'model', content: `**Current Files:**\n${tree || 'No files yet.'}` }]);
+      return true;
+    }
+    if (msg.startsWith('/swarm')) {
+      const prompt = msg.replace('/swarm', '').trim();
+      if (!prompt) {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: '❌ Please provide a prompt for the swarm. Example: `/swarm build a todo app`'}]);
+        return true;
+      }
+      submitSwarm(prompt).then(res => {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: `🚀 **Forge Swarm Initialized!**\nSwarm ID: \`${res.swarmId}\`\n\nI've split your request into subtasks and assigned them to agents. You can monitor progress in the Forge Swarm panel below.`}]);
+      }).catch(err => {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: `❌ Swarm failed: ${err.message}`}]);
+      });
+      return true;
+    }
+    if (msg.startsWith('/task')) {
+      const prompt = msg.replace('/task', '').trim();
+      if (!prompt) {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: '❌ Please provide a prompt for the background task.'}]);
+        return true;
+      }
+      const files: Record<string, string> = {};
+      Object.entries(fileStore).forEach(([p, f]) => { files[p] = f.content; });
+      
+      submitTask(prompt, files, true).then(res => {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: `⏳ **Background Task Queued**\nTask ID: \`${res.taskId}\`\nEstimated Duration: ${res.estimated}s\n\nThe task is running autonomously. Check the status panel for updates.`}]);
+      }).catch(err => {
+        setMessages(prev => [...prev, { id: generateId(), role: 'model', content: `❌ Task failed: ${err.message}`}]);
+      });
       return true;
     }
     return false;
@@ -135,41 +167,51 @@ export function useAppChat({
           systemModifier;
 
         await guard.protect(async () => {
-          await streamGemini(
+          await ForgeAI.stream(
             currentMessages.length > 50 ? currentMessages.slice(-50) : currentMessages,
-            model,
-            apiKey,
-            systemPrompt,
-            (chunk, functionCalls) => {
-              fullResponse += chunk;
-              finalFunctionCalls = functionCalls;
-              setMessages(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1].content = fullResponse;
-                if (functionCalls) {
-                  updated[updated.length - 1].functionCalls = functionCalls;
-                }
-                return updated;
-              });
-              setFileStore(prevStore => {
-                const extractedStore = extractFiles(fullResponse, currentFileStore);
-                const mergedStore = { ...extractedStore };
-                for (const path in prevStore) {
-                  if (currentFileStore[path] && prevStore[path].content !== currentFileStore[path].content) {
-                    mergedStore[path] = prevStore[path];
-                  } else if (!currentFileStore[path] && prevStore[path]) {
-                    mergedStore[path] = prevStore[path];
+            {
+              model,
+              apiKey,
+              systemInstruction: systemPrompt,
+              temperature: settings.temperature,
+              workspace: workspaceName,
+              onChunk: (chunk, functionCalls, state) => {
+                if (chunk) fullResponse += chunk;
+                if (functionCalls) finalFunctionCalls = functionCalls;
+                
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  updated[lastIdx].content = fullResponse;
+                  if (functionCalls) {
+                    updated[lastIdx].functionCalls = functionCalls;
                   }
+                  // We could also surface state.warnings here
+                  return updated;
+                });
+
+                if (chunk) {
+                  setFileStore(prevStore => {
+                    const extractedStore = extractFiles(fullResponse, currentFileStore);
+                    const mergedStore = { ...extractedStore };
+                    // (rest of the store merging logic...)
+                    for (const path in prevStore) {
+                      if (currentFileStore[path] && prevStore[path].content !== currentFileStore[path].content) {
+                        mergedStore[path] = prevStore[path];
+                      } else if (!currentFileStore[path] && prevStore[path]) {
+                        mergedStore[path] = prevStore[path];
+                      }
+                    }
+                    for (const path in currentFileStore) {
+                      if (!prevStore[path]) {
+                        delete mergedStore[path];
+                      }
+                    }
+                    return mergedStore;
+                  });
                 }
-                for (const path in currentFileStore) {
-                  if (!prevStore[path]) {
-                    delete mergedStore[path];
-                  }
-                }
-                return mergedStore;
-              });
-            },
-            settings.temperature
+              }
+            }
           );
         }, { path: 'streamGemini' });
 
