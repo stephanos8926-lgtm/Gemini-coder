@@ -22,14 +22,12 @@ const BLOCKED_PATTERNS = [
 ];
 
 export function validateCode(code: string): { valid: boolean; reason?: string } {
-  return guard.protect(() => {
-    for (const pattern of BLOCKED_PATTERNS) {
-      if (pattern.test(code)) {
-        return { valid: false, reason: `Blocked protocol detected: "${pattern}"` };
-      }
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(code)) {
+      return { valid: false, reason: `Blocked protocol detected: "${pattern}"` };
     }
-    return { valid: true };
-  }, { method: 'validateCode' });
+  }
+  return { valid: true };
 }
 
 export async function sandboxExecute(

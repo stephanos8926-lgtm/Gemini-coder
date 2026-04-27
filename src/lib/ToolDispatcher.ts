@@ -1,6 +1,6 @@
 import { toolRegistry } from './ToolRegistry';
 import { LogTool } from '../utils/LogTool';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
 
 export class ToolDispatcher {
   private logger = new LogTool('ToolDispatcher');

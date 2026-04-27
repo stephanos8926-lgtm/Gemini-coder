@@ -1,5 +1,5 @@
 import { Skill, SkillRegistry } from './SkillRegistry';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
 import { LogTool } from '../utils/LogTool';
 import { ProjectContextEngine } from '../utils/ProjectContextEngine';
 import { ToolDispatcher } from './ToolDispatcher';

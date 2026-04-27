@@ -102,6 +102,30 @@ export class SymbolGraph {
     const all = Array.from(this.symbols.values()).flat();
     return all.slice(-limit).reverse();
   }
+
+  public generateSkeleton(filePath: string): string {
+    const symbols = this.symbols.get(filePath);
+    if (!symbols || symbols.length === 0) return `// No symbols indexed for ${filePath}`;
+
+    let skeleton = `// Skeleton for ${filePath}\n`;
+    symbols.forEach(sym => {
+      if (sym.type === 'import') return;
+      
+      // Basic skeletonization: just the first line of the source (usually the signature)
+      const lines = sym.source?.split('\n') || [];
+      const signature = lines[0]?.trim() || '';
+      
+      if (sym.type === 'class') {
+        skeleton += `class ${sym.name} { ... }\n`;
+      } else if (sym.type === 'interface') {
+        skeleton += `interface ${sym.name} { ... }\n`;
+      } else if (sym.type === 'function') {
+        skeleton += `${signature} { /* implementation omitted */ }\n`;
+      }
+    });
+
+    return skeleton;
+  }
 }
 
 export const symbolGraph = SymbolGraph.getInstance();

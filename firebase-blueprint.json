@@ -1,99 +1,46 @@
 {
   "entities": {
-    "User": {
-      "title": "User",
-      "description": "User profile information",
-      "type": "object",
-      "properties": {
-        "uid": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["user", "admin"] },
-        "no_sandbox": { "type": "boolean" }
-      },
-      "required": ["uid", "email", "role", "no_sandbox"]
-    },
     "Task": {
       "title": "Task",
-      "description": "A background AI execution task",
+      "description": "A task submitted by the user",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "status": { "type": "string", "enum": ["queued", "running", "completed", "failed"] },
         "type": { "type": "string", "enum": ["foreground", "background"] },
         "userId": { "type": "string" },
         "projectId": { "type": "string" },
         "prompt": { "type": "string" },
-        "context": { "type": "object" },
         "progress": { "type": "number" },
         "currentStep": { "type": "string" },
         "result": { "type": "object" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "startedAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" }
+        "error": { "type": "string" }
       },
-      "required": ["status", "type", "userId", "projectId", "prompt", "createdAt"]
+      "required": ["id", "status", "type", "userId", "projectId"]
     },
     "Swarm": {
       "title": "Swarm",
-      "description": "A coordinated group of AI agents",
+      "description": "An agent swarm coordination task",
       "type": "object",
       "properties": {
+        "id": { "type": "string" },
         "status": { "type": "string", "enum": ["planning", "executing", "merging", "completed", "failed"] },
         "userId": { "type": "string" },
         "projectId": { "type": "string" },
         "originalPrompt": { "type": "string" },
-        "plan": { "type": "object" },
-        "result": { "type": "object" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "completedAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["status", "userId", "projectId", "originalPrompt", "createdAt"]
-    },
-    "Agent": {
-      "title": "Agent",
-      "description": "AI Agent configuration from the pool",
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "type": { "type": "string" },
-        "status": { "type": "string" },
-        "systemPrompt": { "type": "string" },
-        "model": { "type": "string" },
-        "config": { "type": "object" },
-        "stats": { "type": "object" }
-      },
-      "required": ["name", "type", "status", "systemPrompt", "model"]
-    },
-    "Metrics": {
-      "title": "Metrics",
-      "description": "System usage metrics",
-      "type": "object",
-      "properties": {
-        "date": { "type": "string" },
-        "period": { "type": "string" },
-        "stats": { "type": "object" }
-      }
+      "required": ["id", "status", "userId", "projectId", "createdAt"]
     }
   },
   "firestore": {
-    "/users/{uid}": {
-      "schema": { "$ref": "User" },
-      "description": "User documents"
-    },
     "/tasks/{taskId}": {
-      "schema": { "$ref": "Task" },
-      "description": "Background tasks"
+      "schema": "Task",
+      "description": "Tasks collection"
     },
     "/swarms/{swarmId}": {
-      "schema": { "$ref": "Swarm" },
-      "description": "Agent swarms"
-    },
-    "/agentPool/{agentId}": {
-      "schema": { "$ref": "Agent" },
-      "description": "AI agent configurations"
-    },
-    "/metrics/{metricId}": {
-      "schema": { "$ref": "Metrics" },
-      "description": "System metrics"
+      "schema": "Swarm",
+      "description": "Swarms collection"
     }
   }
 }

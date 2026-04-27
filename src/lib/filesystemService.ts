@@ -1,10 +1,10 @@
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
+import type { ForgeGuard as ForgeGuardType } from '../../packages/nexus/guard/ForgeGuard';
 import ky from 'ky';
 import { FileStore } from './fileStore';
 import { FileSaveSchema, FileCreateSchema } from './schemas';
 import { LRUCache } from 'lru-cache';
 import CryptoJS from 'crypto-js';
-import path from 'path';
 
 class TinyEmitter {
   private listeners: { [key: string]: Function[] } = {};
@@ -27,7 +27,6 @@ class TinyEmitter {
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
-import { fileCache } from '../utils/FileCacheManager';
 import { get, set, del } from 'idb-keyval';
 
 class FileCacheManager {
@@ -49,27 +48,15 @@ class FileCacheManager {
 
   public async get(workspace: string, filePath: string): Promise<string | null> {
     const key = `${this.userId}:${workspace}:${filePath}`;
-    const absolutePath = path.join(process.cwd(), workspace, filePath);
     
-    // Tier 1/2: App Cache
-    try {
-      const cached = await fileCache.getFile(this.userId, `${workspace}:${filePath}`, absolutePath);
-      if (cached) return cached;
-    } catch (e) {
-      console.warn('[Cache] App tier get failed', e);
-    }
-
-    // Tier 3: Client-Side IndexedDB (Local Recovery)
+    // Tier 1: Client-Side IndexedDB
     try {
       const idbContent = await get(key);
       if (idbContent) {
-        // Backfill Tier 1/2
-        const absolutePath = path.join(process.cwd(), workspace, filePath);
-        await fileCache.updateFile(this.userId, `${workspace}:${filePath}`, absolutePath, idbContent);
         return idbContent;
       }
     } catch (e) {
-      console.warn('[L3 Cache] idb-get failed', e);
+      console.warn('[Cache] idb-get failed', e);
     }
 
     return null;
@@ -77,26 +64,21 @@ class FileCacheManager {
 
   public async set(workspace: string, filePath: string, content: string) {
     const key = `${this.userId}:${workspace}:${filePath}`;
-    const absolutePath = path.join(process.cwd(), workspace, filePath);
     
-    // Tier 1/2: App Cache
-    await fileCache.updateFile(this.userId, `${workspace}:${filePath}`, absolutePath, content);
-    
-    // Tier 3: Client-Side IndexedDB
+    // Tier 1: Client-Side IndexedDB
     try {
       await set(key, content);
     } catch (e) {
-      console.warn('[L3 Cache] idb-set failed', e);
+      console.warn('[Cache] idb-set failed', e);
     }
   }
 
   public async invalidate(workspace: string, path: string) {
     const key = `${this.userId}:${workspace}:${path}`;
-    fileCache.invalidate(this.userId, `${workspace}:${path}`);
     try {
       await del(key);
     } catch (e) {
-      console.warn('[L3 Cache] idb-del failed', e);
+      console.warn('[Cache] idb-del failed', e);
     }
   }
 }
@@ -108,7 +90,7 @@ export class FilesystemService extends TinyEmitter {
   private workspace: string = '';
   private idToken: string = '';
   private _client: any = null;
-  private guard: ForgeGuard;
+  private guard: ForgeGuardType;
 
   private constructor() {
     super();

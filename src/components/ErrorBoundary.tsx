@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertCircle, RefreshCcw } from 'lucide-react';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
 
 const guard = ForgeGuard.init('ErrorBoundary');
 

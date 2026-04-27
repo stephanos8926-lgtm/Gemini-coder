@@ -8,7 +8,7 @@ import {
   ValidatorFilter 
 } from '../services/ai/filters';
 import { AIContext, AIRuntimeState } from '../services/ai/types';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
 
 // Initialize the pipeline with standard filters
 aiPipeline.addFilter(new BudgetFilter());
@@ -17,7 +17,8 @@ aiPipeline.addFilter(new PIIFilter());
 aiPipeline.addFilter(new CacheFilter());
 aiPipeline.addFilter(new ValidatorFilter());
 
-let guard: ForgeGuard | null = null;
+
+let guard: any = null;
 if (typeof window === 'undefined') {
   guard = ForgeGuard.init('ForgeAI');
 }

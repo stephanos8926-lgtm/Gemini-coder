@@ -26,6 +26,7 @@
 - [x] Implement Command Palette (Ctrl + K).
 - [x] Implement Git-Style Visual Diff.
 - [x] Remove non-filesystem fallback mode.
+- [ ] Integrate ForgeGuard Debugger (UI profiling, AI chat triggers, error automation).
 
 ## Phase 4: Deployment & Documentation
 - [x] Update `package.json` with a `start` script.

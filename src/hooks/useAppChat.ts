@@ -135,13 +135,14 @@ export function useAppChat({
           }
         }
         
-        const fileTree = Object.entries(currentFileStore).map(([path, file]) => {
-          const skeleton = generateAstSkeleton(file.content, path);
+        const fileTreeItems = await Promise.all(Object.entries(currentFileStore).map(async ([path, file]) => {
+          const skeleton = await generateAstSkeleton(file.content, path);
           if (skeleton) {
-            return `- ${path}\n  AST Summary:\n  ${skeleton.split('\\n').join('\\n  ')}`;
+            return `- ${path}\n  AST Summary:\n  ${skeleton.split('\n').join('\n  ')}`;
           }
           return `- ${path}`;
-        }).join('\\n');
+        }));
+        const fileTree = fileTreeItems.join('\\n');
         
         const personaInstruction = settings.aiPersona === 'custom' 
           ? settings.customPersona 

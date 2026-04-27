@@ -1,0 +1,6 @@
+{
+  "completed": [],
+  "in_progress": ["Refactor ForgeWrappers.ts", "Fix PersistenceManager.ts globals"],
+  "blocked": [],
+  "next": ["Verify client bundle", "Log audit"]
+}

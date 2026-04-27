@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, ChildProcess, exec } from 'child_process';
+import util from 'util';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
@@ -114,10 +115,30 @@ import { FileSaveSchema, FileCreateSchema } from './src/lib/schemas';
 import { env } from './server-config';
 // @ts-ignore — no types needed for rate-limit config
 
+// Global Error Handler Middleware
+function errorHandler(err: express.Error | Error, req: express.Request, res: express.Response, next: express.NextFunction) {
+  logger.error('Unhandled error', err, { 
+    path: req.path,
+    method: req.method 
+  });
+
+  if (err instanceof z.ZodError) {
+    return res.status(400).json({ 
+      error: 'Validation failed', 
+      details: err.issues 
+    });
+  }
+
+  // Generic response to avoid leaking internal details
+  res.status((err as any).status || 500).json({ 
+    error: 'Internal Server Error' 
+  });
+}
+
 // Validation Schemas
 const RunToolSchema = z.object({
   command: z.string().min(1),
-  workspace: z.string().optional().default(''),
+  workspace: z.string().default(''),
 });
 
 const AdminRequestSchema = z.object({
@@ -136,20 +157,20 @@ const AdminUserDeleteSchema = AdminRequestSchema.extend({
 
 const GitPullSchema = AdminRequestSchema.extend({
   repoUrl: z.string().url().optional(),
-  branch: z.string().optional().default('main'),
-  target: z.enum(['root', 'workspaces']).optional().default('workspaces'),
+  branch: z.string().default('main'),
+  target: z.enum(['root', 'workspaces']).default('workspaces'),
 });
 
 
 const FileDeleteSchema = z.object({
   path: z.string().min(1),
-  workspace: z.string().optional().default(''),
+  workspace: z.string().default(''),
 });
 
 const FileRenameSchema = z.object({
   oldPath: z.string().min(1),
   newPath: z.string().min(1),
-  workspace: z.string().optional().default(''),
+  workspace: z.string().default(''),
 });
 
 export let db: admin.firestore.Firestore;
@@ -163,6 +184,7 @@ async function initializeFirebase() {
     
     if (fsSync.existsSync(configPath)) {
       config = JSON.parse(fsSync.readFileSync(configPath, 'utf8'));
+      logger.info('Loaded firebase config', { config });
     }
     
     let app: admin.app.App;
@@ -181,22 +203,16 @@ async function initializeFirebase() {
       logger.info('Firebase Admin already initialized, using existing app');
     }
     
-    // Initialize Firestore with the specific database ID if provided
-    // If the named database fails, we fallback to the default one
+    // Initialize Firestore
     try {
-      db = config.firestoreDatabaseId 
-        ? getFirestore(app, config.firestoreDatabaseId)
-        : getFirestore(app);
-      
-      // Test the connection to catch PERMISSION_DENIED early
-      await db.collection('users').limit(1).get();
-      logger.info('Firestore connection successful', { databaseId: config.firestoreDatabaseId || '(default)' });
+      db = getFirestore(app);
+      logger.info('Firestore initialized with default database');
     } catch (firestoreError: unknown) {
       const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-      logger.warn('Failed to initialize Firestore with named database, falling back to default', { 
-        databaseId: config.firestoreDatabaseId,
+      logger.warn('Failed to initialize Firestore', { 
         error: errorMessage
       });
+      // Fallback
       db = getFirestore(app);
     }
     
@@ -331,7 +347,8 @@ const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const upload = multer({ dest: UPLOAD_DIR });
 
-export const appPromise = (async () => {
+// Server Initialization Function
+async function startServer() {
   await initializeFirebase();
   logger.info('Initializing express app...');
   const app = express();
@@ -345,17 +362,15 @@ export const appPromise = (async () => {
     logger.error('Failed to create workspace root', e as any);
   }
 
-  // ... (Move all routes, middleware etc. from startServer into here) ...
-  
-  return app;
-})();
-
   try {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     logger.info('Upload directory initialized', { UPLOAD_DIR });
   } catch (e) {
     logger.error('Failed to create upload directory', e as any);
   }
+
+  // Body parser MUST come before CSRF protection to parse request body
+  app.use(express.json({ limit: '5mb' }));
 
   // CSRF Protection Middleware
   const csrfProtection = (req: Request, res: Response, next: NextFunction) => {
@@ -371,8 +386,6 @@ export const appPromise = (async () => {
     next();
   };
   app.use(csrfProtection);
-
-  app.use(express.json({ limit: '5mb' }));
 
   // MCP Tool Registry
   let cachedTools: any[] | null = null;
@@ -574,43 +587,8 @@ export const appPromise = (async () => {
     message: { error: 'Too many requests, please try again later.' },
   });
   app.use('/api/admin', adminLimiter, authenticateUser, authorizeAdmin, adminRouter);
-  app.use((req, res, next) => {
-    // Filter out noisy static asset requests from logs
-    const isStaticAsset = req.url.includes('/src/') || 
-                          req.url.includes('/node_modules/') || 
-                          req.url.endsWith('.js') || 
-                          req.url.endsWith('.css') || 
-                          req.url.endsWith('.svg') || 
-                          req.url.endsWith('.png') || 
-                          req.url.endsWith('.jpg') || 
-                          req.url.endsWith('.json') ||
-                          req.url.includes('@vite') ||
-                          req.url.includes('__vite');
-
-    if (!isStaticAsset) {
-      logger.info(`${req.method} ${req.url}`, { ip: req.ip });
-    }
-    next();
-  });
-
-  // Global Error Handler Middleware
-  const errorHandler: express.ErrorRequestHandler = (err, req, res, next) => {
-    logger.error('Unhandled error', err, { 
-      path: req.path,
-      method: req.method 
-    });
-
-    if (err instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Validation failed', 
-        details: err.issues 
-      });
-    }
-
-    res.status(err.status || 500).json({ 
-      error: err.message || 'Internal Server Error' 
-    });
-  };
+  
+                
 
   // Endpoint for GIDE to call tools
   app.post('/api/mcp/call', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -841,9 +819,7 @@ export const appPromise = (async () => {
         const { symbol, file_pattern, workspace } = req.body;
         const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
         
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
+        const execAsync = util.promisify(exec);
         
         // Try rg first, fallback to grep
         const cmd = `rg --json --no-heading --line-number ${file_pattern ? `-g "${file_pattern}"` : ''} "${symbol}" . || grep -rn "${symbol}" ${file_pattern ? `--include="${file_pattern}"` : ''} .`;
@@ -886,9 +862,7 @@ export const appPromise = (async () => {
         const targetPath = getSafePath(file_path, req.user, workspace);
         const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
         
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
+        const execAsync = util.promisify(exec);
         
         // Basic syntax check using node for JS/TS
         if (file_path.endsWith('.js') || file_path.endsWith('.ts')) {
@@ -907,7 +881,7 @@ export const appPromise = (async () => {
     }
   });
 
-  app.post('/api/admin/users', async (req, res, next) => {
+  app.post('/api/admin/users', authenticateUser, authorizeAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const { secretKey } = AdminRequestSchema.parse(req.body);
       const isValidSecret = crypto.timingSafeEqual(
@@ -1093,11 +1067,24 @@ export const appPromise = (async () => {
           return;
         }
 
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
+        const execAsync = util.promisify(exec);
         
         const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
+        
+        // SECURITY: Validate canonical path to prevent traversal attacks
+        const canonicalRoot = await fs.realpath(root).catch(() => root);
+        const canonicalWorkspaceRoot = await fs.realpath(WORKSPACE_ROOT).catch(() => WORKSPACE_ROOT);
+        
+        if (!canonicalRoot.startsWith(canonicalWorkspaceRoot)) {
+          logger.error('Path traversal attempt blocked', new Error('Path traversal'), { 
+            workspace, 
+            root, 
+            canonicalRoot, 
+            canonicalWorkspaceRoot 
+          });
+          res.status(403).json({ error: 'Invalid workspace path' });
+          return;
+        }
         
         switch (command) {
           case 'status':
@@ -1672,9 +1659,9 @@ export const appPromise = (async () => {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('/admin', authenticateUser, authorizeAdmin, (req, res) => {
-      res.sendFile(path.join(process.cwd(), 'admin.html'));
+      res.sendFile(path.join(distPath, 'admin.html'));
     });
-    app.get('/*splat', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
@@ -1994,19 +1981,18 @@ export const appPromise = (async () => {
     });
   });
 
+  // ERROR HANDLER MUST BE LAST - after all routes and middleware
   app.use(errorHandler);
 
   server.listen(PORT, '0.0.0.0', () => {
     logger.info(`GIDE Server running on http://localhost:${PORT}`);
   });
-// } <- This brace was causing the builder error.
 
-// Ensure the server starts
-appPromise.then((app: any) => {
-    // This is a minimal bridge to ensure the server starts if the file structure is mangled.
-    // The main routing/middleware is expected to be registered as part of appPromise.
-    // If listeners are already configured, this might double; but given the current state 
-    // this is necessary to get the server running.
-}).catch(err => {
-    logger.error('Failed to start server', err);
+  return { app, server, io };
+}
+
+// Start the server
+startServer().catch(err => {
+  logger.error('Failed to start server', err);
+  process.exit(1);
 });

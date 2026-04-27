@@ -1,8 +1,8 @@
 import { Message } from '../../lib/gemini';
 import { AIFilter, AIContext, AIRuntimeState, AIFilterResponse, AIResponseFilterResult } from './types';
-import { ForgeGuard } from '../../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../../utils/ForgeWrappers';
 
-let guard: ForgeGuard | null = null;
+let guard: any = null;
 if (typeof window === 'undefined') {
   guard = ForgeGuard.init('AIPipeline');
 }

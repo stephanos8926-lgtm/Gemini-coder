@@ -71,8 +71,8 @@ export function FirebaseProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
+      try {
+        if (currentUser) {
           const token = await currentUser.getIdToken();
           filesystemService.setToken(token);
           setIdToken(token);
@@ -96,22 +96,25 @@ export function FirebaseProvider({ children }: { children: ReactNode }) {
               lastLogin: new Date().toISOString()
             }, { merge: true });
           }
-        } catch (error) {
-          console.error("Error syncing user to Firestore:", error);
-          // Ensure we still set the user and stop loading even if Firestore sync fails
-          setUser(currentUser);
+        } else {
+          filesystemService.setToken('');
+          setIdToken(null);
+          setUser(null);
           setIsAuthLoading(false);
         }
-      } else {
-        filesystemService.setToken('');
-        setIdToken(null);
-        setUser(null);
+      } catch (error) {
+        console.error("Authentication flow error:", error);
+        setUser(currentUser);
         setIsAuthLoading(false);
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  if (isAuthLoading) {
+    return <div className="flex h-screen items-center justify-center bg-[#1e1e1e] text-white">Loading...</div>;
+  }
 
   return (
     <FirebaseContext.Provider value={{ user, idToken, isAuthLoading, handleFirestoreError }}>

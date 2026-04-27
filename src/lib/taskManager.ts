@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 
 export interface TaskData {
@@ -100,9 +100,12 @@ export function watchTask(taskId: string, callbacks: {
  * Watches all active tasks for a project.
  */
 export function watchActiveTasks(projectId: string, onUpdate: (tasks: TaskData[]) => void) {
+  if (!auth.currentUser) return () => {};
+  
   const q = query(
     collection(db, 'tasks'),
     where('projectId', '==', projectId),
+    where('userId', '==', auth.currentUser.uid),
     where('status', 'in', ['queued', 'running'])
   );
 
@@ -116,9 +119,12 @@ export function watchActiveTasks(projectId: string, onUpdate: (tasks: TaskData[]
  * Watches all active swarms for a project.
  */
 export function watchActiveSwarms(projectId: string, onUpdate: (swarms: SwarmData[]) => void) {
+  if (!auth.currentUser) return () => {};
+
   const q = query(
     collection(db, 'swarms'),
     where('projectId', '==', projectId),
+    where('userId', '==', auth.currentUser.uid),
     where('status', 'in', ['planning', 'executing', 'merging'])
   );
 

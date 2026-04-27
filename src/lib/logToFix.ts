@@ -1,5 +1,6 @@
 import { ProjectContextEngine } from '../utils/ProjectContextEngine';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
+import type { ForgeGuard as ForgeGuardType } from '../../packages/nexus/guard/ForgeGuard';
 
 export interface LogAnalysis {
   rootCause: string;
@@ -9,7 +10,7 @@ export interface LogAnalysis {
 
 export class LogToFixPipeline {
   private static instance: LogToFixPipeline;
-  private guard = ForgeGuard.init('log-to-fix');
+  private guard: ForgeGuardType = ForgeGuard.init('log-to-fix');
 
   private constructor() {}
 

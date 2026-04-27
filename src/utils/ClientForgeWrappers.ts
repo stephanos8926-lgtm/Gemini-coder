@@ -6,6 +6,10 @@ export class LogTool {
 
 export class ForgeGuard {
   static init(name: string) { return new ForgeGuard(name); }
+  public config = {
+    get: (key: string, defaultValue: any) => defaultValue
+  };
   constructor(private name: string) {}
   protect<T>(fn: () => T, options: any): T { return fn(); }
+  emitSignal(signal: any) {}
 }

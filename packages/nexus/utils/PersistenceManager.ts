@@ -50,8 +50,20 @@ export class PersistenceManager {
   }
 
   public static getInstance(): PersistenceManager {
+    // In browser environment, process.env might be undefined.
+    // We use a safe fallback or Vite's import.meta.env if available.
+    const isServer = typeof window === 'undefined';
+    const isDev = isServer 
+      ? (process.env.NODE_ENV !== 'production')
+      // @ts-ignore
+      : (import.meta.env?.MODE !== 'production');
+
+    const defaultWorkerPath = isDev 
+      ? './packages/nexus/telemetry/nexus-worker.js'
+      : './dist/nexus-worker.js';
+      
     if (!PersistenceManager.instance) {
-      PersistenceManager.instance = new PersistenceManager('nexus_telemetry.db', '/app/packages/nexus/workers/dbWorker.js');
+      PersistenceManager.instance = new PersistenceManager('nexus_telemetry.db', defaultWorkerPath);
     }
     return PersistenceManager.instance;
   }

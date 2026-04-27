@@ -1,11 +1,11 @@
 import winston from 'winston';
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from './ForgeWrappers';
 import path from 'path';
 import fs from 'fs';
 
 export class LogTool {
   private logger: winston.Logger;
-  private guard: ForgeGuard;
+  private guard: any;
 
   constructor(moduleName: string, userId?: string) {
     this.guard = ForgeGuard.init(moduleName);
@@ -17,7 +17,7 @@ export class LogTool {
 
     // Initialize Winston
     this.logger = winston.createLogger({
-      level: this.guard.config.get('LOG_LEVEL', 'info'),
+      level: this.guard?.config?.get ? this.guard.config.get('LOG_LEVEL', 'info') : 'info',
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()

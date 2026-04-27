@@ -8,7 +8,7 @@ import { FirebaseProvider } from './contexts/FirebaseContext';
 import { initEruda } from './utils/ErudaManager';
 
 // Initialize Eruda based on environment
-initEruda();
+// initEruda();
 
 const queryClient = new QueryClient({
   defaultOptions: {

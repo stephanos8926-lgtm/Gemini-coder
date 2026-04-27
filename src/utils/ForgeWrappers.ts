@@ -1,34 +1,42 @@
+// src/utils/ForgeWrappers.ts
+import * as ClientWrappers from './ClientForgeWrappers';
+
+/**
+ * environment detection
+ */
 const isBrowser = typeof window !== 'undefined';
 
-// We can't use require() easily in Vite/Vitest ESM environments.
-// Instead, we'll use a simple proxy or just import both and conditionally use them.
-// But importing server modules in browser crashes.
-// Let's use Vite's import.meta.env.SSR if available, or fallback to isBrowser.
-
-import { LogTool as ClientLogTool, ForgeGuard as ClientForgeGuard } from './ClientForgeWrappers';
-
-let LogTool: any;
-let ForgeGuard: any;
-
-if (isBrowser) {
-  LogTool = ClientLogTool;
-  ForgeGuard = ClientForgeGuard;
-} else {
-  // For Node.js environment, we can use dynamic import or require.
-  // In Vitest (jsdom), isBrowser is true, so it uses Client wrappers.
-  // In actual Node.js server, isBrowser is false.
+// Vite-friendly SSR detection. 
+const getIsSSR = () => {
+  if (typeof window === 'undefined') return true; // Standard Node.js detection
   try {
     // @ts-ignore
-    const serverWrappers = require('../utils/LogTool');
-    // @ts-ignore
-    const serverGuard = require('../../packages/nexus/guard/ForgeGuard');
-    LogTool = serverWrappers.LogTool;
-    ForgeGuard = serverGuard.ForgeGuard;
+    return import.meta.env.SSR;
   } catch (e) {
-    // Fallback if require fails
-    LogTool = ClientLogTool;
-    ForgeGuard = ClientForgeGuard;
+    return false;
+  }
+};
+
+let LogToolValue: any = ClientWrappers.LogTool;
+let ForgeGuardValue: any = ClientWrappers.ForgeGuard;
+
+// If we are strictly not in the browser, we try to load the heavy server-side versions.
+if (getIsSSR()) {
+  try {
+    // Using eval('require') to completely bypass Vite's static analysis
+    const req = eval('require');
+    const logPath = './LogTool';
+    const guardPath = '../../packages/nexus/guard/ForgeGuard';
+    
+    const serverLogTool = req(logPath).LogTool;
+    const serverForgeGuard = req(guardPath).ForgeGuard;
+    
+    if (serverLogTool) LogToolValue = serverLogTool;
+    if (serverForgeGuard) ForgeGuardValue = serverForgeGuard;
+  } catch (e) {
+    // Fallback handled by initial values
   }
 }
 
-export { LogTool, ForgeGuard };
+export const LogTool = LogToolValue;
+export const ForgeGuard = ForgeGuardValue;

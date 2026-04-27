@@ -4,8 +4,8 @@ import fs from 'node:fs';
 
 console.log('[NexusWorker] Starting worker...', workerData.dbPath);
 
-let db: any;
-function initDb(path: string, retry = true): boolean {
+let db;
+function initDb(path, retry = true) {
   try {
     console.log('[NexusWorker] Opening DB:', path);
     db = new Database(path);
@@ -16,7 +16,7 @@ function initDb(path: string, retry = true): boolean {
     `);
     console.log('[NexusWorker] DB Schema initialized.');
     return true;
-  } catch (err: any) {
+  } catch (err) {
     console.error('[NexusWorker] Database Error:', err);
     if (retry && err.code === 'SQLITE_CORRUPT') {
       console.warn('[NexusWorker] Corrupt DB detected, attempting recovery...', path);
@@ -37,7 +37,7 @@ if (initDb(workerData.dbPath)) {
   const insertSensor = db.prepare('INSERT OR REPLACE INTO sensor_registry (name, config) VALUES (?, ?)');
   const insertSignal = db.prepare('INSERT INTO signal_backlog (signal, ttl, timestamp) VALUES (?, ?, ?)');
 
-  parentPort!.on('message', (msg: any) => {
+  parentPort.on('message', (msg) => {
     console.log('[NexusWorker] Message received:', msg.type);
     try {
       if (msg.type === 'saveSensor') {

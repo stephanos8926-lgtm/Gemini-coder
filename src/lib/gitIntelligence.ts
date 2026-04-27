@@ -1,4 +1,4 @@
-import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { ForgeGuard } from '../utils/ForgeWrappers';
 import { logRedirector } from '../utils/LogRedirector';
 import { ProjectContextEngine } from '../utils/ProjectContextEngine';
 import { spawn } from 'child_process';
