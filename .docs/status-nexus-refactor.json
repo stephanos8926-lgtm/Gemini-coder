@@ -3,7 +3,11 @@
     "Nexus library migration",
     "ShadowExecutionEngine migration",
     "ForgeGuard refactor",
-    "BaseSensor/TUISensor implementation"
+    "BaseSensor/TUISensor implementation",
+    "GIDE rebranding to RapidForge",
+    "Firestore server logging fix",
+    "FilesystemGuardProtocol implementation",
+    "Git commit/push functionality"
   ],
   "in_progress": [
     "NexusFactory implementation",

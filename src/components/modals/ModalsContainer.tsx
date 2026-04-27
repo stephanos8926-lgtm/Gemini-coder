@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { AnimatePresence } from 'motion/react';
 
-const ApiKeyModal = lazy(() => import('../ApiKeyModal').then(m => ({ default: m.ApiKeyModal })));
+import { ApiKeyModal } from '../ApiKeyModal';
 const ProjectModal = lazy(() => import('../ProjectModal').then(m => ({ default: m.ProjectModal })));
 const WorkspaceModal = lazy(() => import('../WorkspaceModal'));
 const SettingsModal = lazy(() => import('../SettingsModal').then(m => ({ default: m.SettingsModal })));

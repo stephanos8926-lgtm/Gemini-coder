@@ -178,10 +178,9 @@ export let auth: admin.auth.Auth;
 
 // Initialize Firebase Admin
 async function initializeFirebase() {
+  let config: any = { projectId: undefined, firestoreDatabaseId: undefined };
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    let config = { projectId: undefined, firestoreDatabaseId: undefined };
-    
     if (fsSync.existsSync(configPath)) {
       config = JSON.parse(fsSync.readFileSync(configPath, 'utf8'));
       logger.info('Loaded firebase config', { config });
@@ -191,13 +190,30 @@ async function initializeFirebase() {
     const existingApps = getApps();
     
     if (existingApps.length === 0) {
-      // Explicitly set the projectId from the config to match the client-side audience claim.
-      // This prevents the "aud" claim mismatch error.
-      app = initializeApp({
-        credential: admin.credential.applicationDefault(),
-        projectId: (config.projectId as unknown) as string,
-      }) as unknown as admin.app.App;
-      logger.info('Firebase Admin initialized with applicationDefault', { projectId: config.projectId });
+      if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+        try {
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+          app = initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: config.projectId,
+          });
+          logger.info('Firebase Admin initialized with service account key');
+        } catch (keyError) {
+          logger.error('CRITICAL: Malformed FIREBASE_SERVICE_ACCOUNT_KEY provided', keyError as Error);
+          app = initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: config.projectId,
+          });
+          logger.info('Firebase Admin fell back to applicationDefault() due to parse error', { projectId: config.projectId });
+        }
+      } else {
+        // Fallback to application default credentials (which may lack IAM permissions in AI Studio)
+        app = initializeApp({
+          credential: admin.credential.applicationDefault(),
+          projectId: config.projectId,
+        }) as unknown as admin.app.App;
+        logger.info('Firebase Admin initialized with applicationDefault (Note: this often lacks permissions unless FIREBASE_SERVICE_ACCOUNT_KEY is set)', { projectId: config.projectId });
+      }
     } else {
       app = existingApps[0] as unknown as admin.app.App;
       logger.info('Firebase Admin already initialized, using existing app');
@@ -205,9 +221,8 @@ async function initializeFirebase() {
     
     // Initialize Firestore
     try {
-      // Always initialize with default database
-      db = getFirestore(app);
-      logger.info('Firestore initialized with default database');
+      db = getFirestore(app, config.firestoreDatabaseId);
+      logger.info(`Firestore initialized with database: ${config.firestoreDatabaseId || 'default'}`);
     } catch (firestoreError: unknown) {
       logger.error('CRITICAL: Failed to initialize Firestore', firestoreError as Error);
       // Do not continue if Firestore is essential
@@ -220,7 +235,7 @@ async function initializeFirebase() {
     // Last resort fallback
     try {
       const app = getApps().length === 0 ? initializeApp() : getApps()[0];
-      db = getFirestore(app);
+      db = getFirestore(app, config.firestoreDatabaseId);
       auth = getAuth(app);
       logger.info('Firebase Admin initialized with last resort fallback');
     } catch (err) {
@@ -1992,7 +2007,7 @@ async function startServer() {
   app.use(errorHandler);
 
   server.listen(PORT, '0.0.0.0', () => {
-    logger.info(`GIDE Server running on http://localhost:${PORT}`);
+    logger.info(`RapidForge Server running on http://localhost:${PORT}`);
   });
 
   return { app, server, io };
