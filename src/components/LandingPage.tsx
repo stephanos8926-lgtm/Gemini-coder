@@ -4,7 +4,7 @@ import { RW_APP_NAME, RW_APP_DESCRIPTION } from '../constants/app';
 
 export const LandingPage: React.FC<{ onSignInGoogle: () => void; onSignInGithub: () => void }> = ({ onSignInGoogle, onSignInGithub }) => {
   return (
-    <div className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-6 text-center">
+    <div className="h-full bg-[#121212] flex flex-col items-center justify-center p-6 text-center">
       <div className="mb-8 p-4 bg-[#007acc]/10 rounded-2xl border border-[#007acc]/20">
         <Sparkles className="w-12 h-12 text-[#007acc]" />
       </div>

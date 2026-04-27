@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "rm -rf dist && mkdir -p dist && vite build --outDir dist && esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js && cp packages/nexus/telemetry/nexus-worker.js dist/ && cp mcp-config.json dist/ && cp node_modules/web-tree-sitter/web-tree-sitter.wasm dist/",
+    "build": "npx shx rm -rf dist && npx shx mkdir -p dist && npx vite build --outDir dist && npx esbuild server.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.js && npx shx cp packages/nexus/telemetry/nexus-worker.js dist/nexus-worker.js && npx shx cp mcp-config.json dist/mcp-config.json && npx shx cp node_modules/web-tree-sitter/web-tree-sitter.wasm dist/web-tree-sitter.wasm",
     "start": "NODE_ENV=production node dist/server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",

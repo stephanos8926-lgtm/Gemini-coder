@@ -6,14 +6,11 @@ We have encountered persistent issues with building and deploying the applicatio
 ## 1. Build Artifacts Empty
 **Issue:** During deployment, the CI/CD pipeline reported "Build artifacts are empty."
 **Resolution:**
-The original `build` script in `package.json` was not correctly creating the `dist/` directory and populating it with all runtime requirements before build artifact upload.
+The original `build` script in `package.json` was not reliably creating and populating the `dist/` directory in the restricted environment's CI pipeline.
 **Fix applied:**
-Updated `package.json` build script to:
-1.  `rm -rf dist` (Clean)
-2.  `mkdir -p dist` (Ensure directory exists)
-3.  `vite build --outDir dist` (Build client-side assets)
-4.  `esbuild server.ts [...] --outfile=dist/server.js` (Bundle server-side code)
-5.  `cp` necessary assets (`worker`, `mcp-config.json`, `web-tree-sitter.wasm`) into `dist/`.
+Refactored the `build` script in `package.json` to use `npx shx` for all file operations (`rm`, `mkdir`, `cp`). This ensures cross-platform compatibility and, crucially, that file operations execute correctly within the constrained shell environment used during deployment artifact generation.
+**Verification:**
+Multiple sequential `npm run build` cycles confirmed successful generation of all required assets in `dist/`.
 
 ## 2. Firebase/Firestore Initialization
 **Issue:** Persistent `PERMISSION_DENIED` and `NOT_FOUND` errors when initializing Firestore, likely due to how named databases were being referenced via `firebase-applet-config.json` and `server.ts`.
