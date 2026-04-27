@@ -209,9 +209,7 @@ async function initializeFirebase() {
       db = getFirestore(app);
       logger.info('Firestore initialized with default database');
     } catch (firestoreError: unknown) {
-      logger.error('CRITICAL: Failed to initialize Firestore', { 
-        error: firestoreError
-      });
+      logger.error('CRITICAL: Failed to initialize Firestore', firestoreError as Error);
       // Do not continue if Firestore is essential
       throw firestoreError;
     }
@@ -247,48 +245,57 @@ const skillExecutor = new SkillExecutor();
 // Register tools
 toolRegistry.registerTool({
   name: 'read_file',
-  description: 'Read the contents of a file.',
-  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING } }, required: ['path'] }
+  description: 'Read the contents of a file, including its path.',
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING } }, required: ['path'] },
+  execute: async (args, context) => await executeTool('read_file', args, context)
 });
 toolRegistry.registerTool({
   name: 'write_file',
   description: 'Write content to a file.',
-  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, content: { type: SchemaType.STRING } }, required: ['path', 'content'] }
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, content: { type: SchemaType.STRING } }, required: ['path', 'content'] },
+  execute: async (args, context) => await executeTool('write_file', args, context)
 });
 toolRegistry.registerTool({
   name: 'apply_diff',
   description: 'Apply a unified diff to a file.',
-  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, diff: { type: SchemaType.STRING } }, required: ['path', 'diff'] }
+  parameters: { type: SchemaType.OBJECT, properties: { path: { type: SchemaType.STRING }, diff: { type: SchemaType.STRING } }, required: ['path', 'diff'] },
+  execute: async (args, context) => await executeTool('apply_diff', args, context)
 });
 toolRegistry.registerTool({
   name: 'search_code',
   description: 'Search for a regex pattern in the codebase.',
-  parameters: { type: SchemaType.OBJECT, properties: { pattern: { type: SchemaType.STRING }, dir: { type: SchemaType.STRING } }, required: ['pattern'] }
+  parameters: { type: SchemaType.OBJECT, properties: { pattern: { type: SchemaType.STRING }, dir: { type: SchemaType.STRING } }, required: ['pattern'] },
+  execute: async (args, context) => await executeTool('search_code', args, context)
 });
 toolRegistry.registerTool({
   name: 'find_symbol',
   description: 'Find the definition and references of a symbol.',
-  parameters: { type: SchemaType.OBJECT, properties: { symbol: { type: SchemaType.STRING }, file_pattern: { type: SchemaType.STRING } }, required: ['symbol'] }
+  parameters: { type: SchemaType.OBJECT, properties: { symbol: { type: SchemaType.STRING }, file_pattern: { type: SchemaType.STRING } }, required: ['symbol'] },
+  execute: async (args, context) => await executeTool('find_symbol', args, context)
 });
 toolRegistry.registerTool({
   name: 'get_diagnostics',
   description: 'Get linting or compilation errors for a file.',
-  parameters: { type: SchemaType.OBJECT, properties: { file_path: { type: SchemaType.STRING } }, required: ['file_path'] }
+  parameters: { type: SchemaType.OBJECT, properties: { file_path: { type: SchemaType.STRING } }, required: ['file_path'] },
+  execute: async (args, context) => await executeTool('get_diagnostics', args, context)
 });
 toolRegistry.registerTool({
   name: 'mcp_dispatch',
   description: 'Execute a tool on an MCP server.',
   parameters: { type: SchemaType.OBJECT, properties: { server_name: { type: SchemaType.STRING }, tool_name: { type: SchemaType.STRING }, args: { type: SchemaType.STRING } }, required: ['server_name', 'tool_name', 'args'] }
+  // mcp_dispatch is special, we don't use executeTool directly
 });
 toolRegistry.registerTool({
   name: 'runCommand',
   description: 'Run a shell command or tool in the workspace.',
-  parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING } }, required: ['command'] }
+  parameters: { type: SchemaType.OBJECT, properties: { command: { type: SchemaType.STRING } }, required: ['command'] },
+  execute: async (args, context) => await executeTool('runCommand', args, context)
 });
 toolRegistry.registerTool({
   name: 'web_search',
   description: 'Search the web for information.',
-  parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING } }, required: ['query'] }
+  parameters: { type: SchemaType.OBJECT, properties: { query: { type: SchemaType.STRING } }, required: ['query'] },
+  execute: async (args, context) => await executeTool('web_search', args, context)
 });
 
 async function connectToMCP(serverPath: string, args: string[], workspaceRoot: string) {

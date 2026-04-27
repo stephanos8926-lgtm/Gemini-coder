@@ -2,6 +2,7 @@
   "name": "nexus-git-sync",
   "version": "0.1.0",
   "description": "Sync tool for GitHub repos",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "sync": "tsx src/cli.ts"

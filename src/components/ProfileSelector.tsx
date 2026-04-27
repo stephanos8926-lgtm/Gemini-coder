@@ -51,7 +51,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
               <Sparkles className="w-8 h-8 text-[#007acc]" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">Welcome to GIDE</h2>
+              <h2 className="text-2xl font-bold text-white tracking-tight">Welcome to RapidForge</h2>
               <p className="text-[#858585] text-sm">Select a profile to continue your workspace</p>
             </div>
           </div>

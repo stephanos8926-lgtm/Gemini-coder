@@ -152,11 +152,6 @@ export function MobileIDE({
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-[#1e1e1e] relative">
       
-      {/* HEADER IS DELEGATED TO APP.TSX or we use our own? Guide says MobileIDE has its own. 
-          But wait, App.tsx already has a global header.
-          Let's provide the flex-1 chat area and fixed input area inside this designated container. 
-          We'll assume the top global header remains for now, and we just orchestrate the chat. */}
-
       {/* CHAT AREA - SCROLLABLE MIDDLE */}
       <div className="flex-1 overflow-y-auto pb-36 custom-scrollbar">
         <div className="max-w-3xl mx-auto p-3 space-y-4">
@@ -172,7 +167,7 @@ export function MobileIDE({
                <div key={msg.id} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-6`}>
                  <div className="flex items-center gap-2 mb-1.5 px-1">
                    <span className="text-[10px] text-[#858585] font-bold uppercase tracking-widest">
-                     {isUser ? (settings.userName || 'You') : 'RapidForge AI'}
+                     {isUser ? (settings.userName || 'You') : 'GIDE AI'}
                    </span>
                  </div>
                  

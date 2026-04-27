@@ -96,7 +96,7 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
                       </div>
                       <div className="flex-1 space-y-1">
                         <h4 className="text-sm font-bold text-white">{settings.userName || 'Developer'}</h4>
-                        <p className="text-xs text-[#858585]">GIDE Professional Tier</p>
+                        <p className="text-xs text-[#858585]">RapidForge Professional Tier</p>
                       </div>
                     </div>
 

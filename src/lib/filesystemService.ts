@@ -1,5 +1,6 @@
 import { ForgeGuard } from '../utils/ForgeWrappers';
 import type { ForgeGuard as ForgeGuardType } from '../../packages/nexus/guard/ForgeGuard';
+import { FilesystemGuardProtocol } from '../utils/FilesystemGuardProtocol';
 import ky from 'ky';
 import { FileStore } from './fileStore';
 import { FileSaveSchema, FileCreateSchema } from './schemas';
@@ -94,7 +95,7 @@ export class FilesystemService extends TinyEmitter {
 
   private constructor() {
     super();
-    this.guard = ForgeGuard.init('FilesystemService');
+    this.guard = ForgeGuard.init('FilesystemService', {}, undefined, new FilesystemGuardProtocol());
   }
 
   public get events() {

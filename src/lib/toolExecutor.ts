@@ -57,7 +57,7 @@ async function handleReadFile(args: { path: string }) {
   const { getSafePath } = await import('../utils/pathUtility');
   const safePath = getSafePath(args.path, { role: 'user' }, workspaceRoot, ''); // Needs user context
   const content = await fs.readFile(safePath, 'utf-8');
-  return { content };
+  return { path: args.path, content };
 }
 
 async function handleWriteFile(args: { path: string, content: string }) {

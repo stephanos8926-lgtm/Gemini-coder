@@ -94,7 +94,7 @@ export function useFileSystemMutations() {
     mutationFn: (name: string) => {
       // Just creating a dummy file to ensure the directory exists
       filesystemService.setWorkspace(name);
-      return filesystemService.createFile('.gide', false);
+      return filesystemService.createFile('.rapidforge', false);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });

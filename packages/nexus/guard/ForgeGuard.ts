@@ -26,14 +26,17 @@ export class ForgeGuard {
     this.persistence = persistence;
   }
 
-  public static init(moduleName: string, configOverrides: Record<string, any> = {}, persistence?: PersistenceManager): ForgeGuard {
+  public static init(moduleName: string, configOverrides: Record<string, any> = {}, persistence?: PersistenceManager, protocol?: ForgeGuardProtocol): ForgeGuard {
     if (!ForgeGuard.instances.has(moduleName)) {
       const pm = persistence || PersistenceManager.getInstance();
       const guard = new ForgeGuard(moduleName, configOverrides, pm);
+      if (protocol) guard.setProtocol(protocol);
       guard.registerTagger(new ContextTagger({ moduleName }));
       ForgeGuard.instances.set(moduleName, guard);
     }
-    return ForgeGuard.instances.get(moduleName)!;
+    const guard = ForgeGuard.instances.get(moduleName)!;
+    if (protocol) guard.setProtocol(protocol);
+    return guard;
   }
 
   public setProtocol(protocol: ForgeGuardProtocol) {

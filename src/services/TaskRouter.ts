@@ -192,7 +192,7 @@ async function executeAITaskWithProgress(task: any, onProgress: (p: number, s: s
   const focus = languageSpecifics[mainLang] || 'Follow standard best practices for the detected framework.';
 
   // Create a structured system prompt for the background worker
-  const systemPrompt = `You are a background autonomous coding agent in ForgeGuard IDE (GIDE).
+  const systemPrompt = `You are a background autonomous coding agent in ForgeGuard IDE (RapidForge IDE).
 You must follow instructions precisely and return your final response once the task is complete.
 Your final response MUST include a clear summary and any file changes in a block format.
 

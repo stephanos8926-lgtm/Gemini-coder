@@ -57,11 +57,12 @@ export const DEFAULT_SETTINGS: Settings = {
   autoSaveInterval: 1000,
 };
 
-const SETTINGS_KEY = 'gide_settings';
+const SETTINGS_KEY = 'rapidforge_settings';
+const OLD_SETTINGS_KEY = 'gide_settings';
 
 export const settingsStore = {
   get(): Settings {
-    const saved = localStorage.getItem(SETTINGS_KEY);
+    const saved = localStorage.getItem(SETTINGS_KEY) || localStorage.getItem(OLD_SETTINGS_KEY);
     if (!saved) return DEFAULT_SETTINGS;
     try {
       return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
@@ -72,5 +73,9 @@ export const settingsStore = {
   
   save(settings: Settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    // Optionally remove the old key if it exists
+    if (localStorage.getItem(OLD_SETTINGS_KEY)) {
+      localStorage.removeItem(OLD_SETTINGS_KEY);
+    }
   }
 };

@@ -9,7 +9,9 @@ export function isErudaEnabled(): boolean {
 export function setErudaEnabled(enabled: boolean) {
   localStorage.setItem(ERUDA_KEY, enabled.toString());
   if (enabled) {
-    eruda.init();
+    eruda.init({
+      tool: ['console', 'elements', 'info'] // Exclude 'network' which might be trying to mock fetch
+    });
   } else {
     eruda.destroy();
   }
@@ -17,7 +19,9 @@ export function setErudaEnabled(enabled: boolean) {
 
 export function initEruda() {
   if (isErudaEnabled()) {
-    eruda.init();
+    eruda.init({
+      tool: ['console', 'elements', 'info']
+    });
     console.log('Eruda initialized.');
   }
 }

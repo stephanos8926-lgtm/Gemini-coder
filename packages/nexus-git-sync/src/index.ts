@@ -41,3 +41,53 @@ export async function syncRepo(dir: string, url: string, token: string) {
     });
   }
 }
+
+export async function restoreFile(dir: string, url: string, token: string, filePath: string) {
+  const gitDir = path.join(dir, '.git');
+  if (!fs.existsSync(gitDir)) {
+      await git.init({ fs, dir });
+      await git.addRemote({ fs, dir, remote: 'origin', url });
+  }
+
+  await git.fetch({
+    fs,
+    http,
+    dir,
+    remote: 'origin',
+    token
+  });
+
+  await git.checkout({
+    fs,
+    dir,
+    filepaths: [filePath],
+    ref: 'origin/main'
+  });
+}
+
+export async function commitAndPush(dir: string, url: string, token: string, message: string) {
+  // 1. Add & Commit first
+  await git.add({ fs, dir, filepath: '.' });
+  await git.commit({
+    fs,
+    dir,
+    author: { name: 'Nexus Sync', email: 'sync@nexus.local' },
+    message
+  });
+
+  // 2. Fetch
+  await git.fetch({ fs, http, dir, remote: 'origin', token });
+
+  // 3. Current branch
+  const branch = await git.currentBranch({ fs, dir }) || 'main';
+
+  // 4. Push
+  await git.push({
+    fs,
+    http,
+    dir,
+    remote: 'origin',
+    token,
+    ref: branch
+  });
+}

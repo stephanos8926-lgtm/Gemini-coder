@@ -6,8 +6,8 @@ dotenv.config();
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  ADMIN_SECRET_KEY: z.string().min(1, 'ADMIN_SECRET_KEY is required').default('gide-admin-secret-123'),
-  CSRF_SECRET: z.string().min(1, 'CSRF_SECRET is required').default('gide-csrf-secret-456'),
+  ADMIN_SECRET_KEY: z.string().min(1, 'ADMIN_SECRET_KEY is required').default('rapidforge-admin-secret-123'),
+  CSRF_SECRET: z.string().min(1, 'CSRF_SECRET is required').default('rapidforge-csrf-secret-456'),
   // Add other required env vars here
 });
 

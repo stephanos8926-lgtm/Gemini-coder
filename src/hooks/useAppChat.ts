@@ -148,12 +148,41 @@ export function useAppChat({
           ? settings.customPersona 
           : `Act as a ${settings.aiPersona}.`;
 
+        // Load project knowledge base if it exists
+        let systemKnowledge = '';
+        
+        // 1. Load root level FORGE.md (System Instructions)
+        if (currentFileStore['FORGE.md']) {
+          try {
+            const content = await filesystemService.getFileContent('FORGE.md');
+            systemKnowledge += `\n\n[SYSTEM INSTRUCTIONS: FORGE.md]\n${content}\n`;
+          } catch (e) {
+            console.warn(`[useAppChat] Could not load system instructions: FORGE.md`, e);
+          }
+        }
+
+        // 2. Load FORGE.md files from subdirectories (User/Folder level instructions)
+        // Only look in workspace depth 1 for now to prevent performance issues
+        const folderForgeFiles = Object.keys(currentFileStore).filter(path => 
+          path.endsWith('/FORGE.md') && path !== 'FORGE.md'
+        );
+
+        for (const file of folderForgeFiles) {
+          try {
+            const content = await filesystemService.getFileContent(file);
+            systemKnowledge += `\n\n[USER/FOLDER CONTEXT: ${file}]\n${content}\n`;
+          } catch (e) {
+            console.warn(`[useAppChat] Could not load context file: ${file}`, e);
+          }
+        }
+
         let relevantContextString = relevantContextItems.length > 0 
           ? `\n\n[RELEVANT CONTEXT & MENTIONS]\nBased on the user's query and explicit @mentions, here are detailed snippets of the most relevant files/symbols:\n` +
             relevantContextItems.map(m => `--- ${m.path} ---\n${m.content}\n`).join('\n')
           : '';
 
         const systemPrompt = getSystemInstruction(enabledTools) + 
+          systemKnowledge +
           `\n\n[CURRENT WORKSPACE CONTEXT]\n` +
           `Workspace Name: ${workspaceName}\n` +
           `Active File: ${selectedFile || 'None'}\n` +

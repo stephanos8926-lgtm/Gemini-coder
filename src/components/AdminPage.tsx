@@ -24,7 +24,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [mcpTools, setMcpTools] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [secretKey, setSecretKey] = useState(localStorage.getItem('gide_admin_key') || '');
+  const [secretKey, setSecretKey] = useState(localStorage.getItem('rapidforge_admin_key') || '');
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
@@ -48,12 +48,12 @@ export default function AdminPage() {
         const data = await response.json();
         setUsers(data);
         setIsAuthorized(true);
-        localStorage.setItem('gide_admin_key', secretKey);
+        localStorage.setItem('rapidforge_admin_key', secretKey);
         fetchMcpTools();
       } else {
         const errorData = await response.json().catch(() => ({}));
         setIsAuthorized(false);
-        localStorage.removeItem('gide_admin_key');
+        localStorage.removeItem('rapidforge_admin_key');
         if (secretKey) toast.error(errorData.error || 'Invalid admin secret key');
       }
     } catch (e) {
@@ -158,7 +158,7 @@ export default function AdminPage() {
   };
 
   const handleGitPull = async () => {
-    const target = window.confirm('Update GIDE Application (root)? Click Cancel to update Projects (workspaces).') ? 'root' : 'workspaces';
+    const target = window.confirm('Update RapidForge IDE Application (root)? Click Cancel to update Projects (workspaces).') ? 'root' : 'workspaces';
     const repoUrl = prompt('Enter repository URL (optional if already initialized):');
     const branch = prompt('Enter branch name (default: main):') || 'main';
     
