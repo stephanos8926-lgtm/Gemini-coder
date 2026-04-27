@@ -105,7 +105,6 @@ export function watchActiveTasks(projectId: string, onUpdate: (tasks: TaskData[]
   const q = query(
     collection(db, 'tasks'),
     where('projectId', '==', projectId),
-    where('userId', '==', auth.currentUser.uid),
     where('status', 'in', ['queued', 'running'])
   );
 
@@ -124,7 +123,6 @@ export function watchActiveSwarms(projectId: string, onUpdate: (swarms: SwarmDat
   const q = query(
     collection(db, 'swarms'),
     where('projectId', '==', projectId),
-    where('userId', '==', auth.currentUser.uid),
     where('status', 'in', ['planning', 'executing', 'merging'])
   );
 

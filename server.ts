@@ -205,15 +205,15 @@ async function initializeFirebase() {
     
     // Initialize Firestore
     try {
+      // Always initialize with default database
       db = getFirestore(app);
       logger.info('Firestore initialized with default database');
     } catch (firestoreError: unknown) {
-      const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-      logger.warn('Failed to initialize Firestore', { 
-        error: errorMessage
+      logger.error('CRITICAL: Failed to initialize Firestore', { 
+        error: firestoreError
       });
-      // Fallback
-      db = getFirestore(app);
+      // Do not continue if Firestore is essential
+      throw firestoreError;
     }
     
     auth = getAuth(app);
