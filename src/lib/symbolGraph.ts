@@ -9,18 +9,21 @@ export interface SymbolInfo {
   file: string;
   dependencies: string[]; // Names of other symbols referenced
   source?: string; // Full source code of the symbol for semantic chunking
+  usageCount?: number; // How many times this symbol was included in a prompt
+  successWeight?: number; // Cognitive boost based on successful interaction history
 }
 
 export class SymbolGraph {
-  private static instance: SymbolGraph;
-  private symbols: Map<string, SymbolInfo[]> = new Map(); // file -> symbols
-  private graph: Map<string, Set<string>> = new Map(); // symbol -> dependent symbols
+  private static instances: Map<string, SymbolGraph> = new Map();
+  private symbols: Map<string, SymbolInfo[]> = new Map(); 
+  private graph: Map<string, Set<string>> = new Map();
 
-  public static getInstance(): SymbolGraph {
-    if (!SymbolGraph.instance) {
-      SymbolGraph.instance = new SymbolGraph();
+  public static getInstance(tenant?: { userId: string, workspaceId: string }): SymbolGraph {
+    const key = tenant ? `${tenant.userId}:${tenant.workspaceId}` : 'default';
+    if (!SymbolGraph.instances.has(key)) {
+      SymbolGraph.instances.set(key, new SymbolGraph());
     }
-    return SymbolGraph.instance;
+    return SymbolGraph.instances.get(key)!;
   }
 
   async indexFile(filePath: string, content: string) {

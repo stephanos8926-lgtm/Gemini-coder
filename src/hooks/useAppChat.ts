@@ -11,6 +11,8 @@ import { generateId } from '../lib/projectStore';
 import { Settings } from '../lib/settingsStore';
 import { ForgeGuard } from '../utils/ForgeWrappers';
 import { submitTask, submitSwarm } from '../lib/taskManager';
+import { activeTabTracker } from '../lib/activeTabTracker';
+import { ContextBlock, ContextPruner } from '../utils/ContextPruner';
 
 interface UseAppChatProps {
   apiKey: string | null;
@@ -120,7 +122,11 @@ export function useAppChat({
         
         let relevantContextItems: { path: string, content: string }[] = [];
         try {
-          relevantContextItems = await filesystemService.getRelevantContext(latestQuery, 5);
+          const clientContext = {
+            activeTab: selectedFile,
+            openTabs: activeTabTracker.getOpenTabs()
+          };
+          relevantContextItems = await filesystemService.getRelevantContext(latestQuery, 5, undefined, clientContext);
         } catch (e) {
           console.warn('[useAppChat] Context engine unreachable:', e);
         }
@@ -136,13 +142,22 @@ export function useAppChat({
         }
         
         const fileTreeItems = await Promise.all(Object.entries(currentFileStore).map(async ([path, file]) => {
-          const skeleton = await generateAstSkeleton(file.content, path);
-          if (skeleton) {
-            return `- ${path}\n  AST Summary:\n  ${skeleton.split('\n').join('\n  ')}`;
+          // Only generate skeleton for files that are likely to have interesting structure
+          const isCodeFile = /\.(ts|tsx|js|jsx|py)$/.test(path);
+          if (isCodeFile && file.content && file.content.length < 50000) { // Limit size for skeleton generation
+            const skeleton = await generateAstSkeleton(file.content, path);
+            if (skeleton) {
+              return `- ${path}\n  AST Summary:\n  ${skeleton.split('\n').join('\n  ')}`;
+            }
           }
-          return `- ${path}`;
+          return `- ${path}${file.isDir ? '/' : ''}`;
         }));
-        const fileTree = fileTreeItems.join('\\n');
+        const fileTree = fileTreeItems.join('\n');
+        
+        let activeFileContext = '';
+        if (selectedFile && currentFileStore[selectedFile]) {
+          activeFileContext = `\n\n[ACTIVE FILE: ${selectedFile}]\n${currentFileStore[selectedFile].content}\n`;
+        }
         
         const personaInstruction = settings.aiPersona === 'custom' 
           ? settings.customPersona 
@@ -181,28 +196,66 @@ export function useAppChat({
             relevantContextItems.map(m => `--- ${m.path} ---\n${m.content}\n`).join('\n')
           : '';
 
-        const systemPrompt = getSystemInstruction(enabledTools) + 
-          systemKnowledge +
-          `\n\n[CURRENT WORKSPACE CONTEXT]\n` +
-          `Workspace Name: ${workspaceName}\n` +
-          `Active File: ${selectedFile || 'None'}\n` +
-          `\n[CURRENT WORKSPACE FILES & STRUCTURE]\n` +
-          `The following is a list of files in the current workspace. For supported files (JS, TS, Python), ` +
-          `a structural AST summary is provided to help you understand the codebase without reading every file. ` +
-          `Use these summaries to identify relevant functions, classes, and types.\n\n` +
-          `${fileTree || 'No files yet.'}\n` +
-          relevantContextString +
-          `\n\n[AI PERSONA: ${settings.aiPersona.toUpperCase()}]\n${personaInstruction}\n` +
-          (settings.aiChainOfThought ? "\n[CHAIN OF THOUGHT]\nYou MUST wrap your internal reasoning process in <thinking> tags before providing your final response. This reasoning should include your plan, file manifest, and any complexity estimates.\n" : "") +
-          systemModifier;
+        const systemInstruction = getSystemInstruction(enabledTools);
+        
+        // 1. Build Context Blocks
+        const blocks: ContextBlock[] = [
+          { id: 'system-base', content: systemInstruction, priority: 100, type: 'system' },
+          { id: 'persona', content: personaInstruction, priority: 95, type: 'instruction' },
+        ];
+
+        if (systemKnowledge) {
+          blocks.push({ id: 'forge-directives', content: systemKnowledge, priority: 90, type: 'system' });
+        }
+
+        blocks.push({ 
+          id: 'workspace-metadata', 
+          content: `[WORKSPACE]: ${workspaceName}\n[ACTIVE FILE]: ${selectedFile || 'None'}`, 
+          priority: 95, 
+          type: 'metadata' 
+        });
+
+        if (activeFileContext) {
+          blocks.push({ id: 'active-file', content: activeFileContext, priority: 90, type: 'file' });
+        }
+
+        // Add file tree (High priority for structure but can be pruned if needed)
+        blocks.push({ id: 'file-tree', content: `[FILE STRUCTURE]:\n${fileTree}`, priority: 70, type: 'metadata' });
+
+        // Add relevant context snippets (Ranked by scoring engine)
+        relevantContextItems.forEach((item, idx) => {
+          blocks.push({ 
+            id: `context-${item.path}`, 
+            content: `[FILE CONTENT: ${item.path}]\n${item.content}`, 
+            priority: 85 - idx, // Higher relevance score = higher priority
+            type: 'file' 
+          });
+        });
+
+        // Add chat history
+        const messageBlocks = ContextPruner.createMessageBlocks(currentMessages.slice(-50));
+        blocks.push(...messageBlocks);
+
+        if (systemModifier) {
+          blocks.push({ id: 'modifier', content: systemModifier, priority: 100, type: 'instruction' });
+        }
+
+        // 2. Perform Pruning
+        // Use a 32k window for Gemini Flash, 128k for Pro, but default to 16k for cost efficiency
+        const MAX_CONTEXT_TOKENS = window.innerWidth < 768 ? 12000 : 24000; // Parity check: Mobile gets slightly smaller window for performance
+        const { content: finalPrompt, stats } = ContextPruner.prune(blocks, MAX_CONTEXT_TOKENS);
+
+        if (stats.efficiency > 0.2) {
+          console.info(`[ContextPruner] Pruned ${stats.originalTokens} tokens down to ${stats.prunedTokens} (Efficiency: ${(stats.efficiency * 100).toFixed(1)}%)`);
+        }
 
         await guard.protect(async () => {
           await ForgeAI.stream(
-            currentMessages.length > 50 ? currentMessages.slice(-50) : currentMessages,
+            [], // Messages are already folded into finalPrompt for fine-grained control
             {
               model,
               apiKey,
-              systemInstruction: systemPrompt,
+              systemInstruction: finalPrompt,
               temperature: settings.temperature,
               workspace: workspaceName,
               onChunk: (chunk, functionCalls, state) => {

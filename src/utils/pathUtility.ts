@@ -1,10 +1,12 @@
 import path from 'path';
 import fsSync from 'fs';
 
-export function getSafePath(unsafePath: string, user: any, workspaceRoot: string, workspace: string = '') {
+export const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces');
+
+export function getSafePath(unsafePath: string, user: any, workspace: string = '') {
     const base = user.role === 'admin' 
-      ? (workspace ? path.join(workspaceRoot, workspace) : workspaceRoot)
-      : path.join(workspaceRoot, workspace);
+      ? (workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT)
+      : path.join(WORKSPACE_ROOT, workspace);
     
     // Ensure base directory exists so we can at least validate against it
     if (!fsSync.existsSync(base)) {

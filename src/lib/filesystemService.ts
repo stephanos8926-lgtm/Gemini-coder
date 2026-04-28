@@ -221,9 +221,28 @@ export class FilesystemService extends TinyEmitter {
     return this.client.get(`/api/search?${searchParams}`).json();
   }
 
-  async getRelevantContext(query: string, limit: number = 5, skillContext?: any): Promise<{ path: string, content: string }[]> {
+  async acceptStaging(path: string): Promise<void> {
+    await this.client.post('/api/files/staging/accept', {
+      json: { path, workspace: this.workspace },
+    });
+    // cacheManager and event emission (handled in previous versions)
+    this.emit('file-updated', { path });
+  }
+
+  async rejectStaging(path: string): Promise<void> {
+    await this.client.post('/api/files/staging/reject', {
+      json: { path },
+    });
+  }
+
+  async getRelevantContext(
+    query: string, 
+    limit: number = 5, 
+    skillContext?: any,
+    clientContext?: { activeTab: string | null, openTabs: string[] }
+  ): Promise<{ path: string, content: string }[]> {
     return (this.client.post('/api/context/relevant', {
-      json: { query, limit, skillContext }
+      json: { query, limit, skillContext, clientContext, workspace: this.workspace }
     }).json() as Promise<any>).then((data: any) => data.results);
   }
 

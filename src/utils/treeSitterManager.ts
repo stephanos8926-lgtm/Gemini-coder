@@ -1,9 +1,9 @@
-import * as Parser from 'web-tree-sitter';
+import * as TreeSitter from 'web-tree-sitter';
 
 export class TreeSitterManager {
   private static instance: TreeSitterManager;
-  private parser: any = null;
-  private grammars: Map<string, any> = new Map();
+  private parser: TreeSitter.Parser | null = null;
+  private grammars: Map<string, TreeSitter.Language> = new Map();
 
   private constructor() {}
 
@@ -16,21 +16,21 @@ export class TreeSitterManager {
 
   public async init() {
     if (this.parser) return;
-    await (Parser as any).init();
-    this.parser = new (Parser as any)();
+    await TreeSitter.Parser.init();
+    this.parser = new TreeSitter.Parser();
   }
 
-  public async loadGrammar(lang: string, wasmPath: string): Promise<any> {
+  public async loadGrammar(lang: string, wasmPath: string): Promise<TreeSitter.Language> {
     if (!this.parser) await this.init();
     
     if (!this.grammars.has(lang)) {
-      const language = await (Parser as any).Language.load(wasmPath);
+      const language = await TreeSitter.Language.load(wasmPath);
       this.grammars.set(lang, language);
     }
     return this.grammars.get(lang)!;
   }
 
-  public getParser(): any {
+  public getParser(): TreeSitter.Parser {
     if (!this.parser) throw new Error('Parser not initialized');
     return this.parser;
   }

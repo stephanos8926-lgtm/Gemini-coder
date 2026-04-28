@@ -4,6 +4,8 @@ import { FolderTree, Sparkles, MessageSquare, Wand2, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as monaco from 'monaco-editor';
 import { activeTabTracker } from '../lib/activeTabTracker';
+import { callGemini } from '../lib/gemini';
+import { settingsStore } from '../lib/settingsStore';
 
 interface CodeEditorProps {
   content: string;
@@ -46,6 +48,56 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor;
+
+    // Register Inline Ghost Text Provider for AI Code Completion
+    monacoInstance.languages.registerInlineCompletionsProvider('*', {
+      provideInlineCompletions: async (model: any, position: any, context: any, token: any) => {
+        // Only trigger if at the end of a line or after typing a character
+        if (context.triggerKind === monaco.languages.InlineCompletionTriggerKind.Explicit) return { items: [] };
+
+        const prefix = model.getValueInRange({
+          startLineNumber: Math.max(1, position.lineNumber - 30),
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+
+        const suffix = model.getValueInRange({
+          startLineNumber: position.lineNumber,
+          startColumn: position.column,
+          endLineNumber: Math.min(model.getLineCount(), position.lineNumber + 30),
+          endColumn: model.getLineMaxColumn(position.lineNumber + 30) || 1,
+        });
+
+        if (!prefix.trim()) return { items: [] };
+
+        try {
+          const appSettings = settingsStore.get();
+          const prompt = `You are an AI code completion engine. Continue the code exactly where the <cursor> is. Do not wrap in markdown blocks, just return the raw text to be inserted. Provide at most 2-3 lines of completion or a single logical block.\n\nCode before cursor:\n${prefix}\n\nCode after cursor:\n${suffix}`;
+          
+          const completion = await callGemini(
+            [{ role: 'user', content: prompt }],
+            appSettings.defaultModel,
+            '', // server side API key
+            'You are an inline code autocomplete ghost text provider.',
+            0.1
+          );
+
+          if (completion && completion.trim().length > 0) {
+            return {
+              items: [{
+                insertText: completion,
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+              }]
+            };
+          }
+        } catch (e) {
+          console.error("AI Completion error", e);
+        }
+        return { items: [] };
+      },
+      freeInlineCompletions: () => {}
+    });
 
     // Configure diagnostics based on settings
     monacoInstance.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
@@ -161,15 +213,25 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
             scrollBeyondLastLine: false,
             automaticLayout: true,
             folding: true,
+            foldingHighlight: true,
+            foldingStrategy: 'indentation',
+            showFoldingControls: 'mouseover',
             lineNumbers: settings.lineNumbers ? 'on' : 'off',
             renderWhitespace: 'none',
             wordWrap: settings.wordWrap,
             tabSize: settings.tabSize,
             contextmenu: true,
-            quickSuggestions: true,
+            quickSuggestions: {
+              other: true,
+              comments: false,
+              strings: true
+            },
             parameterHints: { enabled: true },
             suggestOnTriggerCharacters: true,
             acceptSuggestionOnEnter: 'on',
+            renderLineHighlight: 'all',
+            cursorSmoothCaretAnimation: 'on',
+            smoothScrolling: true,
             scrollbar: {
               vertical: 'visible',
               horizontal: 'visible',

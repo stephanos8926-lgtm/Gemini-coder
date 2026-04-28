@@ -1,6 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
-import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels';
 import { streamGemini } from './lib/gemini';
 import { filesystemService } from './lib/filesystemService';
 import { settingsStore, type Settings } from './lib/settingsStore';
@@ -26,6 +25,7 @@ import { useAppFileOperations } from './hooks/useAppFileOperations';
 import { useAppChat } from './hooks/useAppChat';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ModalsContainer } from './components/modals/ModalsContainer';
+import { CommandPalette } from './components/CommandPalette';
 
 // Multi-tier Modular Stores
 import { useAppStore } from './store/useAppStore';
@@ -58,6 +58,8 @@ const PanelLoader = () => (
     <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Hydrating Panel</span>
   </div>
 );
+
+import { MainLayout } from './components/layout/MainLayout';
 
 /**
  * @component App
@@ -95,7 +97,6 @@ export default function App() {
     RW_messages, 
     RW_isStreaming, 
     RW_activeModel, 
-    RW_systemModifier,
     setMessages,
     setActiveModel
   } = useChatStore();
@@ -209,7 +210,7 @@ export default function App() {
     fileStore: RW_fileStore,
     setFileStore: setFileStoreCompat,
     setShowKeyModal,
-    systemModifier: RW_systemModifier
+    systemModifier: useChatStore.getState().RW_systemModifier
   });
 
   const handleSendMessage = chatHook.handleSendMessage;
@@ -249,101 +250,15 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden relative">
           {user ? (
             <div className="flex-1 flex h-full">
-              {/* Professional Desktop IDE Layout (3-Column) */}
-              <div className="hidden sm:flex flex-1 h-full overflow-hidden">
-                {/* @ts-ignore */}
-                <PanelGroup direction="horizontal">
-                  {/* Left Sidebar: File Explorer */}
-                  {isLeftSidebarOpen && (
-                    <>
-                      <Panel defaultSize={15} minSize={10} maxSize={30}>
-                        <div className="h-full bg-[#252526] flex flex-col">
-                          <ErrorBoundary name="File Tree">
-                            <FileTree
-                              files={RW_fileStore}
-                              selectedFile={RW_activeFile}
-                              onSelect={setActiveFile}
-                              onDownload={fileOperationsHook.handleDownloadFile}
-                              onDownloadZip={fileOperationsHook.handleDownloadZip}
-                              onImportZip={() => {}} 
-                              workspaceName={RW_workspaceName}
-                              onDelete={fileOperationsHook.handleDeleteFile}
-                            />
-                          </ErrorBoundary>
-                        </div>
-                      </Panel>
-                      <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
-                    </>
-                  )}
-
-                  {/* Main Creative Center */}
-                  <Panel defaultSize={isLeftSidebarOpen ? 55 : isRightSidebarOpen ? 70 : 100}>
-                    {/* @ts-ignore */}
-                    <PanelGroup direction="vertical">
-                      {/* Top: Tabs & Editor */}
-                      <Panel defaultSize={showTerminal ? 70 : 100} minSize={30}>
-                        <div className="flex flex-col h-full bg-[#1e1e1e]">
-                          <TabBar />
-                          <div className="flex-1 overflow-hidden">
-                            <ErrorBoundary name="Code Editor">
-                              <Suspense fallback={<PanelLoader />}>
-                                <CodeEditor
-                                  content={RW_activeFile ? RW_fileStore[RW_activeFile]?.content || '' : ''}
-                                  filename={RW_activeFile || ''}
-                                  settings={settings}
-                                />
-                              </Suspense>
-                            </ErrorBoundary>
-                          </div>
-                        </div>
-                      </Panel>
-
-                      {/* Bottom: Utility Panel (Terminal/Preview/Debug) */}
-                      {showTerminal && (
-                        <>
-                          <PanelResizeHandle className="h-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
-                          <Panel defaultSize={30} minSize={20}>
-                            <ErrorBoundary name="Bottom Panel">
-                              <BottomPanel
-                                files={RW_fileStore}
-                                activeTab={activeBottomTab}
-                                onTabChange={setActiveBottomTab}
-                                onSelectFile={setActiveFile}
-                                onDownloadFile={fileOperationsHook.handleDownloadFile}
-                                onDownloadZip={fileOperationsHook.handleDownloadZip}
-                                onImportZip={() => {}}
-                                onDeleteFile={fileOperationsHook.handleDeleteFile}
-                              />
-                            </ErrorBoundary>
-                          </Panel>
-                        </>
-                      )}
-                    </PanelGroup>
-                  </Panel>
-
-                  {/* Right Sidebar: AI Contextual Assistant */}
-                  {isRightSidebarOpen && (
-                    <>
-                      <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
-                      <Panel defaultSize={30} minSize={20} maxSize={40}>
-                        <ErrorBoundary name="AI Chat">
-                          <div className="h-full bg-[#252526]">
-                            <Suspense fallback={<PanelLoader />}>
-                              <ChatPanel
-                                messages={RW_messages}
-                                onSendMessage={handleSendMessage}
-                                onNewChat={() => setMessages([])}
-                                isStreaming={RW_isStreaming}
-                                settings={settings}
-                                />
-                            </Suspense>
-                          </div>
-                        </ErrorBoundary>
-                      </Panel>
-                    </>
-                  )}
-                </PanelGroup>
-              </div>
+              {/* Professional Desktop IDE Layout */}
+              <MainLayout 
+                settings={settings}
+                showTerminal={showTerminal}
+                onSendMessage={handleSendMessage}
+                onDownloadFile={fileOperationsHook.handleDownloadFile}
+                onDownloadZip={fileOperationsHook.handleDownloadZip}
+                onDeleteFile={fileOperationsHook.handleDeleteFile}
+              />
 
               {/* Mobile Adaptive Handset View */}
               <div className="sm:hidden flex-1 h-full relative">
@@ -438,6 +353,24 @@ export default function App() {
           </div>
         </AdaptiveBottomSheet>
 
+        <CommandPalette 
+          isOpen={showCommandPalette}
+          onClose={() => setShowCommandPalette(false)}
+          files={Object.keys(RW_fileStore)}
+          workspaces={projects.map(p => p.name)}
+          onSelectFile={setActiveFile}
+          onSelectWorkspace={setWorkspaceName}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onAiAction={(type) => {
+            setRightSidebarOpen(true);
+            setTimeout(() => handleSendMessage(`Please ${type} the current file.`), 100);
+          }}
+          onGenerateReadme={() => {
+            setRightSidebarOpen(true);
+            handleSendMessage("Generate a comprehensive README.md for this project.");
+          }}
+        />
+
         <ModalsContainer 
           showProjectModal={false} 
           setShowProjectModal={() => {}}
@@ -467,3 +400,4 @@ export default function App() {
     </div>
   );
 }
+

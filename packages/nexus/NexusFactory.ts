@@ -1,5 +1,8 @@
 import { ForgeGuard } from './guard/ForgeGuard';
 import { PersistenceManager } from './utils/PersistenceManager';
+import { TUISensor } from './guard/sensors/TUISensor';
+import { FirestoreSensor } from './guard/sensors/FirestoreSensor';
+import { LocalFileSensor } from './guard/sensors/LocalFileSensor';
 
 export class NexusFactory {
   private static instance: NexusFactory;
@@ -14,9 +17,9 @@ export class NexusFactory {
     return NexusFactory.instance;
   }
 
-  public createForgeGuard(moduleName: string, persistence: PersistenceManager): ForgeGuard {
-    // In the future this can be pulled from container or configured dynamically
-    return ForgeGuard.init(moduleName, {}, persistence);
+  public createForgeGuard(moduleName: string, persistence?: PersistenceManager): ForgeGuard {
+    const pm = persistence || this.getPersistenceManager();
+    return ForgeGuard.init(moduleName, {}, pm);
   }
 
   public getPersistenceManager(): PersistenceManager {
@@ -24,5 +27,18 @@ export class NexusFactory {
       this.container.set('PersistenceManager', PersistenceManager.getInstance());
     }
     return this.container.get('PersistenceManager');
+  }
+
+  /**
+   * Registers standard suite of sensors to a guard instance
+   */
+  public setupStandardSensors(guard: ForgeGuard): void {
+    guard.registerSensor('tui', new TUISensor());
+    guard.registerSensor('local-file', new LocalFileSensor(process.cwd()));
+    
+    // Conditional sensors based on environment
+    if (process.env.FIREBASE_PROJECT_ID) {
+      guard.registerSensor('firestore', new FirestoreSensor());
+    }
   }
 }

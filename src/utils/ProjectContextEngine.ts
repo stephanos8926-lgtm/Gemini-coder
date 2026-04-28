@@ -1,32 +1,64 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { ForgeGuard } from './ForgeWrappers';
-import { symbolGraph } from '../lib/symbolGraph';
-import { embeddingEngine } from '../lib/embeddingEngine';
+import { SymbolGraph } from '../lib/symbolGraph';
+import { EmbeddingEngine } from '../lib/embeddingEngine';
 import { activeTabTracker } from '../lib/activeTabTracker';
+
+import { nexusPersist } from '../lib/persistence/NexusPersistence';
+import { TenantContext, PersistenceTier } from '../lib/persistence/types';
 
 export interface FileIndexEntry {
   path: string;
   size: number;
   lastModified: number;
   summary?: string;
-  intent?: string; // Extracted from README or comments
+  intent?: string; 
+  successWeight?: number; // Persisted weight
 }
 
 export class ProjectContextEngine {
-  private static instance: ProjectContextEngine;
+  private static instances: Map<string, ProjectContextEngine> = new Map();
   private index: Map<string, FileIndexEntry> = new Map();
-  private docIndex: Map<string, string> = new Map(); // path -> content
+  private docIndex: Map<string, string> = new Map(); 
   private guard = ForgeGuard.init('context-engine');
   private isIndexing = false;
+  private tenant: TenantContext;
 
-  private constructor() {}
+  private constructor(tenant: TenantContext) {
+    this.tenant = tenant;
+    this.loadPersistedWeights();
+  }
 
-  public static getInstance(): ProjectContextEngine {
-    if (!ProjectContextEngine.instance) {
-      ProjectContextEngine.instance = new ProjectContextEngine();
+  private get symbols() {
+    return SymbolGraph.getInstance(this.tenant);
+  }
+
+  private get embeddings() {
+    return EmbeddingEngine.getInstance(this.tenant);
+  }
+
+  private async loadPersistedWeights() {
+    const weights = await nexusPersist.get<Record<string, number>>('context_weights', this.tenant);
+    if (weights) {
+      Object.entries(weights).forEach(([path, weight]) => {
+        const entry = this.index.get(path);
+        if (entry) {
+          entry.successWeight = weight;
+        }
+      });
     }
-    return ProjectContextEngine.instance;
+  }
+
+  public static getInstance(tenant?: TenantContext): ProjectContextEngine {
+    // For client-side backward compatibility if tenant is not provided
+    const effectiveTenant = tenant || { userId: 'default-user', workspaceId: 'default-workspace' };
+    const key = `${effectiveTenant.userId}:${effectiveTenant.workspaceId}`;
+    
+    if (!ProjectContextEngine.instances.has(key)) {
+      ProjectContextEngine.instances.set(key, new ProjectContextEngine(effectiveTenant));
+    }
+    return ProjectContextEngine.instances.get(key)!;
   }
 
   /**
@@ -62,12 +94,12 @@ export class ProjectContextEngine {
             
             // Index symbols for TS/JS files
             if (entry.name.match(/\.(ts|tsx|js|jsx)$/)) {
-              await symbolGraph.indexFile(relPath, content);
+              await this.symbols.indexFile(relPath, content);
             }
 
             // Index embeddings for semantic search
             try {
-              await embeddingEngine.indexFile(relPath, content);
+              await this.embeddings.indexFile(relPath, content);
             } catch (e) {
               console.warn(`[ContextEngine] Failed to embed ${relPath}:`, e);
             }
@@ -131,55 +163,32 @@ export class ProjectContextEngine {
   public async getRelevantContext(
     query: string, 
     limit: number = 5, 
-    skillContext?: { skillName: string, stepName: string }
+    skillContext?: { skillName: string, stepName: string },
+    clientContext?: { activeTab: string | null, openTabs: string[] }
   ): Promise<{ path: string, content: string }[]> {
     const q = query.toLowerCase();
     
-    // 1. Active Tab Priority (Working Set)
-    const activeTab = activeTabTracker.getActiveTab();
-    const openTabs = new Set(activeTabTracker.getOpenTabs());
+    // 1. Context Priority (Working Set)
+    const activeTab = clientContext?.activeTab ?? activeTabTracker.getActiveTab();
+    const openTabs = clientContext?.openTabs ? new Set(clientContext.openTabs) : new Set(activeTabTracker.getOpenTabs());
 
     // 2. Symbol-based scoring (Advanced Context)
-    const relatedSymbols = symbolGraph.getRelatedSymbols(query);
+    const relatedSymbols = this.symbols.getRelatedSymbols(query);
     const symbolPaths = new Set(relatedSymbols.map(s => s.file));
 
     // 3. Semantic Search (Embeddings)
     let semanticResults: string[] = [];
     try {
-      const semanticMatches = await embeddingEngine.search(query, limit);
+      const semanticMatches = await this.embeddings.search(query, limit);
       semanticResults = semanticMatches.map(m => m.path);
     } catch (e) {
       console.warn('[ContextEngine] Semantic search failed:', e);
     }
 
-    // 4. Scoring logic
     const scored = Array.from(this.index.values()).map(entry => {
-      let score = 0;
-      const pathParts = entry.path.toLowerCase().split('/');
-      const fileName = pathParts[pathParts.length - 1];
-      
-      // Active Tab is highest priority
-      if (entry.path === activeTab) score += 50;
-      if (openTabs.has(entry.path)) score += 20;
-
-      // Symbol matches
-      if (symbolPaths.has(entry.path)) score += 30;
-
-      // Semantic matches
-      if (semanticResults.includes(entry.path)) score += 25;
-
-      // Skill-based context priority
-      if (skillContext) {
-        // Boost files that seem related to the skill step
-        if (entry.path.toLowerCase().includes(skillContext.skillName.toLowerCase())) score += 40;
-        if (entry.path.toLowerCase().includes(skillContext.stepName.toLowerCase())) score += 30;
-      }
-
-      // Keyword matches
-      if (fileName.includes(q)) score += 10;
-      if (entry.path.toLowerCase().includes(q)) score += 5;
-      if (entry.intent?.toLowerCase().includes(q)) score += 3;
-      
+      const score = this.calculateScore(entry, {
+        q, activeTab, openTabs, symbolPaths, semanticResults, skillContext
+      });
       return { entry, score };
     });
 
@@ -192,8 +201,6 @@ export class ProjectContextEngine {
     // 6. Fetch contents for top results
     const results = await Promise.all(top.map(async ({ entry }) => {
       try {
-        // In a real enterprise tool, we'd use vector embeddings here.
-        // For now, we use high-quality keyword matching.
         const content = await fs.readFile(entry.path, 'utf8');
         return { path: entry.path, content: content.substring(0, 5000) }; // Cap at 5k chars
       } catch (e) {
@@ -202,6 +209,59 @@ export class ProjectContextEngine {
     }));
 
     return results.filter((r): r is { path: string, content: string } => r !== null);
+  }
+
+  /**
+   * Tracks a successful interaction for a given path.
+   * Increments successWeight and persists it via NexusPersistence.
+   */
+  public async trackSuccess(path: string, weightBoost: number = 5): Promise<void> {
+    const entry = this.index.get(path);
+    if (entry) {
+      const currentWeight = entry.successWeight || 0;
+      entry.successWeight = currentWeight + weightBoost;
+      
+      // Persist all weights (In an enterprise system, we might throttle this or persist incrementally)
+      const weights: Record<string, number> = {};
+      this.getIndex().forEach(e => {
+        if (e.successWeight) weights[e.path] = e.successWeight;
+      });
+      await nexusPersist.set('context_weights', weights, { tier: PersistenceTier.LOCAL, tenant: this.tenant });
+    }
+  }
+
+  /**
+   * Scoring logic with success weighting
+   */
+  private calculateScore(entry: FileIndexEntry, context: { 
+    q: string, 
+    activeTab: string | null, 
+    openTabs: Set<string>, 
+    symbolPaths: Set<string>,
+    semanticResults: string[]
+    skillContext?: any
+  }): number {
+    let score = 0;
+    const pathParts = entry.path.toLowerCase().split('/');
+    const fileName = pathParts[pathParts.length - 1];
+    
+    if (entry.path === context.activeTab) score += 50;
+    if (context.openTabs.has(entry.path)) score += 20;
+    if (context.symbolPaths.has(entry.path)) score += 30;
+    if (context.semanticResults.includes(entry.path)) score += 25;
+
+    score += (entry as any).successWeight || 0;
+
+    if (context.skillContext) {
+      if (entry.path.toLowerCase().includes(context.skillContext.skillName.toLowerCase())) score += 40;
+      if (entry.path.toLowerCase().includes(context.skillContext.stepName.toLowerCase())) score += 30;
+    }
+
+    if (fileName.includes(context.q)) score += 10;
+    if (entry.path.toLowerCase().includes(context.q)) score += 5;
+    if (entry.intent?.toLowerCase().includes(context.q)) score += 3;
+    
+    return score;
   }
 
   public serializeIndex(): string {

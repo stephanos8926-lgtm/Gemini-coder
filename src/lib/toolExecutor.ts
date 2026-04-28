@@ -51,19 +51,15 @@ export async function executeTool(name: string, args: any, context: any) {
 }
 
 async function handleReadFile(args: { path: string }) {
-  // toolExecutor needs WORKSPACE_ROOT context.
-  // Assuming relative path from current user's workspace
-  const workspaceRoot = process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces');
   const { getSafePath } = await import('../utils/pathUtility');
-  const safePath = getSafePath(args.path, { role: 'user' }, workspaceRoot, ''); // Needs user context
+  const safePath = getSafePath(args.path, { role: 'user' }, ''); 
   const content = await fs.readFile(safePath, 'utf-8');
   return { path: args.path, content };
 }
 
 async function handleWriteFile(args: { path: string, content: string }) {
-  const workspaceRoot = process.env.WORKSPACE_ROOT || path.join(process.cwd(), 'workspaces');
   const { getSafePath } = await import('../utils/pathUtility');
-  const safePath = getSafePath(args.path, { role: 'user' }, workspaceRoot, '');
+  const safePath = getSafePath(args.path, { role: 'user' }, '');
   await fs.writeFile(safePath, args.content, 'utf-8');
   return { result: 'File written successfully' };
 }

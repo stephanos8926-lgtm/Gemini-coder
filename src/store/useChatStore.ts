@@ -24,6 +24,11 @@ interface ChatState {
  * @store useChatStore
  * @description Centralized communication state for AI interactions and conversation context with persistence.
  */
+import { createNexusStorage } from '../lib/persistence/NexusPersistence';
+import { createJSONStorage } from 'zustand/middleware';
+
+// ... existing imports ...
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set) => ({
@@ -41,7 +46,8 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'forge-chat-storage',
-      partialize: (state) => ({ 
+      storage: createJSONStorage(() => createNexusStorage()),
+      partialize: (state): any => ({ 
         RW_messages: state.RW_messages, 
         RW_activeModel: state.RW_activeModel,
         RW_systemModifier: state.RW_systemModifier

@@ -1,27 +1,28 @@
-import eruda from 'eruda';
+// Protect fetch from being overwritten
+if (typeof window !== 'undefined') {
+  const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+  if (desc && desc.get && !desc.set && desc.configurable) {
+    Object.defineProperty(window, 'fetch', {
+      get: desc.get,
+      set: function() { console.warn('Eruda: ignoring fetch override'); },
+      configurable: true,
+      enumerable: desc.enumerable
+    });
+  }
+}
 
 const ERUDA_KEY = 'forge_eruda_enabled';
 
 export function isErudaEnabled(): boolean {
-  return localStorage.getItem(ERUDA_KEY) === 'true';
+  return false;
 }
 
 export function setErudaEnabled(enabled: boolean) {
-  localStorage.setItem(ERUDA_KEY, enabled.toString());
   if (enabled) {
-    eruda.init({
-      tool: ['console', 'elements', 'info'] // Exclude 'network' which might be trying to mock fetch
-    });
-  } else {
-    eruda.destroy();
+    console.warn('Eruda (Mobile Debug Console) cannot be enabled in this environment because it conflicts with AI Studio iframe sandbox restrictions (fetch is non-configurable). It has been disabled for stability.');
   }
 }
 
 export function initEruda() {
-  if (isErudaEnabled()) {
-    eruda.init({
-      tool: ['console', 'elements', 'info']
-    });
-    console.log('Eruda initialized.');
-  }
+  // no-op
 }

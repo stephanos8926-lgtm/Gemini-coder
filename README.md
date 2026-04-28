@@ -13,7 +13,7 @@ RapidForge (formerly GIDE) is a high-performance, modular Integrated Development
 ## 🌟 Professional Features
 
 - **SwiftCache Architecture**: Optimized for industrial-scale codebases with sub-10ms retrieval latency.
-- **Intelligent Refactoring**: Professional-tier AI chat experience with shiki-powered highlighting and visual staging.
+- **Intelligent Refactoring**: Professional-tier AI chat experience with shiki-powered highlighting and context-aware suggestions.
 - **Modular Brand System**: Centralized Branding Configuration (`appConfig.ts`) for easy organizational white-labeling.
 - **Responsive Workspace**: Desktop-first precision with mobile-adaptive ergonomics.
 

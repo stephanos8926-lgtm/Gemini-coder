@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Terminal, Play, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronRight, Command, Sparkles } from 'lucide-react';
+import { Terminal, Trash2, AlertCircle, CheckCircle2, Loader2, ChevronRight, Command, Sparkles } from 'lucide-react';
+import { ToolResultRenderer } from './panels/tools/ToolResultRenderer';
 import { motion, AnimatePresence } from 'motion/react';
 import { filesystemService } from '../lib/filesystemService';
 import { chatService } from '../lib/chatService';
@@ -125,17 +126,13 @@ export function ToolsPanel() {
                 </span>
               </div>
               
-              {res.stdout && (
-                <pre className="text-[#cccccc] whitespace-pre-wrap pl-5 border-l-2 border-[#3c3c3c] py-1">
-                  {res.stdout}
-                </pre>
-              )}
-              
-              {res.stderr && (
-                <pre className="text-red-400 whitespace-pre-wrap pl-5 border-l-2 border-red-900/50 py-1 bg-red-900/10">
-                  {res.stderr}
-                </pre>
-              )}
+              {res.stdout || res.stderr ? (
+                <ToolResultRenderer 
+                  stdout={res.stdout} 
+                  stderr={res.stderr}
+                  success={res.success} 
+                />
+              ) : null}
 
               <div className="flex items-center gap-2 pl-5">
                 {res.success ? (

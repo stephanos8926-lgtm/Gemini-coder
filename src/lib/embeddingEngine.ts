@@ -1,5 +1,4 @@
-import { get, set } from 'idb-keyval';
-import { symbolGraph } from './symbolGraph';
+import { SymbolGraph } from './symbolGraph';
 
 const EMBEDDING_CACHE_KEY = 'gide_embeddings';
 
@@ -11,20 +10,29 @@ export interface CodeEmbedding {
 }
 
 export class EmbeddingEngine {
-  private static instance: EmbeddingEngine;
+  private static instances: Map<string, EmbeddingEngine> = new Map();
   private cache: Map<string, CodeEmbedding> = new Map();
+  private tenant: { userId: string, workspaceId: string };
 
-  private constructor() {}
+  private constructor(tenant: { userId: string, workspaceId: string }) {
+    this.tenant = tenant;
+    this.init();
+  }
 
-  public static getInstance(): EmbeddingEngine {
-    if (!EmbeddingEngine.instance) {
-      EmbeddingEngine.instance = new EmbeddingEngine();
+  public static getInstance(tenant?: { userId: string, workspaceId: string }): EmbeddingEngine {
+    const effectiveTenant = tenant || { userId: 'default', workspaceId: 'default' };
+    const key = `${effectiveTenant.userId}:${effectiveTenant.workspaceId}`;
+    if (!EmbeddingEngine.instances.has(key)) {
+      EmbeddingEngine.instances.set(key, new EmbeddingEngine(effectiveTenant));
     }
-    return EmbeddingEngine.instance;
+    return EmbeddingEngine.instances.get(key)!;
   }
 
   public async init() {
-    const stored = await get(EMBEDDING_CACHE_KEY);
+    if (typeof window === 'undefined' || !window.indexedDB) return;
+    const { get } = await import('idb-keyval');
+    const key = `embeddings:${this.tenant.userId}:${this.tenant.workspaceId}`;
+    const stored = await get(key);
     if (stored) {
       this.cache = new Map(Object.entries(stored));
     }
@@ -51,7 +59,7 @@ export class EmbeddingEngine {
 
   public async indexFile(path: string, content: string) {
     // Semantic Chunking: Embed by symbol (function/class) if available
-    const symbols = symbolGraph.getFileSymbols(path);
+    const symbols = SymbolGraph.getInstance(this.tenant).getFileSymbols(path);
     
     if (symbols.length > 0) {
       for (const symbol of symbols) {
@@ -80,7 +88,10 @@ export class EmbeddingEngine {
   }
 
   private async save() {
-    await set(EMBEDDING_CACHE_KEY, Object.fromEntries(this.cache));
+    if (typeof window === 'undefined' || !window.indexedDB) return;
+    const { set } = await import('idb-keyval');
+    const key = `embeddings:${this.tenant.userId}:${this.tenant.workspaceId}`;
+    await set(key, Object.fromEntries(this.cache));
   }
 
   public async search(query: string, limit: number = 5): Promise<CodeEmbedding[]> {

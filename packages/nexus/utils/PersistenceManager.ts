@@ -86,4 +86,22 @@ export class PersistenceManager {
         await set(`signal_${Date.now()}`, { signal, ttl });
     }
   }
+
+  public async getRecentSignals(limit: number = 50): Promise<any[]> {
+    if (!isServer) return [];
+    
+    // We open a direct read connection here for simplicity in this turn,
+    // though ideally it would go through the worker to keep file handles centralized.
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database('nexus_telemetry.db', { readonly: true });
+    try {
+        const stmt = db.prepare('SELECT * FROM signal_backlog ORDER BY timestamp DESC LIMIT ?');
+        return stmt.all(limit).map((row: any) => ({
+            ...row,
+            signal: JSON.parse(row.signal)
+        }));
+    } finally {
+        db.close();
+    }
+  }
 }

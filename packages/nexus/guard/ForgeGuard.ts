@@ -89,9 +89,10 @@ export class ForgeGuard {
       }
     }
 
+    // Always persist for global telemetry audit trail
+    this.persistence.saveSignal(s, 86400 * 1000); // 24h TTL
+
     if ((!handled || s.priority === 'CRITICAL') && this.protocol) {
-      this.persistence.saveSignal(s, 86400000);
-      
       if (s.priority === 'CRITICAL' && (s.payload as any)?.filePath) {
         // Delegate to protocol (GIDE implementation) instead of hardcoded scanFile
         await this.protocol.onDangerousIssue((s.payload as any).filePath, []); 

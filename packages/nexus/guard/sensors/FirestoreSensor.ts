@@ -1,6 +1,6 @@
 import { BaseSensor } from '../BaseSensor';
 import { Signal } from '../Sensor';
-import { db } from '../../../firebase'; // assumes firebase setup
+import { db } from '../../../../src/firebase'; // assumes firebase setup
 import { collection, addDoc } from 'firebase/firestore';
 
 export class FirestoreSensor extends BaseSensor {

@@ -33,12 +33,19 @@ This document outlines the strategic roadmap and architectural milestones achiev
 - [ ] **Gesture Interactivity**: Implement swipe-to-switch between Chat and Code Editor on small screens.
 - [ ] **Adaptive Bottom Sheets**: Replace standard modals with native-feeling responsive bottom sheets.
 
-### Phase B: Advanced Persistence
-- [ ] **IndexedDB Mirroring**: Synchronize the SQLite cache to the browser via `idb-keyval` for instant session recovery.
-- [ ] **Proactive Sync**: Integrate `chokidar` for real-time invalidation on external filesystem events.
+### Phase B: Advanced Persistence & Multi-Tenant Boundaries
+- [x] **Strict Multi-Tenant Partitioning**: Refactored `NexusPersistence`, `SymbolGraph`, `ProjectContextEngine`, and `EmbeddingEngine` to use strict composite keys (`userId:workspaceId`). Zero cross-project or cross-user data leakage internally.
+- [ ] **Remote Sync Logic**: Implement conflict-free distributed data type (CRDT) patterns alongside Firebase Firestore for accurate offline-to-online synchronisation.
+- [ ] **Symbol Aging / Garbage Collection**: Context weights, embeddings, and symbols degrade over time. If a symbol isn't accessed or modified within a TTL (Time-to-Live) window, it decays to save memory and token weight.
 
-### Phase C: Semantic Search
-- [ ] **Vector Cache**: Implement local vector embeddings for files and symbols to enable true semantic code navigation.
+### Phase C: Semantic Search & Intelligence
+- [x] **Vector Cache**: Implement local vector embeddings for files and symbols to enable true semantic code navigation.
+- [ ] **Reusable Skills & Sub-Agents**: Implement a routing engine where main prompt can be delegated to specialized agents (e.g., Styling Agent, Security Auditor Agent) sharing a tightly scoped view of the AST.
+
+### Phase D: Mobile GUI & Ecosystem Parity
+- [ ] **OpenWebUI-style Input**: Dynamic context integration directly in the chat bar (`@` file inclusions, `#` workspace references, token budget indicators).
+- [ ] **CLI Workflow Parity**: Provide raw sandboxed terminal execution in agent loops without blocking for user confirmation, similar to Claude Code or Qwen IDE.
+- [ ] **Mobile-First UX Paradigms**: Shift to keyboard-attached action bars, bottom sheet navigations, and swipe-driven branching for chat threads.
 
 ---
 *Maintainer: Forge Systems Architecture*

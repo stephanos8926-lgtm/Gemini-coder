@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { TelemetryMetrics } from './TelemetryAggregator';
+import { ForgeGuardSignals } from '../components/admin/ForgeGuardSignals';
 
 export const AdminDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<TelemetryMetrics | null>(null);
@@ -41,6 +42,10 @@ export const AdminDashboard: React.FC = () => {
           <h2 className="text-lg font-bold mb-2">AI Insights & Recommendations</h2>
           <pre className="whitespace-pre-wrap text-sm">{insights}</pre>
         </div>
+      </div>
+
+      <div className="mt-8">
+        <ForgeGuardSignals />
       </div>
     </div>
   );

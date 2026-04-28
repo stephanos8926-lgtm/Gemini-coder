@@ -16,10 +16,11 @@ import { HttpClient } from 'isomorphic-git';
 import { LogTool } from './packages/nexus/telemetry/LogTool';
 import { ForgeGuard } from './packages/nexus/guard/ForgeGuard';
 import { FileCacheManager } from './src/utils/FileCacheManager';
+import { BackgroundTaskManager } from './src/lib/backgroundTaskManager';
 import { ProjectContextEngine } from './src/utils/ProjectContextEngine';
 import { ServerWatcher } from './src/lib/serverWatcher';
 import { logRedirector } from './src/utils/LogRedirector';
-import { symbolGraph } from './src/lib/symbolGraph';
+import { SymbolGraph } from './src/lib/symbolGraph';
 import { liveDebugger } from './src/lib/liveDebugger';
 import { deepProfiler } from './src/lib/deepProfiler';
 import { shadowExecution } from './packages/nexus/utils/ShadowExecutionEngine';
@@ -51,16 +52,27 @@ const logger = new LogTool('server');
 const nexusFactory = NexusFactory.getInstance();
 const persistenceManager = nexusFactory.getPersistenceManager();
 const guard = nexusFactory.createForgeGuard('server', persistenceManager);
-guard.registerSensor('tui', new TUISensor());
+nexusFactory.setupStandardSensors(guard);
 
 // Global Process Error Handlers
 process.on('uncaughtException', (error) => {
+  guard.emitSignal({
+    type: 'error',
+    payload: { message: error.message, stack: error.stack },
+    source: 'process_uncaught_exception',
+    priority: 'CRITICAL'
+  });
   logger.error('FATAL UNCAUGHT EXCEPTION', error);
   // Give Winston/ForgeGuard a moment to flush before exiting
   setTimeout(() => process.exit(1), 1000);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+  guard.emitSignal({
+    type: 'error',
+    payload: reason instanceof Error ? { message: reason.message, stack: reason.stack } : { reason: String(reason) },
+    source: 'process_unhandled_rejection'
+  });
   logger.error('UNHANDLED PROMISE REJECTION', reason instanceof Error ? reason : new Error(String(reason)));
 });
 
@@ -104,7 +116,7 @@ const gitHttpClient: HttpClient = {
 import { fork } from 'child_process';
 import chokidar from 'chokidar';
 import admin from 'firebase-admin';
-import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
+import { initializeApp, getApps, getApp, cert, App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import multer from 'multer';
@@ -116,7 +128,14 @@ import { env } from './server-config';
 // @ts-ignore — no types needed for rate-limit config
 
 // Global Error Handler Middleware
-function errorHandler(err: express.Error | Error, req: express.Request, res: express.Response, next: express.NextFunction) {
+function errorHandler(err: any, req: express.Request, res: express.Response, next: express.NextFunction) {
+  guard.emitSignal({
+    type: 'error',
+    payload: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+    source: 'http_error_middleware',
+    context: { path: req.path, method: req.method }
+  });
+
   logger.error('Unhandled error', err, { 
     path: req.path,
     method: req.method 
@@ -186,7 +205,7 @@ async function initializeFirebase() {
       logger.info('Loaded firebase config', { config });
     }
     
-    let app: admin.app.App;
+    let app: App;
     const existingApps = getApps();
     
     if (existingApps.length === 0) {
@@ -211,11 +230,11 @@ async function initializeFirebase() {
         app = initializeApp({
           credential: admin.credential.applicationDefault(),
           projectId: config.projectId,
-        }) as unknown as admin.app.App;
+        });
         logger.info('Firebase Admin initialized with applicationDefault (Note: this often lacks permissions unless FIREBASE_SERVICE_ACCOUNT_KEY is set)', { projectId: config.projectId });
       }
     } else {
-      app = existingApps[0] as unknown as admin.app.App;
+      app = existingApps[0];
       logger.info('Firebase Admin already initialized, using existing app');
     }
     
@@ -767,6 +786,20 @@ async function startServer() {
     }
   });
 
+  app.get('/api/telemetry/stats', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      // Only admins or the owner should see raw telemetry
+      if (req.user.role !== 'admin' && req.user.email !== 'stedor7@gmail.com') {
+        return res.status(403).json({ error: 'Permission denied' });
+      }
+
+      const signals = await persistenceManager.getRecentSignals(100);
+      res.json({ signals });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/files', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
@@ -1293,6 +1326,48 @@ async function startServer() {
     }
   });
 
+  app.post('/api/files/staging/accept', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      await guard.protect(async () => {
+        const { path: filePath, workspace } = z.object({ path: z.string(), workspace: z.string().default('') }).parse(req.body);
+        const stagedPath = path.join(process.cwd(), '.staging', filePath);
+        const targetPath = getSafePath(filePath, req.user, workspace);
+
+        if (!fsSync.existsSync(stagedPath)) {
+          throw new Error('Staged file not found');
+        }
+
+        const content = await fs.readFile(stagedPath, 'utf-8');
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        await fileCache.updateFile(req.user.uid, filePath, targetPath, content);
+        
+        // Clean up
+        await fs.unlink(stagedPath);
+        
+        res.json({ success: true });
+      }, { requestId: req.headers['x-request-id'] as string, path: '/api/files/staging/accept' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post('/api/files/staging/reject', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      await guard.protect(async () => {
+        const { path: filePath } = z.object({ path: z.string() }).parse(req.body);
+        const stagedPath = path.join(process.cwd(), '.staging', filePath);
+
+        if (fsSync.existsSync(stagedPath)) {
+          await fs.unlink(stagedPath);
+        }
+        
+        res.json({ success: true });
+      }, { requestId: req.headers['x-request-id'] as string, path: '/api/files/staging/reject' });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/files/create', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
@@ -1366,6 +1441,7 @@ async function startServer() {
           '--exclude-dir=.git',
           '--exclude-dir=dist',
           '--exclude-dir=.next',
+          '--exclude-dir=.staging',
           '--max-count=100', // Limit results
           query as string,
           root
@@ -1411,9 +1487,10 @@ async function startServer() {
   app.post('/api/chat', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
-        const { messages, model, apiKey, systemInstruction, temperature, skillName, skillState } = req.body;
+        const { messages, model, apiKey, systemInstruction, temperature, skillName, skillState, workspace } = req.body;
         const userId = req.user.uid || 'anonymous';
-        const cacheKey = `${userId}-${model}`;
+        const workspaceId = workspace || 'default';
+        const cacheKey = `${userId}:${workspaceId}:${model}`;
 
         // Skill-based orchestration
         if (skillName) {
@@ -1566,10 +1643,16 @@ async function startServer() {
 
   app.get('/api/security/audit', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // Flatten global issues map
-      const allIssues = Array.from(globalSecurityIssues.entries()).flatMap(([file, issues]) => 
-        issues.map(i => ({ ...i, id: crypto.randomUUID() }))
-      );
+      const workspace = (req.query.workspace as string) || req.user.uid;
+      const tenantPrefix = `${workspace}:`;
+
+      // Filter global issues map by tenant prefix
+      const allIssues = Array.from(globalSecurityIssues.entries())
+        .filter(([key]) => key.startsWith(tenantPrefix))
+        .flatMap(([key, issues]) => {
+          const filePath = key.replace(tenantPrefix, '');
+          return issues.map(i => ({ ...i, path: filePath, id: crypto.randomUUID() }));
+        });
       
       res.json({
         issues: allIssues,
@@ -1588,9 +1671,13 @@ async function startServer() {
 
   app.get('/api/context/stats', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
+      const workspace = (req.query.workspace as string) || req.user.uid;
+      const tenant = { userId: req.user.uid, workspaceId: workspace };
+      const symbols = SymbolGraph.getInstance(tenant);
+
       res.json({
-        stats: symbolGraph.getIndexStats(),
-        recentSymbols: symbolGraph.getRecentSymbols(15)
+        stats: symbols.getIndexStats(),
+        recentSymbols: symbols.getRecentSymbols(15)
       });
     } catch (e) {
       logger.error('Failed to fetch context stats', e instanceof Error ? e : new Error(String(e)));
@@ -1759,10 +1846,11 @@ async function startServer() {
 
   app.post('/api/context/relevant', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const { query, limit, skillContext } = req.body;
+      const { query, limit, skillContext, clientContext, workspace } = req.body;
       if (typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
       
-      const results = await ProjectContextEngine.getInstance().getRelevantContext(query, limit, skillContext);
+      const tenant = { userId: req.user.uid, workspaceId: workspace || 'default' };
+      const results = await ProjectContextEngine.getInstance(tenant).getRelevantContext(query, limit, skillContext, clientContext);
       res.json({ results });
     } catch (error) {
       logger.error('Failed to get relevant context', error as any);
@@ -1775,13 +1863,64 @@ async function startServer() {
     res.json({ index });
   });
 
+  app.get('/api/tasks', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
+    const workspace = (req.query.workspace as string) || req.user.uid;
+    const tenant = { userId: req.user.uid, workspaceId: workspace };
+    const tasks = BackgroundTaskManager.getInstance(tenant).getTasks();
+    res.json({ tasks });
+  });
+
+  app.post('/api/tasks', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
+    const workspace = (req.body.workspace as string) || req.user.uid;
+    const { name } = req.body;
+    const tenant = { userId: req.user.uid, workspaceId: workspace };
+    const taskManager = BackgroundTaskManager.getInstance(tenant);
+    
+    const task = taskManager.createTask(name || 'Agentic Task');
+    
+    // Simulate long-running agent logic in the background
+    taskManager.executeTask(task.id, async (signal, log, progress) => {
+      log('Initializing agent swarm...');
+      progress(10);
+      
+      const numSteps = 5;
+      for (let i = 1; i <= numSteps; i++) {
+        if (signal.aborted) {
+          log('Agent interrupted by user.');
+          return;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+        log(`Executing step ${i} of ${numSteps}: Synthesizing plan...`);
+        progress(10 + (80 / numSteps) * i);
+      }
+      
+      log('Agent Swarm task completed successfully.');
+      progress(100);
+    });
+
+    res.json({ task });
+  });
+
+  app.post('/api/tasks/:id/cancel', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
+    const workspace = (req.body.workspace as string) || req.user.uid;
+    const tenant = { userId: req.user.uid, workspaceId: workspace };
+    const taskManager = BackgroundTaskManager.getInstance(tenant);
+    
+    taskManager.cancelTask(req.params.id);
+    res.json({ success: true });
+  });
+
   app.get('/api/context/docs', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
-    const docs = ProjectContextEngine.getInstance().getDocs();
+    const workspace = (req.query.workspace as string) || req.user.uid;
+    const tenant = { userId: req.user.uid, workspaceId: workspace };
+    const docs = ProjectContextEngine.getInstance(tenant).getDocs();
     res.json({ docs });
   });
 
   app.get('/api/context/graph', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
-    res.json({ summary: symbolGraph.getGraphSummary() });
+    const workspace = (req.query.workspace as string) || req.user.uid;
+    const tenant = { userId: req.user.uid, workspaceId: workspace };
+    res.json({ summary: SymbolGraph.getInstance(tenant).getGraphSummary() });
   });
 
   app.post('/api/embeddings', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
@@ -1901,20 +2040,31 @@ async function startServer() {
 
   watcher.on('all', async (event, filePath) => {
     logger.info(`File system event: ${event} on ${filePath}`);
-    io.emit('fs-event', { event, path: filePath });
+    
+    // Extract tenant from path: workspaces/{userId}/...
+    const relativePath = path.relative('workspaces', filePath);
+    const pathParts = relativePath.split(path.sep);
+    const tenantId = pathParts[0];
+
+    if (!tenantId) return;
+
+    // Notify only the specific user/workspace room
+    io.to(tenantId).emit('fs-event', { event, path: filePath });
 
     // Update Symbol Graph on change
     if ((event === 'add' || event === 'change') && (filePath.endsWith('.ts') || filePath.endsWith('.tsx'))) {
       try {
         const content = await fs.readFile(filePath, 'utf-8');
-        symbolGraph.updateFile(filePath, content);
+        // We use tenantId as both userId and workspaceId for the path-based identifier
+        SymbolGraph.getInstance({ userId: tenantId, workspaceId: tenantId }).updateFile(filePath, content);
 
         // Proactive Security Scan
         const scanner = fork('./src/scripts/run-audit.ts', [filePath]);
         scanner.on('message', (issues: any[]) => {
             if (Array.isArray(issues)) {
-              globalSecurityIssues.set(filePath, issues);
-              io.emit('security-alert', { path: filePath, issues });
+              const securityKey = `${tenantId}:${filePath}`;
+              globalSecurityIssues.set(securityKey, issues);
+              io.to(tenantId).emit('security-alert', { path: filePath, issues });
             }
         });
         scanner.on('close', (code) => {
@@ -1927,25 +2077,54 @@ async function startServer() {
     }
   });
 
+  // Authentication for Socket.io
+  io.use(async (socket, next) => {
+    const token = socket.handshake.auth.token;
+    await guard.emitSignal({ type: 'info', payload: 'Socket connection attempt', context: { hasToken: !!token } });
+    
+    if (!token) {
+        await guard.emitSignal({ type: 'warning', payload: 'Socket connection rejected: No token provided' });
+        return next(new Error('Authentication error: Token required'));
+    }
+
+    try {
+      const decodedToken = await auth.verifyIdToken(token);
+      await guard.emitSignal({ type: 'info', payload: 'Socket connection authenticated', context: { uid: decodedToken.uid } });
+      (socket as any).user = decodedToken;
+      next();
+    } catch (err) {
+      await guard.emitSignal({ 
+          type: 'error', 
+          payload: err instanceof Error ? { message: err.message, stack: err.stack } : err, 
+          context: { message: 'Socket connection authentication failed' } 
+      });
+      // Ensure we send a clear error message that we can catch on the client
+      next(new Error('Authentication error: ' + (err instanceof Error ? err.message : 'Invalid token')));
+    }
+  });
+
   io.on('connection', (socket) => {
-    logger.info('Client connected to WebSocket');
+    const user = (socket as any).user;
+    logger.info('User connected to WebSocket', { uid: user.uid });
+    
+    // Join a private room for this user
+    socket.join(user.uid);
     
     let ptyProcess: ReturnType<typeof spawn> | null = null;
 
     socket.on('terminal:start', (options) => {
-      logger.info('Terminal start requested', { options, uid: socket.id });
+      // FORCE sandboxing to the user's root unless they are an admin
+      const workspace = options?.workspace || '';
+      const safeCwd = getSafePath(options?.cwd || '', user, workspace);
+
+      logger.info('Terminal start requested', { safeCwd, uid: user.uid });
       if (ptyProcess) {
-        logger.info('Killing existing PTY process');
         ptyProcess.kill('SIGKILL');
       }
       
-      const cwd = options?.cwd ? path.join(WORKSPACE_ROOT, options.cwd) : process.cwd();
-      logger.info('Spawning PTY', { cwd });
-      
-      // Use python to spawn a real PTY since node-pty is unavailable
       try {
         ptyProcess = spawn('python3', ['-c', 'import pty; pty.spawn("/bin/bash")'], {
-          cwd,
+          cwd: safeCwd,
           env: { ...process.env, TERM: 'xterm-256color' },
           stdio: ['pipe', 'pipe', 'pipe']
         });
