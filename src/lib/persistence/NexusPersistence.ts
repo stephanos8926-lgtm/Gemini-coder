@@ -1,9 +1,6 @@
 import { PersistenceTier, IPersistenceAdapter, PersistenceOptions, TenantContext } from './types';
-import { IndexedDBAdapter } from './adapters/IndexedDBAdapter';
 import type { StateStorage } from 'zustand/middleware';
 import { auth } from '../../firebase';
-
-const isServer = typeof window === 'undefined';
 
 /**
  * NexusPersistence
@@ -19,20 +16,10 @@ export class NexusPersistence {
   private remoteAdapter: IPersistenceAdapter | null = null;
 
   private constructor() {
-    this.initializeLocalAdapter();
   }
 
-  private async initializeLocalAdapter() {
-    if (isServer) {
-      try {
-        const { FilePersistenceAdapter } = await import('./adapters/FilePersistenceAdapter');
-        this.localAdapter = new FilePersistenceAdapter();
-      } catch (e) {
-        console.error('[NexusPersistence] Failed to initialize server adapter', e);
-      }
-    } else {
-      this.localAdapter = new IndexedDBAdapter();
-    }
+  public setLocalAdapter(adapter: IPersistenceAdapter) {
+    this.localAdapter = adapter;
   }
 
   public static getInstance(): NexusPersistence {

@@ -40,6 +40,7 @@ import { APP_CONFIG } from './constants/appConfig';
 import { generateId } from './lib/projectStore';
 import { type Message } from './lib/gemini';
 import { type FileStore } from './lib/fileStore';
+import { nexusPersist } from './lib/persistence/NexusPersistence';
 
 // Lazy load heavy components
 const ChatPanel = lazy(() => import('./components/ChatPanel').then(m => ({ default: m.ChatPanel })));
@@ -134,6 +135,12 @@ export default function App() {
   const { socket } = useSocket((data: { event: string, path: string }) => {
     filesystemService.loadAllFiles().then(setFileStore);
   });
+
+  useEffect(() => {
+    import('./lib/persistence/adapters/IndexedDBAdapter').then(({ IndexedDBAdapter }) => {
+      nexusPersist.setLocalAdapter(new IndexedDBAdapter());
+    });
+  }, []);
 
   // Proactive Security Alerts
   useEffect(() => {

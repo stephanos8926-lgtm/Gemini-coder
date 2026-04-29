@@ -30,6 +30,7 @@ import { NexusFactory } from './packages/nexus/NexusFactory';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { executeTool } from './src/lib/toolExecutor';
 import { summarizeChatHistory } from './src/lib/summarizer';
+import { safeJsonParse } from './src/lib/utils';
 import { SkillExecutor } from './src/lib/SkillExecutor';
 import adminRouter from './src/admin/AdminRouter';
 import { routeTask, initBackgroundWorker } from './src/services/TaskRouter';
@@ -41,15 +42,26 @@ const fileCache = FileCacheManager.getInstance();
 export interface AuthenticatedRequest extends Request {
   user?: any;
 }
-
-// Initialize RapidForge Telemetry
-const buildProcesses = new Map<string, ChildProcess>();
+const FIVE_MINUTES_MS = 300000;
+const ONE_MINUTE_MS = 60000;
+// Global Constants
+const DEFAULT_EXIT_TIMEOUT_MS = 1000;
+const MCP_CACHE_TTL_MS = 60000;
+const HTTP_OK = 200;
+const HTTP_BAD_REQUEST = 400;
+const HTTP_INTERNAL_SERVER_ERROR = 500;
 const chatSummaries = new Map<string, { summary: string, lastMessageCount: number }>();
 const globalSecurityIssues = new Map<string, any[]>(); // filePath -> ScanIssue[]
 const logger = new LogTool('server');
 
+
+
+import { nexusPersist } from './src/lib/persistence/NexusPersistence';
+import { FilePersistenceAdapter } from './server_persistence/adapters/FilePersistenceAdapter';
+
 // Initialize Guard via Factory
 const nexusFactory = NexusFactory.getInstance();
+nexusPersist.setLocalAdapter(new FilePersistenceAdapter());
 const persistenceManager = nexusFactory.getPersistenceManager();
 const guard = nexusFactory.createForgeGuard('server', persistenceManager);
 nexusFactory.setupStandardSensors(guard);
@@ -64,7 +76,7 @@ process.on('uncaughtException', (error) => {
   });
   logger.error('FATAL UNCAUGHT EXCEPTION', error);
   // Give Winston/ForgeGuard a moment to flush before exiting
-  setTimeout(() => process.exit(1), 1000);
+  setTimeout(() => process.exit(1), DEFAULT_EXIT_TIMEOUT_MS);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -99,7 +111,7 @@ const gitHttpClient: HttpClient = {
           
           resolve({
             url: url,
-            statusCode: res.statusCode || 200,
+            statusCode: res.statusCode || HTTP_OK,
             statusMessage: res.statusMessage || 'OK',
             headers: res.headers as any,
             body: bodyIterator,
@@ -142,14 +154,14 @@ function errorHandler(err: any, req: express.Request, res: express.Response, nex
   });
 
   if (err instanceof z.ZodError) {
-    return res.status(400).json({ 
+    return res.status(HTTP_BAD_REQUEST).json({ 
       error: 'Validation failed', 
       details: err.issues 
     });
   }
 
   // Generic response to avoid leaking internal details
-  res.status((err as any).status || 500).json({ 
+  res.status((err as any).status || HTTP_INTERNAL_SERVER_ERROR).json({ 
     error: 'Internal Server Error' 
   });
 }
@@ -200,9 +212,17 @@ async function initializeFirebase() {
   let config: any = { projectId: undefined, firestoreDatabaseId: undefined };
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fsSync.existsSync(configPath)) {
-      config = JSON.parse(fsSync.readFileSync(configPath, 'utf8'));
-      logger.info('Loaded firebase config', { config });
+    try {
+      if (fsSync.existsSync(configPath)) {
+        const fileContent = await fs.readFile(configPath, 'utf8');
+        const parsedConfig = safeJsonParse(fileContent, 'firebase-applet-config.json');
+        if (parsedConfig) {
+          config = { ...config, ...parsedConfig };
+        }
+        logger.info('Loaded firebase config', { config });
+      }
+    } catch(e) {
+        logger.warn('Could not read firebase config', e);
     }
     
     let app: App;
@@ -211,12 +231,16 @@ async function initializeFirebase() {
     if (existingApps.length === 0) {
       if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
         try {
-          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-          app = initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-            projectId: config.projectId,
-          });
-          logger.info('Firebase Admin initialized with service account key');
+          const serviceAccount = safeJsonParse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY, 'FIREBASE_SERVICE_ACCOUNT_KEY');
+          if (serviceAccount) {
+            app = initializeApp({
+              credential: admin.credential.cert(serviceAccount),
+              projectId: config.projectId,
+            });
+            logger.info('Firebase Admin initialized with service account key');
+          } else {
+            throw new Error('Failed to parse service account JSON');
+          }
         } catch (keyError) {
           logger.error('CRITICAL: Malformed FIREBASE_SERVICE_ACCOUNT_KEY provided', keyError as Error);
           app = initializeApp({
@@ -376,13 +400,13 @@ async function getMcpClient(serverName: string, serverDef: any, workspaceRoot: s
 setInterval(() => {
   const now = Date.now();
   for (const [name, entry] of mcpClientPool.entries()) {
-    if (now - entry.lastUsed > 300000) { // 5 minutes
+    if (now - entry.lastUsed > FIVE_MINUTES_MS) { // 5 minutes
       entry.client.close();
       mcpClientPool.delete(name);
       logger.info(`Cleaned up unused MCP client: ${name}`);
     }
   }
-}, 60000); // 1 minute
+}, ONE_MINUTE_MS); // 1 minute
 
 const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
@@ -434,7 +458,7 @@ async function startServer() {
 
   const getEnabledTools = async () => {
     const now = Date.now();
-    if (cachedTools && now - lastConfigRead < 60000) { // Cache for 60 seconds
+    if (cachedTools && now - lastConfigRead < MCP_CACHE_TTL_MS) { // Cache for 60 seconds
       return cachedTools;
     }
     try {

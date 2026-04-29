@@ -1,0 +1,7 @@
+{"type":"info","payload":{"message":"Loaded firebase config","meta":{"config":{"projectId":"gen-lang-client-0112110598","appId":"1:975942690534:web:2475cce96e2cf13f09fd27","apiKey":"AIzaSyCkTh_nE_e38qLoC9MIDHZR8gDvtZju2Bk","authDomain":"gen-lang-client-0112110598.firebaseapp.com","firestoreDatabaseId":"ai-studio-49b64be2-427f-4903-b8de-98c4951f4c43","storageBucket":"gen-lang-client-0112110598.firebasestorage.app","messagingSenderId":"975942690534","measurementId":""}}},"timestamp":1777409427455,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Firebase Admin initialized with service account key"},"timestamp":1777409427519,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Firestore initialized with database: ai-studio-49b64be2-427f-4903-b8de-98c4951f4c43"},"timestamp":1777409427522,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Initializing express app..."},"timestamp":1777409427532,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Workspace root initialized","meta":{"WORKSPACE_ROOT":"/app/applet/workspaces"}},"timestamp":1777409427537,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Upload directory initialized","meta":{"UPLOAD_DIR":"/app/applet/uploads"}},"timestamp":1777409427737,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"RapidForge Server running on http://localhost:3000"},"timestamp":1777409429046,"context":{"moduleName":"server"}}

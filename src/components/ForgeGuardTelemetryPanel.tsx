@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Terminal, Cpu, Database, Filter } from 'lucide-react';
 import { motion } from 'motion/react';
+import { apiClient } from '../lib/apiClient';
+
+const FETCH_INTERVAL_MS = 5000;
 
 export function ForgeGuardTelemetryPanel() {
   const [signals, setSignals] = useState<any[]>([]);
@@ -10,15 +13,14 @@ export function ForgeGuardTelemetryPanel() {
   useEffect(() => {
     const fetchSignals = async () => {
       try {
-        const res = await fetch('/api/debug/forgeguard/signals');
-        const data = await res.json();
+        const data = await apiClient<{ signals: any[] }>('/api/debug/forgeguard/signals');
         setSignals(data.signals || []);
       } catch (e) {
         console.error('Failed to fetch signals', e);
       }
     };
     fetchSignals();
-    const interval = setInterval(fetchSignals, 5000);
+    const interval = setInterval(fetchSignals, FETCH_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

@@ -58,8 +58,11 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-error-boundary": "^6.1.1",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.8.0",
     "recharts": "^3.8.1",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "sonner": "^2.0.7",
@@ -107,7 +110,7 @@
     "supertest": "^7.2.2",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.3",
+    "typescript": "^5.9.3",
     "vite": "^6.2.0",
     "vitest": "^4.1.4"
   }

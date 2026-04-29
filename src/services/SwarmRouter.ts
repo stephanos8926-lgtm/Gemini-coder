@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LogTool } from '../../packages/nexus/telemetry/LogTool';
 import { routeTask } from './TaskRouter';
 import { ForgeGuard } from '../../packages/nexus/guard/ForgeGuard';
+import { safeJsonParse } from '../lib/utils';
 
 const logger = new LogTool('SwarmRouter');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -72,6 +73,6 @@ async function createSwarmPlan(prompt: string) {
   
     const response = await model.generateContent(planningPrompt);
     const text = response.response.text().replace(/```json|```/g, '').trim();
-    return JSON.parse(text);
+    return safeJsonParse(text, 'createSwarmPlan');
   }, { method: 'createSwarmPlan' });
 }

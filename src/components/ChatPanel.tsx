@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { MessageBubble } from './MessageBubble';
 import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
@@ -7,8 +7,12 @@ import { marked, Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css';
-import { Settings } from '../lib/settingsStore';
-import { chatService, ChatMessage } from '../lib/chatService';
+import { apiClient } from '../lib/apiClient';
+import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+const MAX_CODE_LINES = 10;
+const COPY_TIMEOUT_MS = 2000;
 
 // Configure marked with highlight.js using a custom renderer
 const renderer = new Renderer();
@@ -54,56 +58,6 @@ interface ChatPanelProps {
   settings: Settings;
 }
 
-const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; args: any }[] }) => {
-  const [expanded, setExpanded] = useState<number | null>(null);
-
-  return (
-    <div className="w-full space-y-1.5 mt-2">
-      {functionCalls.map((call, idx) => (
-        <div 
-          key={`call-${idx}-${call.name}`} 
-          className="bg-[#252526] border border-[#3c3c3c] rounded-md overflow-hidden transition-all"
-        >
-          <button 
-            onClick={() => setExpanded(expanded === idx ? null : idx)}
-            className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Activity className="w-3 h-3 text-[#007acc]" />
-              <span className="text-[11px] font-mono font-medium text-[#cccccc]">{call.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[#858585] font-bold uppercase tracking-wider">Tool</span>
-              <motion.div
-                animate={{ rotate: expanded === idx ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ChevronRight className="w-3 h-3 text-[#858585]" />
-              </motion.div>
-            </div>
-          </button>
-          
-          <AnimatePresence>
-            {expanded === idx && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="p-2.5 border-t border-[#3c3c3c] bg-[#1a1a1a]">
-                  <pre className="text-[10px] text-[#3794ff] font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                    {JSON.stringify(call.args, null, 2)}
-                  </pre>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, isStreaming, settings }: ChatPanelProps) {
   const [input, setInput] = useState('');
@@ -154,12 +108,14 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   };
 
   const renderMarkdown = (content: string) => {
-    const rawHtml = marked.parse(content) as string;
-    const cleanHtml = DOMPurify.sanitize(rawHtml, {
-      ADD_ATTR: ['data-code', 'data-large'],
-      ADD_TAGS: ['svg', 'path', 'rect']
-    });
-    return { __html: cleanHtml };
+    return (
+      <ReactMarkdown 
+        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+        className="markdown-body"
+      >
+        {content}
+      </ReactMarkdown>
+    );
   };
 
   useEffect(() => {
@@ -268,208 +224,22 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
               </p>
             </div>
           </div>
-        )}
-
-        {messages.map((msg, i) => {
-          const { thinking, main, taskList } = formatContent(msg.content);
-          const isUser = msg.role === 'user';
-          const isProceedPrompt = msg.role === 'model' && /(?:Proceed\?\s*)?\[y\/n(?:\/edit)?\]/i.test(main);
-          const contentToRender = isProceedPrompt 
-            ? main.replace(/\n?\s*\*?\*?(?:Proceed\?\s*)?\[y\/n(?:\/edit)?\]\*?\*?/i, '').trim() 
-            : main;
-
-          return (
-            <motion.div
-              key={msg.id || `msg-${i}-${msg.role}-${msg.content.substring(0, 20)}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
-            >
-              <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center border shadow-sm ${
-                isUser 
-                  ? 'bg-[#007acc] border-[#007acc]/50 text-white' 
-                  : 'bg-[#252526] border-[#3c3c3c] text-[#007acc]'
-              }`}>
-                {isUser ? (
-                  settings.userAvatar ? (
-                    <img src={settings.userAvatar} alt="User" className="w-full h-full rounded-lg object-cover" />
-                  ) : (
-                    <User className="w-4 h-4" />
-                  )
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-              </div>
-
-              <div className={`flex flex-col max-w-[95%] sm:max-w-[85%] min-w-0 space-y-1 ${isUser ? 'items-end' : 'items-start'}`}>
-                {/* Thinking Block */}
-                {thinking && (
-                  <div className="w-full space-y-2 my-2">
-                    {taskList && (
-                      <div className="bg-[#252526] border border-[#007acc]/20 rounded-lg p-3 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Activity className="w-3 h-3 text-[#007acc]" />
-                          <span className="text-[10px] font-bold text-[#858585] uppercase tracking-widest">Active Task List</span>
-                        </div>
-                        <div className="space-y-1">
-                          {taskList.split('\n').map((task, idx) => {
-                            const isDone = task.includes('[x]');
-                            const isInProg = task.includes('[~]');
-                            const isBlocked = task.includes('[!]');
-                            return (
-                              <div key={`task-${idx}`} className="flex items-start gap-2 text-[11px]">
-                                <span className={`font-mono shrink-0 ${
-                                  isDone ? 'text-green-500' : 
-                                  isInProg ? 'text-blue-400 animate-pulse' : 
-                                  isBlocked ? 'text-red-500' : 'text-[#858585]'
-                                }`}>
-                                  {task.match(/\[.\]/)?.[0] || '[ ]'}
-                                </span>
-                                <span className={`${isDone ? 'text-[#858585] line-through' : 'text-[#cccccc]'}`}>
-                                  {task.replace(/\[.\]/, '').trim()}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="border-l-2 border-[#007acc]/30 pl-3 py-1">
-                      <button 
-                        onClick={() => setExpandedThinking(expandedThinking === i ? null : i)}
-                        className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-opacity"
-                      >
-                        <BrainCircuit className="w-3 h-3 text-[#007acc]" />
-                        <span className="text-[9px] font-bold text-[#e5e5e5] uppercase tracking-widest">
-                          {expandedThinking === i ? 'Hide Thought' : 'View Thought'}
-                        </span>
-                        <motion.div
-                          animate={{ rotate: expandedThinking === i ? 90 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ChevronRight className="w-2.5 h-2.5 text-[#858585]" />
-                        </motion.div>
-                      </button>
-                      <AnimatePresence>
-                        {expandedThinking === i && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <p className="text-xs text-[#858585] italic leading-relaxed whitespace-pre-wrap pb-2">{thinking}</p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                )}
-
-                {/* Main Message Bubble */}
-                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative group break-words max-w-full overflow-hidden shadow-sm ${
-                  isUser 
-                    ? 'bg-[#007acc] text-white border border-[#007acc]/50 rounded-tr-none' 
-                    : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'
-                }`}>
-                  <div 
-                    className="markdown-body prose prose-invert prose-sm max-w-none overflow-x-auto break-words prose-pre:bg-[#0d0d0d] prose-pre:border prose-pre:border-[#2d2d2d] prose-a:text-[#3794ff] prose-a:no-underline hover:prose-a:underline prose-p:leading-relaxed"
-                    dangerouslySetInnerHTML={renderMarkdown(contentToRender)}
-                  />
-
-                  {msg.functionCalls && <ToolCallRenderer functionCalls={msg.functionCalls} />}
-                  
-                  {msg.functionResponses && (
-                    <div className="mt-3 space-y-2">
-                      {msg.functionResponses.map((res, idx) => {
-                        const isError = typeof res.response === 'object' && res.response !== null && ('error' in res.response || 'stderr' in res.response && res.response.stderr);
-                        return (
-                          <div key={`resp-${idx}-${res.name}`} className={`bg-[#1e1e1e] border ${isError ? 'border-red-500/20' : 'border-[#3c3c3c]'} rounded-lg overflow-hidden shadow-sm`}>
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#252526] border-b border-[#3c3c3c]">
-                              {isError ? (
-                                <AlertCircle className="w-3 h-3 text-red-400" />
-                              ) : (
-                                <CheckCircle2 className="w-3 h-3 text-green-400" />
-                              )}
-                              <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-[#858585]'}`}>
-                                {res.name} Output
-                              </span>
-                            </div>
-                            <div className={`text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all p-3 bg-black/10 ${isError ? 'text-red-300' : 'text-[#cccccc]'}`}>
-                              {typeof res.response === 'string' ? res.response : JSON.stringify(res.response, null, 2)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  {/* Review Changes Buttons */}
-                  {msg.role === 'model' && !isStreaming && msg.content && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {[...msg.content.matchAll(/```([\w./-]+)\n([\s\S]*?)```/g)].map((match, idx) => {
-                        const filename = match[1];
-                        const content = match[2];
-                        if (filename.includes('.') && !['diff', 'delete', 'rename'].includes(filename)) {
-                          return (
-                            <button
-                              key={`review-${idx}-${filename}`}
-                              onClick={() => onReviewChange?.(filename, content)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007acc]/10 border border-[#007acc]/30 text-[#007acc] rounded-md hover:bg-[#007acc]/20 transition-all text-[10px] font-bold uppercase tracking-wider"
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              <span>Review {filename}</span>
-                            </button>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  )}
-
-                  {isProceedPrompt && (
-                    <div className="mt-5 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl shadow-inner">
-                      <p className="text-xs text-[#d4d4d4] mb-3 font-bold uppercase tracking-widest opacity-70">How would you like to proceed?</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          disabled={i !== messages.length - 1 || isStreaming}
-                          onClick={() => onSendMessage('y')}
-                          className="flex-1 sm:flex-none px-4 py-2 bg-[#007acc] text-white rounded-lg hover:bg-[#005f9e] transition-all text-xs font-bold shadow-lg shadow-[#007acc]/20 disabled:opacity-50"
-                        >
-                          Yes, proceed
-                        </button>
-                        <button
-                          disabled={i !== messages.length - 1 || isStreaming}
-                          onClick={() => onSendMessage('n')}
-                          className="flex-1 sm:flex-none px-4 py-2 bg-transparent text-[#d4d4d4] border border-[#4d4d4d] rounded-lg hover:bg-[#3c3c3c] transition-all text-xs font-bold disabled:opacity-50"
-                        >
-                          No, cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-3 px-1">
-                  <span className="text-[9px] text-[#858585] font-bold uppercase tracking-widest opacity-60">
-                    {isUser ? (settings.userName || 'You') : 'GIDE AI'}
-                  </span>
-                  {!isStreaming && (
-                    <button 
-                      onClick={() => handleCopy(msg.content, `msg-${i}`)}
-                      className="text-[#858585] hover:text-white transition-colors"
-                      title="Copy message"
-                    >
-                      {copiedId === `msg-${i}` ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-
+        )}        {messages.map((msg, i) => (
+          <MessageBubble
+            key={msg.id || `msg-${i}-${msg.role}-${msg.content.substring(0, 20)}`}
+            msg={msg}
+            i={i}
+            isUser={msg.role === 'user'}
+            settings={settings}
+            isStreaming={isStreaming}
+            onReviewChange={onReviewChange}
+            expandedThinking={expandedThinking}
+            setExpandedThinking={setExpandedThinking}
+            formatContent={formatContent}
+            renderMarkdown={renderMarkdown}
+            onSendMessage={onSendMessage}
+          />
+        ))}
         {isStreaming && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#252526] border border-[#3c3c3c] flex items-center justify-center text-[#007acc] shrink-0 shadow-sm">
@@ -509,10 +279,9 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
           <button
             onClick={async () => {
               try {
-                const res = await fetch('/api/logs?source=build');
-                const { logs } = await res.json();
-                if (logs && logs.length > 0) {
-                  const lastError = logs.reverse().find((l: any) => l.level === 'error');
+                const data = await apiClient<{ logs: any[] }>('/api/logs?source=build');
+                if (data.logs && data.logs.length > 0) {
+                  const lastError = data.logs.reverse().find((l: any) => l.level === 'error');
                   if (lastError) {
                     onSendMessage(`I'm seeing this build error, can you fix it?\n\n\`\`\`\n${lastError.message}\n\`\`\``);
                   } else {
