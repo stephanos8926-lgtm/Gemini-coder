@@ -25,7 +25,7 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
     <div class="code-block-wrapper relative group my-4 rounded-lg overflow-hidden border border-[#3c3c3c] bg-[#0d0d0d]" data-large="${isLarge}">
       <div class="flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] border-b border-[#3c3c3c]">
         <span class="text-[10px] font-bold text-[#858585] uppercase tracking-widest">${language}</span>
-        <button class="copy-btn p-1 hover:bg-[#3c3c3c] rounded transition-colors" data-code="${encodeURIComponent(text)}">
+        <button class="copy-btn p-1 hover:bg-[#3c3c3c] rounded transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none" data-code="${encodeURIComponent(text)}" aria-label="Copy code">
           <svg class="w-3 h-3 text-[#858585]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
       </div>
@@ -33,7 +33,7 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
         <pre><code class="hljs language-${language}">${highlighted}</code></pre>
       </div>
       ${isLarge ? `
-        <button class="expand-btn absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-[#0d0d0d] to-transparent text-[10px] font-bold text-[#007acc] hover:text-[#3794ff] transition-all flex items-center justify-center gap-1">
+        <button class="expand-btn absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-[#0d0d0d] to-transparent text-[10px] font-bold text-[#007acc] hover:text-[#3794ff] transition-all flex items-center justify-center gap-1 focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none" aria-label="Show more code" aria-expanded="false">
           <span>Show More</span>
         </button>
       ` : ''}
@@ -134,8 +134,12 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
         const wrapper = expandBtn.closest('.code-block-wrapper');
         const content = wrapper?.querySelector('.code-content');
         if (content) {
+          const isExpanded = !content.classList.contains('max-h-[300px]');
           content.classList.toggle('max-h-[300px]');
-          expandBtn.querySelector('span')!.textContent = content.classList.contains('max-h-[300px]') ? 'Show More' : 'Show Less';
+          const newExpandedState = !content.classList.contains('max-h-[300px]');
+          expandBtn.querySelector('span')!.textContent = !newExpandedState ? 'Show More' : 'Show Less';
+          expandBtn.setAttribute('aria-expanded', newExpandedState.toString());
+          expandBtn.setAttribute('aria-label', !newExpandedState ? 'Show more code' : 'Show less code');
         }
       }
     };
@@ -172,8 +176,9 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
         <div className="flex items-center gap-2">
           <button
             onClick={onNewChat}
-            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             title="New Chat"
+            aria-label="New Chat"
           >
             <Plus className="w-4 h-4 text-[#858585]" />
           </button>
@@ -194,12 +199,13 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
               // but we can trigger it via a custom event or just rely on the SettingsModal
               // For now, let's just show the status and link to settings
             }}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all ${
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none ${
               settings.aiChainOfThought 
                 ? 'bg-[#007acc]/10 border-[#007acc]/30 text-[#007acc]' 
                 : 'bg-[#3c3c3c]/30 border-[#3c3c3c] text-[#858585]'
             }`}
             title={settings.aiChainOfThought ? "Chain of Thought Enabled" : "Chain of Thought Disabled"}
+            aria-label={settings.aiChainOfThought ? "Chain of Thought Enabled" : "Chain of Thought Disabled"}
           >
             <BrainCircuit className={`w-3.5 h-3.5 ${settings.aiChainOfThought ? 'animate-pulse' : ''}`} />
             <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">CoT</span>
@@ -314,11 +320,12 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
             <button
               type="submit"
               disabled={!input.trim() || isStreaming}
-              className={`absolute right-2 bottom-2 p-2 rounded-xl transition-all ${
+              className={`absolute right-2 bottom-2 p-2 rounded-xl transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none ${
                 input.trim() && !isStreaming 
                   ? 'bg-[#007acc] text-white hover:bg-[#0062a3]' 
                   : 'text-[#858585] cursor-not-allowed'
               }`}
+              aria-label="Send Message"
             >
               {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </button>
