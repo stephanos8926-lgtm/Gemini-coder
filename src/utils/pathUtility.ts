@@ -23,10 +23,13 @@ export function getSafePath(unsafePath: string, user: any, workspace: string = '
     try {
       realBasePath = fsSync.realpathSync(base);
     } catch {
-       return resolvedPath; // Fallback
+       realBasePath = path.resolve(base);
     }
 
-    if (!resolvedPath.startsWith(realBasePath)) {
+    const normalizedResolved = path.normalize(resolvedPath);
+    const normalizedBase = path.normalize(realBasePath);
+
+    if (!normalizedResolved.startsWith(normalizedBase + path.sep) && normalizedResolved !== normalizedBase) {
         throw new Error('Path traversal attempt detected');
     }
 
