@@ -37,7 +37,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onDeleteFile
 }) => {
   const { isLeftSidebarOpen, isRightSidebarOpen, activeBottomTab, setActiveBottomTab } = useAppStore();
-  const { RW_fileStore, RW_activeFile, setActiveFile } = useFileStore();
+  const { RW_fileStore, RW_activeFile, setActiveFile, RW_openFiles } = useFileStore();
 
   return (
     <div className="hidden sm:flex flex-1 h-full overflow-hidden">
@@ -53,7 +53,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 onDeleteFile={onDeleteFile}
               />
             </Panel>
-            <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
+            <PanelResizeHandle className="w-[1px] bg-border-subtle hover:bg-accent-primary transition-colors z-20" />
           </>
         )}
 
@@ -62,7 +62,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {/* @ts-ignore */}
           <PanelGroup orientation="vertical" id="forge-layout-vertical">
             <Panel defaultSize={70} minSize={30}>
-              <div className="flex flex-col h-full bg-[#1e1e1e]">
+              <div className="flex flex-col h-full bg-surface-base">
                 <TabBar />
                 <div className="flex-1 overflow-hidden">
                   <ErrorBoundary name="Code Editor">

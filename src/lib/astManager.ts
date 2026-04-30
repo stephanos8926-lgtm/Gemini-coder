@@ -1,6 +1,10 @@
 import { parse } from '@babel/parser';
 import traverseModule from '@babel/traverse';
 import { treeSitterManager } from '../utils/treeSitterManager';
+// Removing child_process dependency for browser compatibility in Vite build
+// import { exec } from 'child_process';
+// import util from 'util';
+// const execAsync = util.promisify(exec);
 
 const traverse = typeof traverseModule === 'function' ? traverseModule : (traverseModule as any).default;
 
@@ -54,7 +58,28 @@ export async function generateAstSkeleton(code: string, filename: string): Promi
   return fallbackGenerateSkeleton(code, filename);
 }
 
-// -- PURE PORT OF STABLE LOGIC FROM astChunker.ts --
+export async function getAstNodes(code: string, filename: string): Promise<AstNodeInfo[]> {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  
+  if (ext === 'py') {
+    // Client-side Python symbol extraction using regex
+    const symbols: AstNodeInfo[] = [];
+    const lines = code.split('\n');
+    lines.forEach(line => {
+      const classMatch = line.match(/^class\s+(\w+)/);
+      if (classMatch) {
+        symbols.push({ name: classMatch[1], type: 'class' });
+      }
+      const funcMatch = line.match(/^def\s+(\w+)/);
+      if (funcMatch) {
+        symbols.push({ name: funcMatch[1], type: 'function' });
+      }
+    });
+    return symbols;
+  }
+
+  return parseWithBabel(code, filename);
+}
 
 function fallbackGenerateSkeleton(code: string, filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase();

@@ -31,15 +31,16 @@ export class FileCacheManager {
     });
 
     // Tier 2: SQLite Persistent Cache
-    const logsDir = path.join(process.cwd(), 'logs');
-    const dbPath = path.join(logsDir, 'file_cache.db');
+    const dataDir = path.join(process.cwd(), 'data');
+    const cacheDir = path.join(dataDir, 'cache');
+    const dbPath = path.join(cacheDir, 'file_cache.db');
     
-    // Ensure logs directory exists
-    if (!fs.existsSync(logsDir)) {
+    // Ensure cache directory exists
+    if (!fs.existsSync(cacheDir)) {
       try {
-        fs.mkdirSync(logsDir, { recursive: true });
+        fs.mkdirSync(cacheDir, { recursive: true });
       } catch (err) {
-        console.error('[FileCacheManager] Failed to create logs directory:', err);
+        console.error('[FileCacheManager] Failed to create cache directory:', err);
       }
     }
 

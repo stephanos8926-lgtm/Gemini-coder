@@ -6,14 +6,21 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
   
-  --color-forge-intel: #ce9178;
-  --color-forge-ops: #4ec9b0;
-  --color-forge-security: #f14c4c;
+  /* Semantic Colors */
+  --color-surface-base: #1e1e1e;
+  --color-surface-card: #252526;
+  --color-surface-accent: #333333;
+  --color-text-primary: #d4d4d4;
+  --color-text-subtle: #858585;
+  --color-border-subtle: #3c3c3c;
+  --color-accent-intel: #ce9178;
+  --color-accent-ops: #4ec9b0;
+  --color-accent-security: #f14c4c;
 }
 
 body {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
+  background-color: var(--color-surface-base);
+  color: var(--color-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -25,15 +32,15 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--color-surface-base);
 }
 ::-webkit-scrollbar-thumb {
-  background: #333333;
+  background: var(--color-surface-accent);
   border-radius: 5px;
-  border: 2px solid #1e1e1e;
+  border: 2px solid var(--color-surface-base);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #444444;
+  background: var(--color-text-subtle);
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -41,7 +48,7 @@ body {
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #333333 #1e1e1e;
+  scrollbar-color: var(--color-surface-accent) var(--color-surface-base);
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
@@ -51,17 +58,17 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #3c3c3c;
+  background: var(--color-border-subtle);
   border-radius: 3px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #4f4f4f;
+  background: var(--color-text-subtle);
 }
 
 /* Prose inline code styling */
 .prose :where(code):not(:where([class~="not-prose"] *)) {
-  background-color: #2d2d2d;
-  color: #9cdcfe;
+  background-color: var(--color-surface-accent);
+  color: var(--color-accent-intel);
   padding: 0.15rem 0.3rem;
   border-radius: 0.25rem;
   font-weight: 400;
@@ -72,6 +79,7 @@ body {
   content: "";
 }
 .prose :where(pre):not(:where([class~="not-prose"] *)) {
+  background-color: var(--color-surface-card);
   font-family: var(--font-mono);
   font-size: 0.85rem;
 }

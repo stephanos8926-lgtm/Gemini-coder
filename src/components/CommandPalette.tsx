@@ -143,10 +143,10 @@ export function CommandPalette({
         initial={{ opacity: 0, scale: 0.95, y: -20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: -20 }}
-        className="relative w-full max-w-2xl bg-[#252526] border border-[#454545] rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-2xl bg-surface-card border border-border-subtle rounded-xl shadow-2xl overflow-hidden flex flex-col"
       >
-        <div className="flex items-center px-4 py-3 border-b border-[#3c3c3c]">
-          <Search className="w-5 h-5 text-[#858585] mr-3" />
+        <div className="flex items-center px-4 py-3 border-b border-border-subtle">
+          <Search className="w-5 h-5 text-text-subtle mr-3" />
           <input
             ref={inputRef}
             type="text"
@@ -154,9 +154,9 @@ export function CommandPalette({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type a command or search for files..."
-            className="flex-1 bg-transparent text-[#d4d4d4] text-base focus:outline-none"
+            className="flex-1 bg-transparent text-text-primary text-base focus:outline-none"
           />
-          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-[#1e1e1e] border border-[#3c3c3c] rounded text-[10px] text-[#858585] font-mono">
+          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-surface-base border border-border-subtle rounded text-[10px] text-text-subtle font-mono">
             <Command className="w-2.5 h-2.5" />
             <span>K</span>
           </div>
@@ -167,7 +167,7 @@ export function CommandPalette({
           className="max-h-[60vh] overflow-y-auto p-2"
         >
           {filteredItems.length === 0 ? (
-            <div className="py-8 text-center text-[#858585] text-sm italic">
+            <div className="py-8 text-center text-text-subtle text-sm italic">
               No matching commands found
             </div>
           ) : (
@@ -177,15 +177,15 @@ export function CommandPalette({
                 onClick={() => { item.action(); onClose(); }}
                 onMouseEnter={() => setSelectedIndex(index)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  index === selectedIndex ? 'bg-[#007acc] text-white' : 'hover:bg-[#2d2d2d] text-[#cccccc]'
+                  index === selectedIndex ? 'bg-accent-intel text-white' : 'hover:bg-surface-accent text-text-subtle'
                 }`}
               >
-                <div className={`${index === selectedIndex ? 'text-white' : ''}`}>
+                <div className={`${index === selectedIndex ? 'text-white' : 'text-text-subtle'}`}>
                   {item.icon}
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <div className="text-sm font-medium truncate">{item.label}</div>
-                  <div className={`text-[10px] uppercase tracking-wider ${index === selectedIndex ? 'text-blue-100' : 'text-[#858585]'}`}>
+                  <div className={`text-[10px] uppercase tracking-wider ${index === selectedIndex ? 'text-blue-100' : 'text-text-subtle'}`}>
                     {item.category}
                   </div>
                 </div>
@@ -194,11 +194,11 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="px-4 py-2 bg-[#1e1e1e] border-t border-[#3c3c3c] flex items-center justify-between text-[10px] text-[#858585]">
+        <div className="px-4 py-2 bg-surface-base border-t border-border-subtle flex items-center justify-between text-[10px] text-text-subtle">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><span className="px-1 bg-[#2d2d2d] rounded">↑↓</span> to navigate</span>
-            <span className="flex items-center gap-1"><span className="px-1 bg-[#2d2d2d] rounded">Enter</span> to select</span>
-            <span className="flex items-center gap-1"><span className="px-1 bg-[#2d2d2d] rounded">Esc</span> to close</span>
+            <span className="flex items-center gap-1"><span className="px-1 bg-surface-accent rounded">↑↓</span> to navigate</span>
+            <span className="flex items-center gap-1"><span className="px-1 bg-surface-accent rounded">Enter</span> to select</span>
+            <span className="flex items-center gap-1"><span className="px-1 bg-surface-accent rounded">Esc</span> to close</span>
           </div>
           <div className="font-mono">GIDE v1.0</div>
         </div>

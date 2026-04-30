@@ -1,19 +1,26 @@
-# Status: RapidForge Architecture
+# Infrastructure Status - RapidForge
 
-[x] DONE — Conceptualize RapidForge ecosystem (ForgeGuard, Agent, Platform).
-[x] DONE — Install dependencies (`js-yaml`, `better-sqlite3`, `winston`).
-[x] DONE — Implement `ConfigUtility` (Failover: Default -> YAML/JSON -> Env with `RW_` prefix).
-[x] DONE — Implement `PersistenceManager` (SQLite-backed sensor registry and signal backlog via Node.js Worker Thread).
-[x] DONE — Implement `Omitter` and `Sensor` interfaces (Proxy-based hooking).
-[x] DONE — Implement `ForgeGuard` singleton base class (Advanced routing, backpressure).
-[x] DONE — Implement concrete `Sensor` classes (TUISensor, HTTPSensor, RemoteDBSensor, LocalFileSensor, SQLiteSensor).
-[x] DONE — Integrate `ForgeGuard` with `LogTool` (Winston wrapper).
-[x] DONE — Hook `ForgeGuard` into the main application entry points (`server.ts`, etc.).
-[x] DONE — Implement AST-driven error prediction (Static Analysis with `@babel/traverse` + Runtime Telemetry).
-[x] DONE — Integrate Patch Engine with ForgeGuard signals for autonomous self-healing.
-[ ] NEXT — Build a UI Dashboard to visualize SQLite telemetry stats.
+## Project: EHP & POL Core
+**Status**: `GOVERNED`
+**Last Updated**: 2026-04-30
 
-## Findings & Decisions
-- **Architecture**: Adopted a Proxy-based Wrapper approach for hooking into existing code, prioritizing stability and performance over zero-modification "magic" hooks.
-- **Performance**: Chose Static Analysis (at startup/build) + Runtime Telemetry over full runtime AST analysis to prevent catastrophic performance degradation.
-- **Configuration**: Enforced `RW_` prefix for environment variables to cleanly separate RapidForge config from general app config.
+### Completed Milestones
+- [x] **EHP Backbone**: Bus implementation with publish/request-response support.
+- [x] **POL Foundation**: Service registry and heartbeat monitoring.
+- [x] **Warden Security**: File and tool interception logic.
+- [x] **Server Integration**: Hooked `server.ts` into EHP governance.
+- [x] **Portability Guide**: Created root-level migration documentation.
+
+### In Progress
+- [ ] **RapidVault**: Designing the AES-256 / SSS key storage.
+- [ ] **POL Agent**: Planning the LangGraph operational node.
+- [ ] **Monorepo Migration**: Moving logic to `packages/@rapidforge`.
+
+### Blocked / High Risk
+- **Crypto Latency**: ChaCha20/SSS performance needs benchmarking on low-power cloud run nodes.
+- **IPC Transports**: Transitioning from `EventEmitter` to Network Sockets needs careful firewall considerations.
+
+### Next Tasks
+1. Initialize `@rapidforge/vault` TypeScript bridge.
+2. Implement Shamir's Secret Sharing split-key logic in Node.js.
+3. Build the first LangGraph node for the POL Agent.

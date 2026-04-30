@@ -1,0 +1,22 @@
+name: ForgeGuardIDE
+description: Infrastructure, application architecture, and ForgeGuard integration guidelines.
+instructions: |
+  * Current Runtime: Node.js (Express) + Vite (Client-side React).
+  * Infrastructure Overview:
+    - Port 3000 is for all external traffic.
+    - DO NOT attempt to change the PORT environment variable.
+    - Hot Module Replacement (HMR) is disabled.
+  * ForgeGuard Integration:
+    - All security-sensitive actions MUST be routed through `ForgeGuard.init('ComponentName')`.
+    - Telemetry MUST be piped into `ForgeDashboard` for real-time monitoring and security analysis.
+    - Always verify component context and user permissions before allowing action execution through ForgeGuard.
+  * Persistence Architecture:
+    - Use `NexusPersistence` as the primary interface for all data operations.
+    - Utilize `IPersistenceAdapter` implementations correctly:
+      - `FilePersistenceAdapter` for server-side persistence in `/.docs/persistence/`.
+      - `IndexedDBAdapter` for client-side browser persistence.
+    - STRICTLY isolate multi-tenant data using `TenantContext` to prevent cross-tenant data leakage.
+  * Security Best Practices:
+    - Validate all `TenantContext` inputs before operations.
+    - Log every persistence access attempt via `ForgeDashboard` telemetry pipeline.
+    - Always consider race conditions in asynchronous persistence actions and ensure atomic operations where data integrity is required.

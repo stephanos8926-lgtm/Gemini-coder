@@ -19,6 +19,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
   const [remoteUrl, setRemoteUrl] = useState<string>('');
   const [isConfiguringRemote, setIsConfiguringRemote] = useState(false);
   const [auditIssues, setAuditIssues] = useState<any[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
 
   const fetchStatus = async () => {
     try {
@@ -35,6 +36,17 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
       if (result.success) {
         setStatus(result.stdout);
         setCurrentBranch(result.branch || 'main');
+      }
+
+      // Fetch history
+      const historyResponse = await fetch('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, command: 'log', workspace }),
+      });
+      const historyResult = await historyResponse.json();
+      if (historyResult.success) {
+        setHistory(historyResult.stdout.split('\n').filter(Boolean));
       }
 
       // Fetch remote URL
@@ -347,6 +359,28 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
           )}
 
           {/* Output Log */}
+          {history.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">History</h3>
+              <div className="bg-[#1e1e1e] border border-[#3c3c3c] rounded-md overflow-hidden flex flex-col font-mono">
+                {history.map((log, i) => {
+                  const [hash, ...msgParts] = log.split(' ');
+                  const msg = msgParts.join(' ');
+                  return (
+                    <div key={hash} className="flex items-center gap-3 px-3 py-2 border-b border-[#3c3c3c] last:border-0 hover:bg-[#2d2d2d] group">
+                      <div className="flex flex-col items-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#007acc]" />
+                        {i < history.length - 1 && <div className="w-0.5 h-full bg-[#3c3c3c] my-0.5" />}
+                      </div>
+                      <span className="text-[10px] text-[#007acc] font-bold w-12">{hash}</span>
+                      <span className="text-[11px] text-[#cccccc] truncate">{msg}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {output && (
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Output</h3>

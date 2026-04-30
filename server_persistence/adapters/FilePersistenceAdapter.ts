@@ -1,4 +1,4 @@
-import { IPersistenceAdapter } from '../types';
+import { IPersistenceAdapter } from '../../src/lib/persistence/types';
 
 /**
  * FilePersistenceAdapter
@@ -14,7 +14,7 @@ export class FilePersistenceAdapter implements IPersistenceAdapter {
   private async getStoragePath() {
     if (!this.storagePath) {
       const path = await import('path');
-      this.storagePath = path.join(process.cwd(), '.docs', 'persistence', this.fileName);
+      this.storagePath = path.join(process.cwd(), 'data', 'persistence', this.fileName);
     }
     return this.storagePath;
   }

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import * as ts from 'typescript';
+import { generateAstSkeleton, getAstNodes, AstNodeInfo } from './astManager';
 
 export interface SymbolInfo {
   name: string;
@@ -27,33 +27,18 @@ export class SymbolGraph {
   }
 
   async indexFile(filePath: string, content: string) {
-    const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true);
-    const symbols: SymbolInfo[] = [];
+    const nodes = await getAstNodes(content, filePath);
+    
+    const symbols: SymbolInfo[] = nodes.map((node: AstNodeInfo) => ({
+      name: node.name,
+      type: node.type as any,
+      line: 0, // We should improve getAstNodes to return line numbers
+      file: filePath,
+      dependencies: [],
+      source: node.type === 'class' ? `class ${node.name} { ... }` : `${node.type} ${node.name}(${node.params || ''}) { ... }`
+    }));
 
-    const visit = (node: ts.Node) => {
-      if (ts.isClassDeclaration(node) && node.name) {
-        symbols.push({ name: node.name.text, type: 'class', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
-      } else if (ts.isFunctionDeclaration(node) && node.name) {
-        symbols.push({ name: node.name.text, type: 'function', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
-      } else if (ts.isInterfaceDeclaration(node) && node.name) {
-        symbols.push({ name: node.name.text, type: 'interface', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
-      } else if (ts.isImportDeclaration(node)) {
-        const moduleSpecifier = node.moduleSpecifier.getText(sourceFile).replace(/['"]/g, '');
-        symbols.push({ name: moduleSpecifier, type: 'import', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.getText(sourceFile) });
-      } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-        if (node.initializer && (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))) {
-          symbols.push({ name: node.name.text, type: 'function', line: this.getLine(sourceFile, node), file: filePath, dependencies: [], source: node.parent.getText(sourceFile) });
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-
-    visit(sourceFile);
     this.symbols.set(filePath, symbols);
-  }
-
-  private getLine(sourceFile: ts.SourceFile, node: ts.Node): number {
-    return sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
   }
 
   public updateFile(filePath: string, content: string) {
@@ -106,7 +91,16 @@ export class SymbolGraph {
     return all.slice(-limit).reverse();
   }
 
-  public generateSkeleton(filePath: string): string {
+  public async generateSkeleton(filePath: string, content: string): Promise<string> {
+    try {
+      return await generateAstSkeleton(content, filePath);
+    } catch (e) {
+      console.warn(`AST skeleton generation failed for ${filePath}, using basic version:`, e);
+      return this.generateBasicSkeleton(filePath);
+    }
+  }
+
+  private generateBasicSkeleton(filePath: string): string {
     const symbols = this.symbols.get(filePath);
     if (!symbols || symbols.length === 0) return `// No symbols indexed for ${filePath}`;
 
@@ -114,16 +108,18 @@ export class SymbolGraph {
     symbols.forEach(sym => {
       if (sym.type === 'import') return;
       
-      // Basic skeletonization: just the first line of the source (usually the signature)
-      const lines = sym.source?.split('\n') || [];
-      const signature = lines[0]?.trim() || '';
+      // Improved skeletonization: include the signature and types for functions/classes/interfaces
+      const source = sym.source || '';
       
-      if (sym.type === 'class') {
-        skeleton += `class ${sym.name} { ... }\n`;
-      } else if (sym.type === 'interface') {
-        skeleton += `interface ${sym.name} { ... }\n`;
+      if (sym.type === 'class' || sym.type === 'interface') {
+        // Extract the declaration line, maybe a bit more if possible
+        const declaration = source.split('\n')[0].trim();
+        skeleton += `${declaration} { /* ... members omitted ... */ }\n`;
       } else if (sym.type === 'function') {
-        skeleton += `${signature} { /* implementation omitted */ }\n`;
+        const signature = source.split('{')[0].trim() || 'function ' + sym.name;
+        skeleton += `${signature} { /* ... implementation omitted ... */ };\n`;
+      } else {
+        skeleton += `// ${sym.type}: ${sym.name}\n`;
       }
     });
 

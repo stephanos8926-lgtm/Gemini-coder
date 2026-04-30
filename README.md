@@ -1,46 +1,34 @@
 # RapidForge IDE
-> Advanced AI-Driven Development Environment for Production Systems.
+> Enterprise-Grade Autonomous Agentic Development Infrastructure.
 
-RapidForge (formerly GIDE) is a high-performance, modular Integrated Development Environment architected for the next generation of AI-assisted software engineering. It combines professional-grade tooling with a multi-tier caching system ("SwiftCache") and AST-based code intelligence.
+RapidForge is a modular, secure-by-design platform infrastructure that combines AI-assisted development tools with a robust, event-driven service backbone. It is engineered for enterprise-scale software engineering, multi-application ecosystems, and AI-first workflows.
 
-## 🛠 Engineering Core
+## 🚀 The RapidForge Ecosystem
+- **EHP (Event Horizon Pipeline)**: The mission-critical communication backbone using a pub-sub message bus for asynchronous, distributed service communication.
+- **POL (Platform Orchestration Layer)**: An autonomous supervisor service for platform integrity, service management, and reactive remediation.
+- **Security Warden**: The mandatory governance gate that enforces fine-grained RBAC and security boundaries on all system and agentic operations.
+- **RapidVault**: A multi-tiered encryption engine utilizing `AES-256`, `ChaCha20-Poly1305`, and `Shamir's Secret Sharing` for secure secrets storage and identity governance.
 
-- **High-Performance Caching**: Powered by SwiftCache — a multi-tier system utilizing **L1 (In-memory LRU)** and **L2 (SQLite + LZ4 Compression)**.
-- **Advanced State Management**: Modularized state via **Zustand**, decentralized across workspace, auth, chat, and filesystem domains for maximum maintainability.
-- **AST Unification**: Deep code understanding using **web-tree-sitter** for context extraction and token optimization.
-- **Real-Time Sync**: Sub-millisecond filesystem synchronization via WebSocket triggers and FNV-1a hashing.
+## 🏛 Documentation Hierarchy
+We enforce a strict documentation structure for maintainability and platform clarity:
 
-## 🌟 Professional Features
+- [**Design Paradigm**](/.docs/design/paradigm-shift.md): The vision for rapid ecosystem integration.
+- [**Enterprise Standards**](/.docs/standards/ENTERPRISE_STANDARDS.md): Mandatory mandates and development protocols.
+- [**Agentic Orchestration**](/.docs/design/agentic-orchestration.md): Theory and practice of our LangGraph-based POL Agent.
+- [**Portability Guide**](/RAPIDFORGE_PORTABILITY_GUIDE.md): Migration steps to move from AI Studio to production cloud environments.
 
-- **SwiftCache Architecture**: Optimized for industrial-scale codebases with sub-10ms retrieval latency.
-- **Intelligent Refactoring**: Professional-tier AI chat experience with shiki-powered highlighting and context-aware suggestions.
-- **Modular Brand System**: Centralized Branding Configuration (`appConfig.ts`) for easy organizational white-labeling.
-- **Responsive Workspace**: Desktop-first precision with mobile-adaptive ergonomics.
+## 📐 Core Engineering Stack
+- **Languages**: TypeScript (Node.js), Python 3.12 (`@rapidforge/vault`)
+- **Intelligence**: LangChain + LangGraph (Control Plane)
+- **Infrastructure**: EHP (Pub-Sub), Redis/SQLite (Persistence), Podman/Docker (Sandboxing)
+- **Security**: Warden (Middleware Governance), AES-256/SSS (Encryption)
 
-## 🚀 Getting Started
+## 🛠 Usage
+For development, consult the [Enterprise Standards](/.docs/standards/ENTERPRISE_STANDARDS.md). To begin a new project integration, review the [Portability Guide](/RAPIDFORGE_PORTABILITY_GUIDE.md).
 
-1. **Environmental Setup**:
-   ```bash
-   npm install
-   ```
-2. **Launch Development Services**:
-   ```bash
-   npm run dev
-   ```
-3. **Configure API Intelligence**:
-   Define `GEMINI_API_KEY` in your environment or via the in-app Key Sentinel.
-
-## 📐 Architecture Stack
-
-- **Foundational Layer**: React 18 / Vite 5 / TypeScript 5
-- **Modular Intelligence**: Gemini 2.0 Flash / Nexus Sensor API
-- **Persistence Layer**: better-sqlite3 / LZ4js / Persistence Middleware
-- **Interface Design**: Tailwind CSS / Framer Motion / Lucide Nodes
-
-## 🏛 Maintainer
+## 🏢 Contact / Maintainer
 **Forge Systems Architectures**  
-Contact: [architecture@forge-systems.io](mailto:architecture@forge-systems.io)  
-Repo: [https://github.com/forge-systems/rapidforge](https://github.com/forge-systems/rapidforge)
+[architecture@forge-systems.io](mailto:architecture@forge-systems.io)
 
 ---
 *License: Proprietary / Enterprise Research Edition*

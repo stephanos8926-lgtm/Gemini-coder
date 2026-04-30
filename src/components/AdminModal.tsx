@@ -54,12 +54,12 @@ export const McpModal: React.FC<McpModalProps> = ({ onClose }) => {
         exit={{ opacity: 0, scale: 0.9, y: 20 }}
         className="bg-[#252526] border border-[#454545] sm:rounded-xl shadow-2xl w-full h-full sm:h-auto max-w-lg overflow-hidden flex flex-col max-h-full sm:max-h-[80vh]"
       >
-        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#3c3c3c] bg-[#2d2d2d]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border-subtle bg-surface-accent">
           <div className="flex items-center gap-2">
-            <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-[#007acc]" />
-            <h2 className="text-base sm:text-lg font-semibold text-white">MCP Tool Management</h2>
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-accent-intel" />
+            <h2 className="text-base sm:text-lg font-semibold text-text-primary">MCP Tool Management</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-[#3c3c3c] rounded-md text-[#858585] hover:text-white transition-colors">
+          <button onClick={onClose} className="p-1.5 hover:bg-surface-base rounded-md text-text-subtle hover:text-text-primary transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -67,21 +67,21 @@ export const McpModal: React.FC<McpModalProps> = ({ onClose }) => {
         <div className="p-4 sm:p-6 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#007acc]" />
+              <Loader2 className="w-8 h-8 animate-spin text-accent-intel" />
             </div>
           ) : (
             <div className="space-y-4">
               {tools.map((tool) => (
-                <div key={tool.name} className="flex items-center justify-between p-4 bg-[#2d2d2d] rounded-lg border border-[#3c3c3c]">
+                <div key={tool.name} className="flex items-center justify-between p-4 bg-surface-accent rounded-lg border border-border-subtle">
                   <div>
-                    <h2 className="font-semibold text-white">{tool.name}</h2>
-                    <p className="text-sm text-gray-400">{tool.description || 'No description'}</p>
+                    <h2 className="font-semibold text-text-primary">{tool.name}</h2>
+                    <p className="text-sm text-text-subtle">{tool.description || 'No description'}</p>
                   </div>
                   <button onClick={() => toggleTool(tool.name, tool.enabled)}>
                     {tool.enabled ? (
-                      <ToggleRight className="w-8 h-8 text-green-500" />
+                      <ToggleRight className="w-8 h-8 text-accent-ops" />
                     ) : (
-                      <ToggleLeft className="w-8 h-8 text-gray-500" />
+                      <ToggleLeft className="w-8 h-8 text-text-subtle" />
                     )}
                   </button>
                 </div>
@@ -90,10 +90,10 @@ export const McpModal: React.FC<McpModalProps> = ({ onClose }) => {
           )}
         </div>
         
-        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#2d2d2d] border-t border-[#3c3c3c] flex justify-end">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-surface-accent border-t border-border-subtle flex justify-end">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 text-xs sm:text-sm font-medium text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-xs sm:text-sm font-medium text-text-primary hover:text-text-primary hover:bg-surface-base rounded-md transition-colors"
           >
             Close
           </button>

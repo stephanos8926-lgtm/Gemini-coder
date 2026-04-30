@@ -1,5 +1,6 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageBubble } from './MessageBubble';
-import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus } from 'lucide-react';
+import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
 import { toast } from 'sonner';
@@ -11,6 +12,10 @@ import { apiClient } from '../lib/apiClient';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import { type Settings } from '../lib/settingsStore';
+import { chatService, type ChatMessage } from '../lib/chatService';
+import { Settings as SettingsIcon } from 'lucide-react';
+
 const MAX_CODE_LINES = 10;
 const COPY_TIMEOUT_MS = 2000;
 
@@ -59,13 +64,23 @@ interface ChatPanelProps {
 }
 
 
+import { QuickActionOverlay } from './chat/QuickActionOverlay';
+import { useChatStore } from '../store/useChatStore';
+import { useFileStore } from '../store/useFileStore';
+
 export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, isStreaming, settings }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedThinking, setExpandedThinking] = useState<number | null>(null);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('default-coder');
+  const [showQuickActions, setShowQuickActions] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { RW_contextSnippets, removeContextSnippet, addContextSnippet, RW_messages } = useChatStore();
+  const { RW_fileStore } = useFileStore();
+
+  const [showContextSelector, setShowContextSelector] = useState(false);
 
   useEffect(() => {
     getAvailableAgents().then(setAgents);
@@ -89,8 +104,16 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (input.trim() && !isStreaming) {
-      onSendMessage(input.trim(), { agentId: selectedAgentId });
+      // Build context metadata if snippets are present
+      let finalMessage = input.trim();
+      if (RW_contextSnippets.length > 0) {
+        const contextStr = RW_contextSnippets.map(s => `[CONTEXT: ${s.path}]\n${s.content}`).join('\n\n');
+        finalMessage = `Context Information:\n${contextStr}\n\nUser Question:\n${finalMessage}`;
+      }
+
+      onSendMessage(finalMessage, { agentId: selectedAgentId });
       setInput('');
+      setShowQuickActions(true);
     }
   };
 
@@ -109,12 +132,13 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
 
   const renderMarkdown = (content: string) => {
     return (
-      <ReactMarkdown 
-        rehypePlugins={[rehypeRaw, rehypeSanitize]}
-        className="markdown-body"
-      >
-        {content}
-      </ReactMarkdown>
+      <div className="markdown-body">
+        <ReactMarkdown 
+          rehypePlugins={[rehypeRaw as any, rehypeSanitize as any]}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
     );
   };
 
@@ -166,23 +190,23 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   };
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-[#1e1e1e] border-r border-[#3c3c3c]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-surface-base border-r border-border-subtle">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[#3c3c3c] bg-[#252526] flex items-center justify-between shadow-sm z-10 shrink-0">
+      <div className="px-4 py-3 border-b border-border-subtle bg-surface-card flex items-center justify-between shadow-sm z-10 shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={onNewChat}
-            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors"
+            className="p-1.5 hover:bg-surface-accent rounded-lg transition-colors"
             title="New Chat"
           >
-            <Plus className="w-4 h-4 text-[#858585]" />
+            <Plus className="w-4 h-4 text-text-subtle" />
           </button>
-          <div className="p-1.5 bg-[#007acc]/10 rounded-lg">
-            <Sparkles className="w-4 h-4 text-[#007acc]" />
+          <div className="p-1.5 bg-accent-intel/10 rounded-lg">
+            <Sparkles className="w-4 h-4 text-accent-intel" />
           </div>
           <div className="flex flex-col">
-            <span className="font-bold text-sm text-[#e5e5e5] tracking-tight uppercase leading-none">AI Assistant</span>
-            <span className="text-[9px] text-[#007acc] font-bold uppercase tracking-widest mt-0.5 leading-none">
+            <span className="font-bold text-sm text-text-primary tracking-tight uppercase leading-none">AI Assistant</span>
+            <span className="text-[9px] text-accent-intel font-bold uppercase tracking-widest mt-0.5 leading-none">
               {settings.aiPersona === 'custom' ? 'Custom Persona' : settings.aiPersona}
             </span>
           </div>
@@ -196,16 +220,16 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
             }}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all ${
               settings.aiChainOfThought 
-                ? 'bg-[#007acc]/10 border-[#007acc]/30 text-[#007acc]' 
-                : 'bg-[#3c3c3c]/30 border-[#3c3c3c] text-[#858585]'
+                ? 'bg-accent-intel/10 border-accent-intel/30 text-accent-intel' 
+                : 'bg-surface-accent/30 border-border-subtle text-text-subtle'
             }`}
             title={settings.aiChainOfThought ? "Chain of Thought Enabled" : "Chain of Thought Disabled"}
           >
             <BrainCircuit className={`w-3.5 h-3.5 ${settings.aiChainOfThought ? 'animate-pulse' : ''}`} />
             <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">CoT</span>
           </button>
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] text-[#858585] font-medium uppercase tracking-widest">Ready</span>
+          <div className="w-2 h-2 rounded-full bg-accent-ops animate-pulse" />
+          <span className="text-[10px] text-text-subtle font-medium uppercase tracking-widest">Ready</span>
         </div>
       </div>
 
@@ -301,16 +325,78 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
           </button>
         </div>
         <form onSubmit={handleSubmit} className="relative group max-w-3xl mx-auto">
-          <div className="relative flex items-end bg-[#252526] border border-[#3c3c3c] rounded-2xl focus-within:border-[#007acc] focus-within:ring-1 focus-within:ring-[#007acc]/20 transition-all shadow-lg">
+          <QuickActionOverlay 
+            isVisible={showQuickActions && messages.length > 0 && !input} 
+            onAction={(suggestion) => {
+              setInput(suggestion);
+              setShowQuickActions(false);
+            }} 
+          />
+          
+          {RW_contextSnippets.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2 px-1">
+              {RW_contextSnippets.map((s, i) => (
+                <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-accent-intel/10 border border-accent-intel/30 rounded-md">
+                  <Code2 className="w-3 h-3 text-accent-intel" />
+                  <span className="text-[10px] font-medium text-text-primary truncate max-w-[120px]">{s.path.split('/').pop()}</span>
+                  <button onClick={() => removeContextSnippet(s.path)} className="text-text-subtle hover:text-accent-destructive transition-colors">
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="relative flex items-end bg-surface-card border border-border-subtle rounded-2xl focus-within:border-accent-primary focus-within:ring-1 focus-within:ring-accent-primary/20 transition-all shadow-lg">
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setInput(val);
+                if (val.endsWith('@')) {
+                  setShowContextSelector(true);
+                } else if (showContextSelector && !val.includes('@')) {
+                  setShowContextSelector(false);
+                }
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Ask GIDE to build something..."
-              className="w-full bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder-[#858585] focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar"
+              className="w-full bg-transparent px-4 py-3 pr-12 text-sm text-text-primary placeholder-text-subtle focus:outline-none resize-none min-h-[44px] max-h-[200px] custom-scrollbar"
               rows={1}
               disabled={isStreaming}
             />
+
+            <AnimatePresence>
+              {showContextSelector && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  className="absolute bottom-full left-0 mb-2 w-64 bg-surface-card border border-border-subtle rounded-xl shadow-2xl p-2 z-[60]"
+                >
+                  <div className="text-[10px] font-bold text-text-subtle uppercase tracking-widest px-2 py-1 border-b border-border-subtle mb-1">
+                    Inject Context
+                  </div>
+                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                    {Object.keys(RW_fileStore).slice(0, 10).map((path) => (
+                      <button
+                        key={path}
+                        onClick={() => {
+                          addContextSnippet({ path, content: RW_fileStore[path].content });
+                          setInput(input.slice(0, -1)); // Remove @
+                          setShowContextSelector(false);
+                          toast.success(`Context added: ${path}`);
+                        }}
+                        className="w-full text-left px-2 py-2 hover:bg-surface-accent rounded-lg text-xs text-text-primary truncate transition-colors flex items-center gap-2"
+                      >
+                        <Code2 className="w-3.5 h-3.5 text-accent-intel" />
+                        <span className="truncate">{path}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <button
               type="submit"
               disabled={!input.trim() || isStreaming}
@@ -325,11 +411,11 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
           </div>
         </form>
         <div className="mt-2 flex items-center justify-center gap-4 max-w-3xl mx-auto opacity-40">
-          <p className="text-[9px] text-[#858585] font-bold uppercase tracking-widest">
+          <p className="text-[9px] text-text-subtle font-bold uppercase tracking-widest">
             Enter to send
           </p>
-          <div className="flex items-center gap-1 text-[9px] text-[#858585] font-bold uppercase tracking-widest">
-            <Zap className="w-2.5 h-2.5 text-yellow-500" />
+          <div className="flex items-center gap-1 text-[9px] text-text-subtle font-bold uppercase tracking-widest">
+            <Zap className="w-2.5 h-2.5 text-accent-security" />
             <span>AI Powered</span>
           </div>
         </div>

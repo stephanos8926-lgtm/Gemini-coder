@@ -10,7 +10,7 @@ interface StatusBarProps {
 
 export const StatusBar: React.FC<StatusBarProps> = ({ isTerminalVisible, onToggleTerminal, workspace }) => {
   return (
-    <div className="h-6 w-full bg-[#007acc] text-white flex items-center justify-between px-3 text-[10px] sm:text-[11px] font-medium select-none z-50">
+    <div className="h-6 w-full bg-accent-intel text-white flex items-center justify-between px-3 text-[10px] sm:text-[11px] font-medium select-none z-50">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1.5 opacity-90">
           <ShieldCheck className="w-3 h-3" />

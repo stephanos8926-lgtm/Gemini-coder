@@ -1,32 +1,32 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { useAppStore } from '../store/useAppStore';
+import { useFileStore } from '../store/useFileStore';
 
 export const TabBar: React.FC = () => {
-  const { openedFiles, activeFile, setActiveFile, closeFile } = useAppStore();
+  const { RW_openFiles, RW_activeFile, setActiveFile, closeFile } = useFileStore();
 
-  if (openedFiles.length === 0) return null;
+  if (RW_openFiles.length === 0) return null;
 
   return (
-    <div className="flex bg-[#252526] h-9 border-b border-[#3c3c3c] overflow-x-auto no-scrollbar">
-      {openedFiles.map((path) => {
+    <div className="flex bg-surface-card h-10 border-b border-border-subtle overflow-x-auto no-scrollbar scroll-smooth">
+      {RW_openFiles.map((path) => {
         const fileName = path.split('/').pop() || path;
-        const isActive = activeFile === path;
+        const isActive = RW_activeFile === path;
         
         return (
           <div
             key={path}
-            className={`group flex items-center min-w-[120px] max-w-[200px] border-r border-[#3c3c3c] px-3 cursor-pointer text-sm
-              ${isActive ? 'bg-[#1e1e1e] text-white border-t-2 border-t-[#007acc]' : 'bg-[#2d2d2d] text-[#969696] hover:bg-[#2d2d2d]/80'}`}
+            className={`group flex items-center min-w-[140px] max-w-[240px] border-r border-border-subtle px-4 cursor-pointer text-[13px] relative transition-all duration-200
+              ${isActive ? 'bg-surface-base text-text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-accent-primary' : 'bg-surface-card text-text-subtle hover:bg-surface-hover'}`}
             onClick={() => setActiveFile(path)}
           >
-            <span className="truncate flex-grow">{fileName}</span>
+            <span className="truncate flex-grow py-2.5 font-medium">{fileName}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 closeFile(path);
               }}
-              className="ml-2 opacity-0 group-hover:opacity-100 hover:bg-[#404040] rounded-sm p-0.5"
+              className="ml-2 opacity-0 group-hover:opacity-100 hover:bg-surface-hover rounded-md p-1 transition-opacity"
             >
               <X size={14} />
             </button>

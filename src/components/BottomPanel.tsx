@@ -10,10 +10,12 @@ import { StaticLanguageNotice } from './StaticLanguageNotice';
 
 const ToolsPanel = lazy(() => import('./ToolsPanel').then(m => ({ default: m.ToolsPanel })));
 
+import { WasmTerminal } from './WasmTerminal';
+
 interface BottomPanelProps {
   files: FileStore;
-  activeTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge';
-  onTabChange: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge') => void;
+  activeTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge' | 'terminal';
+  onTabChange: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge' | 'terminal') => void;
   onSelectFile: (path: string) => void;
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
@@ -132,6 +134,17 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           Debugger
         </button>
         <button
+          onClick={() => onTabChange('terminal')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+            activeTab === 'terminal'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          Terminal
+        </button>
+        <button
           onClick={() => onTabChange('forge')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
             activeTab === 'forge'
@@ -186,6 +199,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           }>
             <ToolsPanel />
           </Suspense>
+        ) : activeTab === 'terminal' ? (
+          <WasmTerminal />
         ) : activeTab === 'debug' ? (
           <DebugDashboard />
         ) : activeTab === 'forge' ? (

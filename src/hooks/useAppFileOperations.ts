@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileStore } from '../lib/fileStore';
 import { useFileSystemMutations } from './useFileSystem';
-import { useAppStore } from '../store/useAppStore';
+import { useFileStore } from '../store/useFileStore';
 
 interface UseAppFileOperationsProps {
   workspaceName: string;
@@ -19,7 +19,7 @@ export function useAppFileOperations({
   setMobileView
 }: UseAppFileOperationsProps) {
   const { saveFileMutation, createFileMutation, deleteFileMutation, renameFileMutation } = useFileSystemMutations();
-  const { activeFile, setActiveFile } = useAppStore();
+  const { RW_activeFile: activeFile, setActiveFile } = useFileStore();
   const [fileToDelete, setFileToDelete] = useState<string | null>(null);
   const [fileToRename, setFileToRename] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');

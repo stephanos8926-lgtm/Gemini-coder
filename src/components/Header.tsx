@@ -67,27 +67,27 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleRightSidebar
 }) => {
   return (
-    <header className="h-12 border-b border-[#3c3c3c] bg-[#2d2d2d] flex items-center justify-between px-4 shrink-0 z-50">
+    <header className="h-12 border-b border-border-subtle bg-surface-card flex items-center justify-between px-4 shrink-0 z-50">
       <div className="flex items-center gap-4">
         <button
           onClick={onToggleLeftSidebar}
           id="toggle-left-sidebar-btn"
-          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
           title="Toggle Side Bar (Ctrl+B)"
         >
           <PanelLeft className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#007acc] rounded-lg flex items-center justify-center shadow-lg shadow-[#007acc]/20 shrink-0">
+          <div className="w-8 h-8 bg-accent-intel rounded-lg flex items-center justify-center shadow-lg shadow-accent-intel/20 shrink-0">
             <Terminal className="w-5 h-5 text-white" />
           </div>
           <div className="hidden sm:flex flex-col">
-            <h1 className="text-sm font-bold text-white tracking-tight leading-none">{RW_APP_NAME}</h1>
-            <span className="text-[10px] text-[#858585] font-medium uppercase tracking-wider mt-1">{RW_APP_SUBTITLE}</span>
+            <h1 className="text-sm font-bold text-text-primary tracking-tight leading-none">{RW_APP_NAME}</h1>
+            <span className="text-[10px] text-text-subtle font-medium uppercase tracking-wider mt-1">{RW_APP_SUBTITLE}</span>
           </div>
           <button
-            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors text-[#007acc] sm:hidden"
+            className="p-1.5 hover:bg-surface-accent rounded-lg transition-colors text-accent-intel sm:hidden"
             onClick={() => onShowExplorer()}
             id="mobile-toggle-explorer-btn"
             aria-label="Toggle Project Explorer"
@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        <div className="h-6 w-[1px] bg-[#3c3c3c] mx-2 hidden sm:block" />
+        <div className="h-6 w-[1px] bg-border-subtle mx-2 hidden sm:block" />
 
         <WorkspaceSelector 
           workspaceName={workspaceName}
@@ -117,13 +117,13 @@ export const Header: React.FC<HeaderProps> = ({
           showMcpModal={showMcpModal}
         />
 
-        <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1 hidden lg:block" />
+        <div className="h-4 w-[1px] bg-border-subtle mx-1 hidden lg:block" />
 
         <div className="flex items-center gap-1">
           <button
             onClick={onSaveAll}
             id="header-save-all-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Save All"
           >
             <Download className="w-4 h-4 rotate-180" />
@@ -132,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowCommandPalette}
             id="header-command-palette-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Command Palette (Ctrl+K)"
           >
             <Search className="w-4 h-4" />
@@ -141,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowGitPanel}
             id="header-git-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Git Operations"
           >
             <GitBranch className="w-4 h-4" />
@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowSettingsModal}
             id="header-settings-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Settings"
           >
             <SettingsIcon className="w-4 h-4" />
@@ -159,14 +159,14 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onToggleRightSidebar}
             id="toggle-right-sidebar-btn"
-            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
             title="Toggle AI Assistant"
           >
             <PanelRight className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="h-4 w-[1px] bg-[#3c3c3c] mx-1" />
+        <div className="h-4 w-[1px] bg-border-subtle mx-1" />
 
         <UserProfile 
           user={user}

@@ -92,8 +92,8 @@ export class ProjectContextEngine {
             const stats = await fs.stat(fullPath);
             const content = await fs.readFile(fullPath, 'utf8');
             
-            // Index symbols for TS/JS files
-            if (entry.name.match(/\.(ts|tsx|js|jsx)$/)) {
+            // Index symbols for TS/JS/Python files
+            if (entry.name.match(/\.(ts|tsx|js|jsx|py)$/)) {
               await this.symbols.indexFile(relPath, content);
             }
 
@@ -201,6 +201,13 @@ export class ProjectContextEngine {
     // 6. Fetch contents for top results
     const results = await Promise.all(top.map(async ({ entry }) => {
       try {
+        // Integrate AST/skeleton summarization if available
+        if (entry.path.match(/\.(ts|tsx|js|jsx|py)$/)) {
+          const content = await fs.readFile(entry.path, 'utf8');
+          const skeleton = await this.symbols.generateSkeleton(entry.path, content);
+          return { path: entry.path, content: skeleton };
+        }
+        
         const content = await fs.readFile(entry.path, 'utf8');
         return { path: entry.path, content: content.substring(0, 5000) }; // Cap at 5k chars
       } catch (e) {

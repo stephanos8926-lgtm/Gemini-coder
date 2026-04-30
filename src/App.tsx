@@ -36,6 +36,11 @@ import { useFileStore } from './store/useFileStore';
 
 // Branding & System Constants
 import { APP_CONFIG } from './constants/appConfig';
+import { Toaster } from 'sonner';
+import { TaskNotificationHandler } from './components/TaskNotificationHandler';
+
+import { useLayoutState } from './hooks/useLayoutState';
+import { useModalState } from './hooks/useModalState';
 
 import { generateId } from './lib/projectStore';
 import { type Message } from './lib/gemini';
@@ -52,9 +57,9 @@ const TerminalPanel = lazy(() => import('./components/TerminalPanel').then(m => 
  * @description Sophisticated placeholder displayed during asynchronous component hydration.
  */
 const PanelLoader = () => (
-  <div className="flex-1 flex flex-col items-center justify-center h-full bg-[#1e1e1e] text-[#858585] gap-3">
-    <div className="p-2 bg-[#007acc]/10 rounded-xl border border-[#007acc]/20 animate-pulse">
-      <Sparkles className="w-6 h-6 text-[#007acc]" />
+  <div className="flex-1 flex flex-col items-center justify-center h-full bg-surface-base text-text-subtle gap-3">
+    <div className="p-2 bg-accent-intel/10 rounded-xl border border-accent-intel/20 animate-pulse">
+      <Sparkles className="w-6 h-6 text-accent-intel" />
     </div>
     <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Hydrating Panel</span>
   </div>
@@ -66,9 +71,11 @@ import { MainLayout } from './components/layout/MainLayout';
  * @component App
  * @description Primary entry point for RapidForge IDE. Orchestrates modular state synchronization and layout distribution.
  */
+import { useAppInitialization } from './hooks/useAppInitialization';
+import { DesktopIDE } from './components/layout/DesktopIDE';
+
 export default function App() {
-  // Sync from Firebase Context
-  const { user, isAuthLoading: isFirebaseLoading } = useFirebase();
+  const { user } = useAppInitialization();
 
   // Modular State - Workspace
   const { 
@@ -76,154 +83,37 @@ export default function App() {
     RW_workspaces, 
     RW_currentProjectId,
     setWorkspaceName,
-    setWorkspaces,
     setCurrentProjectId
   } = useWorkspaceStore();
 
-  // Modular State - Auth & API
   const { RW_apiKey, setApiKey } = useAuthStore();
+  const { isLeftSidebarOpen, setLeftSidebarOpen, isRightSidebarOpen, setRightSidebarOpen, showTerminal, setShowTerminal } = useAppStore();
+  const { RW_activeModel, setActiveModel, RW_messages, RW_isStreaming } = useChatStore();
+  const { RW_fileStore, RW_activeFile, setActiveFile, setMobileTerminalOpen, setMobileExplorerOpen, setMobileView, RW_isMobileExplorerOpen, RW_mobileView, RW_isMobileTerminalOpen } = useFileStore();
 
-  // Desktop Sidebar & Bottom State
-  const { 
-    isLeftSidebarOpen, 
-    isRightSidebarOpen, 
-    activeBottomTab,
-    setLeftSidebarOpen, 
-    setRightSidebarOpen,
-    setActiveBottomTab
-  } = useAppStore();
-  
-  // Modular State - Chat & Model
-  const { 
-    RW_messages, 
-    RW_isStreaming, 
-    RW_activeModel, 
-    setMessages,
-    setActiveModel
-  } = useChatStore();
-
-  // Modular State - Filesystem
-  const { 
-    RW_fileStore, 
-    RW_activeFile, 
-    RW_isMobileTerminalOpen,
-    RW_isMobileExplorerOpen,
-    RW_mobileView,
-    setFileStore,
-    setActiveFile,
-    setMobileTerminalOpen,
-    setMobileExplorerOpen,
-    setMobileView
-  } = useFileStore();
-
-  // Local UI State (transient views)
-  const [showKeyModal, setShowKeyModal] = useState(false);
+  const layout = useLayoutState();
+  const modals = useModalState();
   const [settings, setSettings] = useState<Settings>(settingsStore.get());
-  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showGitPanel, setShowGitPanel] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [showMcpModal, setShowMcpModal] = useState(false);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(profileStore.getActiveProfile());
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const { projects, setProjects, isLoading: isProjectsLoading, createProject, deleteProject } = useProjects();
   const { data: workspacesData, isLoading: isWorkspacesLoading } = useWorkspaces();
 
-  // Real-time filesystem sync via WebSockets
-  const { socket } = useSocket((data: { event: string, path: string }) => {
-    filesystemService.loadAllFiles().then(setFileStore);
-  });
+  // Compatibility Wrappers & Hooks (shortened for clarity in this edit)
+  const setMessagesCompat = (val: any) => useChatStore.getState().setMessages(typeof val === 'function' ? val(RW_messages) : val);
+  const setFileStoreCompat = (val: any) => useFileStore.getState().setFileStore(typeof val === 'function' ? val(RW_fileStore) : val);
 
-  useEffect(() => {
-    import('./lib/persistence/adapters/IndexedDBAdapter').then(({ IndexedDBAdapter }) => {
-      nexusPersist.setLocalAdapter(new IndexedDBAdapter());
-    });
-  }, []);
+  const authHook = useAppAuth({ user, setActiveProfile, setApiKey, setSettings, setShowKeyModal: modals.setShowKeyModal });
+  const projectHook = useAppProject({ projects, setProjects, currentProjectId: RW_currentProjectId, setCurrentProjectId, fileStore: RW_fileStore, setFileStore: setFileStoreCompat, setMessages: setMessagesCompat, setActiveFile, createProject, deleteProject, isProjectsLoading });
+  const fileOperationsHook = useAppFileOperations({ workspaceName: RW_workspaceName, fileStore: RW_fileStore, setFileStore: setFileStoreCompat, mobileView: layout.RW_mobileView, setMobileView: layout.setMobileView });
+  const chatHook = useAppChat({ apiKey: RW_apiKey, model: RW_activeModel, workspaceName: RW_workspaceName, selectedFile: RW_activeFile, settings, enabledTools: [], fileStore: RW_fileStore, setFileStore: setFileStoreCompat, setShowKeyModal: modals.setShowKeyModal, systemModifier: useChatStore.getState().RW_systemModifier });
 
-  // Proactive Security Alerts
-  useEffect(() => {
-    if (!socket) return;
-    
-    socket.on('security-alert', (data: { path: string, issues: any[] }) => {
-      if (data.issues && data.issues.length > 0) {
-          const issueMsg = `[SECURITY ALERT] Issues detected in ${data.path}:\n${data.issues.map(i => `- ${i.message}`).join('\n')}`;
-          useChatStore.getState().setMessages([...useChatStore.getState().RW_messages, { id: generateId(), role: 'model', content: issueMsg }]);
-      }
-    });
-
-    return () => {
-      socket.off('security-alert');
-    };
-  }, [socket]);
-
-
-  // Type Compatibility Wrappers for Legacy Hooks
-  const setMessagesCompat: React.Dispatch<React.SetStateAction<Message[]>> = (val) => {
-    if (typeof val === 'function') {
-      setMessages(val(useChatStore.getState().RW_messages));
-    } else {
-      setMessages(val);
-    }
-  };
-
-  const setFileStoreCompat: React.Dispatch<React.SetStateAction<FileStore>> = (val) => {
-    if (typeof val === 'function') {
-      setFileStore(val(useFileStore.getState().RW_fileStore));
-    } else {
-      setFileStore(val);
-    }
-  };
-
-  // Orchestration Hooks (Proxying state to business logic)
-  const authHook = useAppAuth({
-    user,
-    setActiveProfile: (p) => setActiveProfile(p), 
-    setApiKey,
-    setSettings,
-    setShowKeyModal
-  });
-
-  const projectHook = useAppProject({
-    projects,
-    setProjects,
-    currentProjectId: RW_currentProjectId,
-    setCurrentProjectId,
-    fileStore: RW_fileStore,
-    setFileStore: setFileStoreCompat,
-    setMessages: setMessagesCompat,
-    setActiveFile,
-    createProject,
-    deleteProject,
-    isProjectsLoading
-  });
-
-  const fileOperationsHook = useAppFileOperations({
-    workspaceName: RW_workspaceName,
-    fileStore: RW_fileStore,
-    setFileStore: setFileStoreCompat,
-    mobileView: RW_mobileView,
-    setMobileView: setMobileView
-  });
-
-  const chatHook = useAppChat({
-    apiKey: RW_apiKey,
-    model: RW_activeModel,
-    workspaceName: RW_workspaceName,
-    selectedFile: RW_activeFile,
-    settings,
-    enabledTools: [],
-    fileStore: RW_fileStore,
-    setFileStore: setFileStoreCompat,
-    setShowKeyModal,
-    systemModifier: useChatStore.getState().RW_systemModifier
-  });
-
-  const handleSendMessage = chatHook.handleSendMessage;
+  if (!user) return <LandingPage onSignInGoogle={authHook.handleSignInGoogle} onSignInGithub={authHook.handleSignInGithub} />;
 
   return (
     <div className="flex flex-col h-screen bg-[#1e1e1e] text-[#cccccc]">
+      <Toaster position="top-right" richColors closeButton theme="dark" />
+      <TaskNotificationHandler />
       <Header 
         user={user}
         workspaceName={RW_workspaceName}
@@ -234,17 +124,17 @@ export default function App() {
         onSignInGoogle={authHook.handleSignInGoogle}
         onSignInGithub={authHook.handleSignInGithub}
         onSignOut={authHook.handleSignOut}
-        onShowWorkspaceModal={() => setShowWorkspaceModal(true)}
-        onShowSettingsModal={() => setShowSettingsModal(true)}
-        onShowGitPanel={() => setShowGitPanel(true)}
+        onShowWorkspaceModal={() => modals.setShowWorkspaceModal(true)}
+        onShowSettingsModal={() => modals.setShowSettingsModal(true)}
+        onShowGitPanel={() => layout.setShowGitPanel(true)}
         onShowTerminal={() => setShowTerminal(!showTerminal)}
-        onShowCommandPalette={() => setShowCommandPalette(true)}
-        onShowMcpModal={() => setShowMcpModal(true)}
-        showMcpModal={showMcpModal}
+        onShowCommandPalette={() => modals.setShowCommandPalette(true)}
+        onShowMcpModal={() => modals.setShowMcpModal(true)}
+        showMcpModal={modals.showMcpModal}
         onSaveAll={fileOperationsHook.handleSaveAll}
         activeProfile={activeProfile}
-        isMobileMenuOpen={isMobileMenuOpen}
-        setIsMobileMenuOpen={setIsMobileMenuOpen}
+        isMobileMenuOpen={layout.isMobileMenuOpen}
+        setIsMobileMenuOpen={layout.setIsMobileMenuOpen}
         onShowExplorer={() => setMobileExplorerOpen(true)}
         mobileView={RW_mobileView}
         setMobileView={setMobileView}
@@ -253,157 +143,124 @@ export default function App() {
         isRightSidebarOpen={isRightSidebarOpen}
         onToggleRightSidebar={() => setRightSidebarOpen(!isRightSidebarOpen)}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 flex overflow-hidden relative">
-          {user ? (
-            <div className="flex-1 flex h-full">
-              {/* Professional Desktop IDE Layout */}
-              <MainLayout 
-                settings={settings}
-                showTerminal={showTerminal}
-                onSendMessage={handleSendMessage}
+
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Responsive Layout Distribution */}
+        <DesktopIDE 
+          settings={settings}
+          showTerminal={showTerminal}
+          onSendMessage={chatHook.handleSendMessage}
+          onDownloadFile={fileOperationsHook.handleDownloadFile}
+          onDownloadZip={fileOperationsHook.handleDownloadZip}
+          onDeleteFile={fileOperationsHook.handleDeleteFile}
+        />
+
+        <div className="sm:hidden flex-1 h-full relative">
+          <MobileIDE
+            messages={RW_messages}
+            onSendMessage={chatHook.handleSendMessage}
+            isStreaming={RW_isStreaming}
+            files={RW_fileStore}
+            workspaceName={RW_workspaceName}
+            settings={settings}
+            showSidebar={RW_isMobileExplorerOpen}
+            setShowSidebar={setMobileExplorerOpen}
+            showPreview={RW_mobileView === 'preview'}
+            setShowPreview={(v) => setMobileView(v ? 'preview' : 'chat')}
+            showSettings={modals.showSettingsModal}
+            setShowSettings={modals.setShowSettingsModal}
+            mobileView={RW_mobileView}
+            setMobileView={setMobileView}
+            fileTreeComponent={
+              <FileTree
+                files={RW_fileStore}
+                selectedFile={RW_activeFile}
+                onSelect={(path) => { setActiveFile(path); setMobileExplorerOpen(false); setMobileView('editor'); }}
+                onDownload={fileOperationsHook.handleDownloadFile}
+                onDownloadZip={fileOperationsHook.handleDownloadZip}
+                onImportZip={() => {}}
+                workspaceName={RW_workspaceName}
+                onDelete={fileOperationsHook.handleDeleteFile}
+              />
+            }
+            editorComponent={
+              <Suspense fallback={<PanelLoader />}>
+                <CodeEditor
+                  content={RW_activeFile ? RW_fileStore[RW_activeFile]?.content || '' : ''}
+                  filename={RW_activeFile || ''}
+                  settings={settings}
+                />
+              </Suspense>
+            }
+            previewComponent={
+              <BottomPanel
+                files={RW_fileStore}
+                activeTab="preview"
+                onTabChange={() => {}}
+                onSelectFile={setActiveFile}
                 onDownloadFile={fileOperationsHook.handleDownloadFile}
                 onDownloadZip={fileOperationsHook.handleDownloadZip}
+                onImportZip={() => {}}
                 onDeleteFile={fileOperationsHook.handleDeleteFile}
+                activeFile={RW_activeFile || undefined}
               />
-
-              {/* Mobile Adaptive Handset View */}
-              <div className="sm:hidden flex-1 h-full relative">
-                <MobileIDE
-                  messages={RW_messages}
-                  onSendMessage={handleSendMessage}
-                  isStreaming={RW_isStreaming}
-                  files={RW_fileStore}
-                  workspaceName={RW_workspaceName}
-                  settings={settings}
-                  showSidebar={RW_isMobileExplorerOpen}
-                  setShowSidebar={setMobileExplorerOpen}
-                  showPreview={RW_mobileView === 'preview'}
-                  setShowPreview={(v) => setMobileView(v ? 'preview' : 'chat')}
-                  showSettings={showSettingsModal}
-                  setShowSettings={setShowSettingsModal}
-                  mobileView={RW_mobileView}
-                  setMobileView={setMobileView}
-                  fileTreeComponent={
-                    <FileTree
-                      files={RW_fileStore}
-                      selectedFile={RW_activeFile}
-                      onSelect={(path) => {
-                        setActiveFile(path);
-                        setMobileExplorerOpen(false);
-                        setMobileView('editor');
-                      }}
-                      onDownload={fileOperationsHook.handleDownloadFile}
-                      onDownloadZip={fileOperationsHook.handleDownloadZip}
-                      onImportZip={() => {}}
-                      workspaceName={RW_workspaceName}
-                      onDelete={fileOperationsHook.handleDeleteFile}
-                    />
-                  }
-                  editorComponent={
-                    <Suspense fallback={<PanelLoader />}>
-                      <CodeEditor
-                        content={RW_activeFile ? RW_fileStore[RW_activeFile]?.content || '' : ''}
-                        filename={RW_activeFile || ''}
-                        settings={settings}
-                      />
-                    </Suspense>
-                  }
-                  previewComponent={
-                    <BottomPanel
-                      files={RW_fileStore}
-                      activeTab="preview"
-                      onTabChange={() => {}}
-                      onSelectFile={setActiveFile}
-                      onDownloadFile={fileOperationsHook.handleDownloadFile}
-                      onDownloadZip={fileOperationsHook.handleDownloadZip}
-                      onImportZip={() => {}}
-                      onDeleteFile={fileOperationsHook.handleDeleteFile}
-                      activeFile={RW_activeFile || undefined}
-                    />
-                  }
-                />
-              </div>
-            </div>
-          ) : (
-            <LandingPage 
-              onSignInGoogle={authHook.handleSignInGoogle} 
-              onSignInGithub={authHook.handleSignInGithub} 
-            />
-          )}
+            }
+          />
         </div>
-        <StatusBar 
-            isTerminalVisible={showTerminal} 
-            onToggleTerminal={() => {
-              if (window.innerWidth < 640) {
-                setMobileTerminalOpen(true);
-              } else {
-                setShowTerminal(!showTerminal);
-              }
-            }}
-            workspace={RW_workspaceName}
-        />
-        <DiffStagingPanel />
-        <TaskMonitorPanel projectId={RW_currentProjectId || 'default'} />
-        <SwarmMonitorPanel projectId={RW_currentProjectId || 'default'} />
-
-        {/* Mobile Ergonomics: Bottom Sheets */}
-        <AdaptiveBottomSheet 
-          isOpen={RW_isMobileTerminalOpen} 
-          onClose={() => setMobileTerminalOpen(false)}
-          title="Terminal Console"
-        >
-          <div className="h-full bg-black">
-            <Suspense fallback={<PanelLoader />}>
-              <TerminalPanel />
-            </Suspense>
-          </div>
-        </AdaptiveBottomSheet>
-
-        <CommandPalette 
-          isOpen={showCommandPalette}
-          onClose={() => setShowCommandPalette(false)}
-          files={Object.keys(RW_fileStore)}
-          workspaces={projects.map(p => p.name)}
-          onSelectFile={setActiveFile}
-          onSelectWorkspace={setWorkspaceName}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onAiAction={(type) => {
-            setRightSidebarOpen(true);
-            setTimeout(() => handleSendMessage(`Please ${type} the current file.`), 100);
-          }}
-          onGenerateReadme={() => {
-            setRightSidebarOpen(true);
-            handleSendMessage("Generate a comprehensive README.md for this project.");
-          }}
-        />
-
-        <ModalsContainer 
-          showProjectModal={false} 
-          setShowProjectModal={() => {}}
-          showKeyModal={showKeyModal}
-          setShowKeyModal={setShowKeyModal}
-          showWorkspaceModal={showWorkspaceModal}
-          setShowWorkspaceModal={setShowWorkspaceModal}
-          showSettingsModal={showSettingsModal}
-          setShowSettingsModal={setShowSettingsModal}
-          showMcpModal={showMcpModal}
-          setShowMcpModal={setShowMcpModal}
-          projects={projects}
-          currentProjectId={RW_currentProjectId}
-          handleSwitchProject={projectHook.handleSwitchProject}
-          handleCreateProject={projectHook.handleCreateProject}
-          handleDeleteProject={projectHook.handleDeleteProject}
-          handleImportProject={projectHook.handleImportProject}
-          handleSaveKey={setApiKey}
-          apiKey={RW_apiKey}
-          user={user}
-          setWorkspaceName={setWorkspaceName}
-          workspaceName={RW_workspaceName}
-          settings={settings}
-          setSettings={setSettings}
-        />
       </div>
+
+      <StatusBar 
+          isTerminalVisible={showTerminal} 
+          onToggleTerminal={() => window.innerWidth < 640 ? setMobileTerminalOpen(true) : setShowTerminal(!showTerminal)}
+          workspace={RW_workspaceName}
+      />
+      <DiffStagingPanel />
+      <TaskMonitorPanel projectId={RW_currentProjectId || 'default'} />
+      <SwarmMonitorPanel projectId={RW_currentProjectId || 'default'} />
+
+      <AdaptiveBottomSheet isOpen={RW_isMobileTerminalOpen} onClose={() => setMobileTerminalOpen(false)} title="Terminal Console">
+        <div className="h-full bg-black">
+          <Suspense fallback={<PanelLoader />}><TerminalPanel /></Suspense>
+        </div>
+      </AdaptiveBottomSheet>
+
+      <CommandPalette 
+        isOpen={modals.showCommandPalette}
+        onClose={() => modals.setShowCommandPalette(false)}
+        files={Object.keys(RW_fileStore)}
+        workspaces={projects.map(p => p.name)}
+        onSelectFile={setActiveFile}
+        onSelectWorkspace={setWorkspaceName}
+        onOpenSettings={() => modals.setShowSettingsModal(true)}
+        onAiAction={(type) => { setRightSidebarOpen(true); setTimeout(() => chatHook.handleSendMessage(`Please ${type} the current file.`), 100); }}
+        onGenerateReadme={() => { setRightSidebarOpen(true); chatHook.handleSendMessage("Generate a comprehensive README.md for this project."); }}
+      />
+
+      <ModalsContainer 
+        showProjectModal={false} 
+        setShowProjectModal={() => {}}
+        showKeyModal={modals.showKeyModal}
+        setShowKeyModal={modals.setShowKeyModal}
+        showWorkspaceModal={modals.showWorkspaceModal}
+        setShowWorkspaceModal={modals.setShowWorkspaceModal}
+        showSettingsModal={modals.showSettingsModal}
+        setShowSettingsModal={modals.setShowSettingsModal}
+        showMcpModal={modals.showMcpModal}
+        setShowMcpModal={modals.setShowMcpModal}
+        projects={projects}
+        currentProjectId={RW_currentProjectId}
+        handleSwitchProject={projectHook.handleSwitchProject}
+        handleCreateProject={projectHook.handleCreateProject}
+        handleDeleteProject={projectHook.handleDeleteProject}
+        handleImportProject={projectHook.handleImportProject}
+        handleSaveKey={setApiKey}
+        apiKey={RW_apiKey}
+        user={user}
+        setWorkspaceName={setWorkspaceName}
+        workspaceName={RW_workspaceName}
+        settings={settings}
+        setSettings={setSettings}
+      />
     </div>
   );
 }

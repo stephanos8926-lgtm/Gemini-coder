@@ -149,7 +149,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
 
   if (!filename) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#858585] text-sm italic h-full">
+      <div className="flex-1 flex items-center justify-center text-text-subtle text-sm italic h-full">
         Select a file to view its contents
       </div>
     );
@@ -185,12 +185,12 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e1e] overflow-hidden">
-      <div className="flex items-center px-4 py-2 bg-[#252526] border-b border-[#3c3c3c] text-sm text-[#d4d4d4]">
+    <div className="flex-1 flex flex-col h-full bg-surface-base overflow-hidden">
+      <div className="flex items-center px-4 py-2 bg-surface-card border-b border-border-subtle text-sm text-text-primary">
         {onOpenFiles && (
           <button 
             onClick={onOpenFiles}
-            className="sm:hidden mr-3 p-1.5 hover:bg-[#3c3c3c] rounded-md transition-colors text-[#858585] hover:text-[#d4d4d4] flex items-center gap-1.5"
+            className="sm:hidden mr-3 p-1.5 hover:bg-border-subtle rounded-md transition-colors text-text-subtle hover:text-text-primary flex items-center gap-1.5"
           >
             <FolderTree className="w-4 h-4" />
             <span>Files</span>
@@ -209,7 +209,11 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
           options={{
             fontSize: settings.fontSize,
             fontFamily: settings.fontFamily,
-            minimap: { enabled: window.innerWidth > 640 && settings.minimap },
+            minimap: { 
+              enabled: settings.minimap,
+              side: 'right',
+              showSlider: 'mouseover'
+            },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             folding: true,
@@ -254,7 +258,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                 top: toolbarPos.y,
                 zIndex: 1000
               }}
-              className="flex items-center gap-0.5 bg-[#252526] border border-[#454545] rounded-lg shadow-2xl p-1 overflow-hidden"
+              className="flex items-center gap-0.5 bg-surface-card border border-border-subtle rounded-lg shadow-2xl p-1 overflow-hidden"
             >
               <button
                 onClick={() => {
@@ -265,7 +269,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                 className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Explain this code"
               >
-                <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
+                <MessageSquare className="w-3.5 h-3.5 text-accent-intel" />
                 <span>Explain</span>
               </button>
               <div className="w-[1px] h-4 bg-[#3c3c3c] mx-0.5" />
@@ -278,7 +282,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                 className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Refactor this code"
               >
-                <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+                <Wand2 className="w-3.5 h-3.5 text-accent-intel" />
                 <span>Refactor</span>
               </button>
               <div className="w-[1px] h-4 bg-[#3c3c3c] mx-0.5" />
@@ -291,7 +295,7 @@ export function CodeEditor({ content, filename, onOpenFiles, onChange, onAiActio
                 className="flex items-center gap-1.5 px-3 py-2 hover:bg-[#3c3c3c] rounded text-[#cccccc] hover:text-white transition-colors text-xs font-medium"
                 title="Fix bugs"
               >
-                <Bug className="w-3.5 h-3.5 text-red-400" />
+                <Bug className="w-3.5 h-3.5 text-text-subtle" />
                 <span>Fix</span>
               </button>
             </motion.div>

@@ -1,0 +1,30 @@
+name: FrontendDesign
+description: Industry-standard UI/UX design patterns, professional React UI patterns, and mobile-first responsive architecture.
+instructions: |
+  # Core Principles: Aesthetics
+  - Color System: Use a 60-30-10 rule. Favor semantic color naming (e.g., `bg-surface`, `text-primary`, `border-subtle`).
+  - Typography: Build a typographic scale. Pair Inter sans-serif for body with refined display fonts for headings.
+  - Visual Depth: Avoid generic defaults. Use soft, consistent box shadows (`shadow-sm`, `shadow-md`) and borders for hierarchy.
+  - Spacing & Rhythm: Use Tailwind spacing classes (4px grid system). NEVER use hard-coded pixel values in CSS.
+
+  # React Professional Architecture
+  - Component Design: Embrace composition over monolithic components. Follow the Atomic Design pattern/Folder structure based on component responsibility.
+  - State Management: Minimize complexity. Use `useState`/`useReducer` for local UI state. Offload complex/shared state to dedicated stores with clear observability/telemetry.
+  - Performance: Implement `memo` and `useCallback` for expensive child renders. Use lazy loading (as done with `lazy` and `Suspense`) for heavy routes or components.
+  - Accessibility: Always use semantic HTML tags. Ensure `aria-*` labels for screen reader compatibility, especially on interactive elements/buttons.
+  - Pattern Consistency: Enforce interface definitions (TypeScript) for component props.
+
+  # Mobile-First Responsive Architecture
+  - Viewport Priority: Design and code for mobile-first. Expand complex layouts only for `sm:`, `md:`, `lg:` breakpoints.
+  - Interaction Targets: Ensure all buttons/interactive elements are >= 44px x 44px.
+  - Navigation Patterns: 
+    - Adaptive: Use `AdaptiveBottomSheet` for mobile modals.
+    - Tiered Nav: Drawers for sub-menus, tab bars for primary actions.
+  - Fluid Containers: Use `w-full max-w-7xl mx-auto` to prevent stretching.
+  - Dynamic Assets: Use `ResizeObserver` for canvases; avoid window events which trigger unnecessary re-renders.
+
+  # Professional Anti-Patterns
+  - Generic defaults: Avoid common purple/blue gradients or generic shadows.
+  - Fake State: Strictly avoid faking network latency or infrastructure readiness.
+  - Logic Coupling: Tight coupling of presentation and data/business logic.
+  - Non-responsiveness: Layouts should never overflow or require horizontal scrolling on small viewports.

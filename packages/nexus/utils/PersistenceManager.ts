@@ -63,7 +63,8 @@ export class PersistenceManager {
       : './dist/nexus-worker.js';
       
     if (!PersistenceManager.instance) {
-      PersistenceManager.instance = new PersistenceManager('nexus_telemetry.db', defaultWorkerPath);
+      const dbPath = isServer ? './data/db/rapidforge_integrity.db' : 'rapidforge_integrity.db';
+      PersistenceManager.instance = new PersistenceManager(dbPath, defaultWorkerPath);
     }
     return PersistenceManager.instance;
   }
@@ -93,7 +94,7 @@ export class PersistenceManager {
     // We open a direct read connection here for simplicity in this turn,
     // though ideally it would go through the worker to keep file handles centralized.
     const Database = (await import('better-sqlite3')).default;
-    const db = new Database('nexus_telemetry.db', { readonly: true });
+    const db = new Database('./data/db/rapidforge_integrity.db', { readonly: true });
     try {
         const stmt = db.prepare('SELECT * FROM signal_backlog ORDER BY timestamp DESC LIMIT ?');
         return stmt.all(limit).map((row: any) => ({

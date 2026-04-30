@@ -7,11 +7,6 @@ interface AppState {
   setWorkspaceName: (name: string) => void;
   workspaces: string[];
   setWorkspaces: (workspaces: string[]) => void;
-  openedFiles: string[];
-  activeFile: string | null;
-  openFile: (path: string) => void;
-  closeFile: (path: string) => void;
-  setActiveFile: (path: string | null) => void;
   model: string;
   setModel: (model: string) => void;
   
@@ -22,8 +17,12 @@ interface AppState {
   setRightSidebarOpen: (open: boolean) => void;
   
   // Bottom Panel State
-  activeBottomTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge';
-  setActiveBottomTab: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge') => void;
+  activeBottomTab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge' | 'terminal';
+  setActiveBottomTab: (tab: 'preview' | 'tree' | 'tools' | 'debug' | 'forge' | 'terminal') => void;
+  
+  // Terminal visibility
+  showTerminal: boolean;
+  setShowTerminal: (show: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -33,25 +32,16 @@ export const useAppStore = create<AppState>()(
       setWorkspaceName: (workspaceName) => set({ workspaceName }),
       workspaces: [],
       setWorkspaces: (workspaces) => set({ workspaces }),
-      openedFiles: [],
-      activeFile: null,
       isLeftSidebarOpen: true,
       isRightSidebarOpen: true,
       activeBottomTab: 'tools',
-      openFile: (path) => set((state) => ({ 
-        openedFiles: state.openedFiles.includes(path) ? state.openedFiles : [...state.openedFiles, path],
-        activeFile: path
-      })),
-      closeFile: (path) => set((state) => ({ 
-        openedFiles: state.openedFiles.filter((p) => p !== path),
-        activeFile: state.activeFile === path ? (state.openedFiles[0] || null) : state.activeFile
-      })),
-      setActiveFile: (path) => set({ activeFile: path }),
       model: RW_DEFAULT_MODEL,
       setModel: (model) => set({ model }),
       setLeftSidebarOpen: (isLeftSidebarOpen) => set({ isLeftSidebarOpen }),
       setRightSidebarOpen: (isRightSidebarOpen) => set({ isRightSidebarOpen }),
       setActiveBottomTab: (activeBottomTab) => set({ activeBottomTab }),
+      showTerminal: false,
+      setShowTerminal: (showTerminal) => set({ showTerminal }),
     }),
     {
       name: 'forge-app-storage',

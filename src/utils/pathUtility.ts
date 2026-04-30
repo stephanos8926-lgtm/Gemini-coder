@@ -7,14 +7,11 @@ export function getSafePath(unsafePath: string, user: any, workspace: string = '
     const base = user.role === 'admin' 
       ? (workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT)
       : path.join(WORKSPACE_ROOT, workspace);
-    
-    // Ensure base directory exists so we can at least validate against it
+
     if (!fsSync.existsSync(base)) {
       try {
         fsSync.mkdirSync(base, { recursive: true });
-      } catch (err) {
-        // Ignore errors here, realpathSync will catch it if it's a real problem
-      }
+      } catch (err) { }
     }
 
     const resolvedPath = path.resolve(base, unsafePath);
@@ -23,12 +20,43 @@ export function getSafePath(unsafePath: string, user: any, workspace: string = '
     try {
       realBasePath = fsSync.realpathSync(base);
     } catch {
-       return resolvedPath; // Fallback
+       realBasePath = path.resolve(base);
     }
 
-    if (!resolvedPath.startsWith(realBasePath)) {
-        throw new Error('Path traversal attempt detected');
+    const normalizedResolved = path.normalize(resolvedPath);
+    const normalizedBase = path.normalize(realBasePath);
+
+    if (!normalizedResolved.startsWith(normalizedBase + (normalizedBase.endsWith(path.sep) ? '' : path.sep)) && normalizedResolved !== normalizedBase) {
+        throw new Error('Access denied: Path is outside of workspace root');
     }
 
+    // Protection against sensitive files
+    const fileName = path.basename(normalizedResolved);
+    if (user.role !== 'admin' && (
+      fileName === '.env' || 
+      fileName.startsWith('.env.') || 
+      fileName === 'firebase-service-account.json' ||
+      fileName === 'firebase-applet-config.json'
+    )) {
+      throw new Error('Access denied: Sensitive file access restricted');
+    }
+    
+    // Minimal workspace validation for non-admins
+    if (user.role !== 'admin' && (!workspace || !workspace.includes(user.uid) || workspace.split(/[/\\]/).filter(Boolean).length < 2)) {
+      throw new Error('Access denied: Valid workspace name is required (e.g., uid/main)');
+    }
+
+    return resolvedPath;
+}
+
+export function validateFilePath(unsafePath: string, user: any, workspace: string = '') {
+    const resolvedPath = getSafePath(unsafePath, user, workspace);
+    // Additional validation: prevent access to hidden files or system files
+    const pathComponents = resolvedPath.split(path.sep);
+    for (const component of pathComponents) {
+      if (component.startsWith('.') && component !== '.') {
+        throw new Error('Access denied: Hidden files are not accessible');
+      }
+    }
     return resolvedPath;
 }

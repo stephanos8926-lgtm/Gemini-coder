@@ -1,0 +1,7 @@
+name: SkillManagement
+description: System for installing and managing reusable skills.
+instructions: |
+  1. Always update `/.skills/SkillSet.json` when adding a skill.
+  2. Create a new `.yaml` file in `/.skills/` for the skill definition.
+  3. Load the skill by reading the YAML file into context only when requested.
+  4. Prune unused skills to keep context window optimized.

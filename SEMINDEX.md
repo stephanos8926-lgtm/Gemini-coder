@@ -1,60 +1,145 @@
-# SEMINDEX.md — Semantic Index for Gemini Context Caching
+# RapidForge Documentation Index
 
-> **Purpose:** Lightweight file/line reference map for large codebases  
-> **Usage:** Cache this file + system prompt, then reference entries by ID in queries  
+Generated automatically via RapidForge CLI.
 
----
-
-## INDEX ENTRIES
-
-### Entry Points
-[INIT-001] src/main.tsx:1-20 | React application entry point, context provider wrapping
-[INIT-002] server.ts:1-1931 | Main Express backend, WebSocket server, build orchestrator, LLM proxy
-
-### Central Orchestration (Frontend)
-[APP-001] src/App.tsx:60-150 | Main layout component, global state initialization, socket listeners
-[APP-002] src/App.tsx:160-205 | Proxy hooks wiring (authHook, projectHook, fileOperationsHook)
-[APP-003] src/App.tsx:238-340 | Desktop 3-column routing (react-resizable-panels)
-[APP-004] src/App.tsx:342-370 | Mobile responsive viewer routing (RW_mobileView)
-
-### Global State Modules (Zustand)
-[STATE-001] src/store/useAppStore.ts:1-25 | UI layout state (sidebars, bottom panels)
-[STATE-002] src/store/useAuthStore.ts:1-25 | Session keys, auth state
-[STATE-003] src/store/useChatStore.ts:1-39 | Chat messages, streaming state, system modifiers
-[STATE-004] src/store/useFileStore.ts:1-40 | Active file tracking, filesystem representation
-[STATE-005] src/store/useWorkspaceStore.ts:1-35 | Current project/workspace tracking
-
-### Core IDE Components
-[UI-EDITOR] src/components/CodeEditor.tsx | Monaco editor integration and diff displays
-[UI-TREE] src/components/FileTree.tsx | Sidebar filesystem explorer
-[UI-CHAT] src/components/ChatPanel.tsx | Right sidebar AI conversation panel
-[UI-TERM] src/components/TerminalPanel.tsx | XTerm.js integration for local shell execution
-[UI-BOT] src/components/BottomPanel.tsx | Desktop bottom panel wrapper (Terminal/Search/Problems)
-[UI-HDR] src/components/Header.tsx | Top navigation, auth controls, layout toggles
-[UI-MOB] src/components/AdaptiveBottomSheet.tsx | Mobile handset utility sheet (Vaul wrapper)
-
-### Core Hooks
-[HOOK-001] src/hooks/useAppChat.ts | Connects UI to `streamGemini` and patch engine
-[HOOK-002] src/hooks/useAppFileOperations.ts | File creation, saves, and deletes
-[HOOK-003] src/hooks/useSocket.ts | WebSocket listener abstractions
-[HOOK-004] src/hooks/useFileSystem.ts | Interaction with `filesystemService`
-
-### Frontend Services & Intelligence
-[SV-FILE] src/lib/filesystemService.ts | Interacts with server file manipulation APIs
-[SV-GEM] src/lib/gemini.ts | Interfaces with LLM API, local streaming orchestration
-[SV-AST] src/utils/astParser.ts | web-tree-sitter integration for AST code parsing
-[SV-CTX] src/utils/ProjectContextEngine.ts | Multi-modal context retrieval for AI
-
-### Automation & Security (Server/Isomorphic)
-[SEC-001] src/security/patch-engine.ts | AST-aware automated code fixer / auto-linter wrapper
-[SEC-002] src/scripts/run-audit.ts | Background security scanner
-[SEC-003] src/utils/patchEngine/ | Utilities for patch validation, compiling, classification
-
-### Backend & Middleware
-[BE-FILE] src/utils/FileCacheManager.ts | SQLite multi-tiered cache for workspaces
-[BE-TEL] src/utils/PersistenceManager.ts | Telemetry/Log SQLite backing store
-[BE-TOOL] src/lib/toolExecutor.ts | Executes local system tools on behalf of AI
-
----
-
-*Last indexed: 2026-04-23 | Target: Next-Gen GUI Audit*
+- **.docs/**
+  - [DEPLOYMENT_GUIDE.md](./.docs/DEPLOYMENT_GUIDE.md)
+  - [FORGE_v2_Upgrade_Guide.md](./.docs/FORGE_v2_Upgrade_Guide.md)
+  - [SKILL_SYSTEM_ADOPTION_GUIDE.md](./.docs/SKILL_SYSTEM_ADOPTION_GUIDE.md)
+  - [TROUBLESHOOTING.md](./.docs/TROUBLESHOOTING.md)
+  - [USAGE_GUIDE.md](./.docs/USAGE_GUIDE.md)
+  - **adrs/**
+    - [adr-2026-04-02-codebase-audit.md](./.docs/adrs/adr-2026-04-02-codebase-audit.md)
+    - [adr-2026-04-17-crypto-stack.md](./.docs/adrs/adr-2026-04-17-crypto-stack.md)
+    - [adr-2026-04-18-Nexus-Integration.md](./.docs/adrs/adr-2026-04-18-Nexus-Integration.md)
+    - [adr-2026-04-19-SingletonToDI.md](./.docs/adrs/adr-2026-04-19-SingletonToDI.md)
+    - [adr-2026-04-23-swarm-context-engineering.md](./.docs/adrs/adr-2026-04-23-swarm-context-engineering.md)
+    - [adr-2026-04-24-log-pruning.md](./.docs/adrs/adr-2026-04-24-log-pruning.md)
+    - [adr-2026-04-24-path-security.md](./.docs/adrs/adr-2026-04-24-path-security.md)
+    - [adr-2026-04-24-validator-filter.md](./.docs/adrs/adr-2026-04-24-validator-filter.md)
+  - **archive/**
+    - [nexus-audit-2026-04-18.md](./.docs/archive/nexus-audit-2026-04-18.md)
+    - [status-admin-fixes.md](./.docs/archive/status-admin-fixes.md)
+    - [status-codebase-audit-resilience.md](./.docs/archive/status-codebase-audit-resilience.md)
+    - [status-codebase-audit.md](./.docs/archive/status-codebase-audit.md)
+    - [status-gide.md](./.docs/archive/status-gide.md)
+    - [status-hook-fix.md](./.docs/archive/status-hook-fix.md)
+    - [status-refactor-conversation-engine.md](./.docs/archive/status-refactor-conversation-engine.md)
+  - [audit-report-2026-04-24.md](./.docs/audit-report-2026-04-24.md)
+  - **canonical/**
+    - **adrs/**
+      - [adr-2026-04-02-refactor-roadmap.md](./.docs/canonical/adrs/adr-2026-04-02-refactor-roadmap.md)
+  - **design/**
+    - [agentic-orchestration.md](./.docs/design/agentic-orchestration.md)
+    - [paradigm-shift.md](./.docs/design/paradigm-shift.md)
+    - [rapidvault.md](./.docs/design/rapidvault.md)
+  - [engineering-insights-nexus.md](./.docs/engineering-insights-nexus.md)
+  - **guides/**
+    - [deployment-guide.md](./.docs/guides/deployment-guide.md)
+    - [firebase-config-guide.md](./.docs/guides/firebase-config-guide.md)
+  - [nexus-audit-endpoints.md](./.docs/nexus-audit-endpoints.md)
+  - **plans/**
+    - [build_plan.md](./.docs/plans/build_plan.md)
+    - [enterprise-roadmap.md](./.docs/plans/enterprise-roadmap.md)
+    - [plan-admin-fixes.md](./.docs/plans/plan-admin-fixes.md)
+    - [plan-ai-scratchpad-and-admin-docs.md](./.docs/plans/plan-ai-scratchpad-and-admin-docs.md)
+    - [plan-audit-remediation.md](./.docs/plans/plan-audit-remediation.md)
+    - [plan-auth-and-editor.md](./.docs/plans/plan-auth-and-editor.md)
+    - [plan-codebase-audit-resilience.md](./.docs/plans/plan-codebase-audit-resilience.md)
+    - [plan-codebase-audit.md](./.docs/plans/plan-codebase-audit.md)
+    - [plan-debug.md](./.docs/plans/plan-debug.md)
+    - [plan-documentation-update.md](./.docs/plans/plan-documentation-update.md)
+    - [plan-ehp-pol.md](./.docs/plans/plan-ehp-pol.md)
+    - [plan-file-manager-system.md](./.docs/plans/plan-file-manager-system.md)
+    - [plan-forgeguard-debugger.md](./.docs/plans/plan-forgeguard-debugger.md)
+    - [plan-gide.md](./.docs/plans/plan-gide.md)
+    - [plan-gui-revamp.md](./.docs/plans/plan-gui-revamp.md)
+    - [plan-hook-fix.md](./.docs/plans/plan-hook-fix.md)
+    - [plan-refactor-conversation-engine.md](./.docs/plans/plan-refactor-conversation-engine.md)
+    - [plan-refactoring-and-audit.md](./.docs/plans/plan-refactoring-and-audit.md)
+    - [plan-security-refactor.md](./.docs/plans/plan-security-refactor.md)
+    - [plan-skill-orchestration.md](./.docs/plans/plan-skill-orchestration.md)
+    - [plan-swarm-migration.md](./.docs/plans/plan-swarm-migration.md)
+    - [plan-wasm-terminal.md](./.docs/plans/plan-wasm-terminal.md)
+    - [plan-web-terminal.md](./.docs/plans/plan-web-terminal.md)
+  - [quality-control.md](./.docs/quality-control.md)
+  - **reports/**
+    - [coverage-audit.md](./.docs/reports/coverage-audit.md)
+    - [status-endeavor.md](./.docs/reports/status-endeavor.md)
+  - **research/**
+    - [advanced-context-strategies.md](./.docs/research/advanced-context-strategies.md)
+    - [caching-infrastructure.md](./.docs/research/caching-infrastructure.md)
+    - [codebase-paradigms-audit.md](./.docs/research/codebase-paradigms-audit.md)
+    - [feature-parity-roadmap.md](./.docs/research/feature-parity-roadmap.md)
+    - [intelligence-cache-plan.md](./.docs/research/intelligence-cache-plan.md)
+    - [long-horizon-agents.md](./.docs/research/long-horizon-agents.md)
+    - [mobile-ui-and-cli-parity.md](./.docs/research/mobile-ui-and-cli-parity.md)
+  - [research-report-terminal-constraints.md](./.docs/research-report-terminal-constraints.md)
+  - **standards/**
+    - [ENTERPRISE_STANDARDS.md](./.docs/standards/ENTERPRISE_STANDARDS.md)
+  - [status-documentation-update.md](./.docs/status-documentation-update.md)
+  - [status-nexus-refactor.md](./.docs/status-nexus-refactor.md)
+  - [status-rapidforge.md](./.docs/status-rapidforge.md)
+  - **strategy/**
+    - [AI_ASSISTED_DEV_STRATEGY_2026.md](./.docs/strategy/AI_ASSISTED_DEV_STRATEGY_2026.md)
+- **.skills/**
+- [CHANGELOG.md](./CHANGELOG.md)
+- [CODEBASE_ANALYSIS.md](./CODEBASE_ANALYSIS.md)
+- [FORGE.md](./FORGE.md)
+- [ISSUE_SUMMARY.md](./ISSUE_SUMMARY.md)
+- [RAPIDFORGE_PORTABILITY_GUIDE.md](./RAPIDFORGE_PORTABILITY_GUIDE.md)
+- [README.md](./README.md)
+- [agents.md](./agents.md)
+- [decisions.md](./decisions.md)
+- [fetched_analysis.md](./fetched_analysis.md)
+- **logs/**
+- [newproject.md](./newproject.md)
+- **packages/**
+  - **nexus/**
+    - **guard/**
+      - **sensors/**
+      - **taggers/**
+    - **telemetry/**
+    - **utils/**
+  - **nexus-git-sync/**
+    - **src/**
+  - **rapidforge-vault/**
+    - [VAULT_PLAN.md](./packages/rapidforge-vault/VAULT_PLAN.md)
+- [progress_log.md](./progress_log.md)
+- **scripts/**
+- **server_persistence/**
+  - **adapters/**
+- **src/**
+  - **admin/**
+  - **components/**
+    - **admin/**
+    - **header/**
+    - **layout/**
+    - **modals/**
+    - **panels/**
+      - **tools/**
+    - **security/**
+    - **ui/**
+  - **constants/**
+  - **contexts/**
+  - **hooks/**
+  - **lib/**
+    - **ehp/**
+    - **persistence/**
+      - **adapters/**
+  - **scripts/**
+  - **security/**
+  - **services/**
+    - **ai/**
+      - **filters/**
+  - **skills/**
+    - **definitions/**
+  - **store/**
+  - **test/**
+    - **backend/**
+  - **types/**
+  - **utils/**
+    - **patchEngine/**
+- [task_plan.md](./task_plan.md)
+- **tests/**
+  - **e2e/**

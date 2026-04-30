@@ -1,4 +1,4 @@
-import { db } from '../../server';
+import { db } from '../lib/firebaseAdmin';
 import admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LogTool } from '../../packages/nexus/telemetry/LogTool';

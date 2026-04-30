@@ -9,6 +9,7 @@ import { type FileStore } from '../lib/fileStore';
 interface FileState {
   RW_fileStore: FileStore;
   RW_activeFile: string | null;
+  RW_openFiles: string[];
   RW_stagedDiffs: string[];
   RW_isMobileTerminalOpen: boolean;
   RW_isMobileExplorerOpen: boolean;
@@ -16,6 +17,8 @@ interface FileState {
   
   setFileStore: (store: FileStore) => void;
   setActiveFile: (path: string | null) => void;
+  openFile: (path: string) => void;
+  closeFile: (path: string) => void;
   setStagedDiffs: (diffs: string[]) => void;
   updateFileContent: (path: string, content: string) => void;
   setMobileTerminalOpen: (open: boolean) => void;
@@ -32,6 +35,7 @@ export const useFileStore = create<FileState>()(
     (set) => ({
       RW_fileStore: {},
       RW_activeFile: null,
+      RW_openFiles: [],
       RW_stagedDiffs: [],
       RW_isMobileTerminalOpen: false,
       RW_isMobileExplorerOpen: false,
@@ -39,6 +43,18 @@ export const useFileStore = create<FileState>()(
 
       setFileStore: (store) => set({ RW_fileStore: store }),
       setActiveFile: (path) => set({ RW_activeFile: path }),
+      openFile: (path) => set((state) => ({
+        RW_openFiles: state.RW_openFiles.includes(path) ? state.RW_openFiles : [...state.RW_openFiles, path],
+        RW_activeFile: path
+      })),
+      closeFile: (path) => set((state) => {
+        const newOpenFiles = state.RW_openFiles.filter(f => f !== path);
+        let newActiveFile = state.RW_activeFile;
+        if (state.RW_activeFile === path) {
+          newActiveFile = newOpenFiles.length > 0 ? newOpenFiles[newOpenFiles.length - 1] : null;
+        }
+        return { RW_openFiles: newOpenFiles, RW_activeFile: newActiveFile };
+      }),
       setStagedDiffs: (diffs) => set({ RW_stagedDiffs: diffs }),
       updateFileContent: (path, content) => set((state) => ({
         RW_fileStore: {
@@ -59,6 +75,7 @@ export const useFileStore = create<FileState>()(
       // Explicitly exclude RW_fileStore content from localStorage to avoid 5MB limit
       partialize: (state) => ({
         RW_activeFile: state.RW_activeFile,
+        RW_openFiles: state.RW_openFiles,
         RW_stagedDiffs: state.RW_stagedDiffs,
         RW_isMobileTerminalOpen: state.RW_isMobileTerminalOpen,
         RW_isMobileExplorerOpen: state.RW_isMobileExplorerOpen,

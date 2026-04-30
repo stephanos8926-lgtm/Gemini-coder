@@ -1,0 +1,7 @@
+{
+  "skills": [
+    { "name": "SkillManagement", "description": "System for installing and managing reusable skills.", "filename": "SkillManagement.yaml" },
+    { "name": "ForgeGuardIDE", "description": "Infrastructure, application architecture, and ForgeGuard integration guidelines.", "filename": "ForgeGuardIDE.yaml" },
+    { "name": "FrontendDesign", "description": "Industry-standard UI/UX design patterns, typography, and layout principles.", "filename": "FrontendDesign.yaml" }
+  ]
+}

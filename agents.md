@@ -16,6 +16,7 @@ This file serves as your persistent memory across sessions. It contains:
 - ✓ **Session start** (ALWAYS) — sync state before any work
 - ✓ **Before architectural decisions** — check for relevant patterns
 - ✓ **When debugging** — look for similar past issues
+- ✓ **Skill Request** — review `/.skills/SkillSet.json` and load relevant instruction files when asked to add/use/install a skill.
 
 ### Update Strategy: IN-PLACE CURATION
 - Consolidate duplicates, remove superseded info, keep sections tidy.
@@ -86,10 +87,23 @@ This file serves as your persistent memory across sessions. It contains:
 - **Gotcha**: `applicationDefault()` may fail with `aud` claim mismatch or lack permissions on custom databases.
 - **Resolution**: Updated `server.ts` to prioritize `FIREBASE_SERVICE_ACCOUNT_KEY` env var and explicitly pass `projectId` and `databaseId` from `firebase-applet-config.json`.
 
+[2026-04-30] ARCHITECTURE: Established the Event Horizon Pipeline (EHP) as the ecosystem communication backbone. 
+- Integrated a mandatory synchronous governance gate via the **Security Warden** for all critical tool and filesystem operations.
+- Implemented **Platform Orchestration Layer (POL)** for service lifecycle management and autonomous remediation.
+
+[2026-04-30] SECURITY: Implemented Dual-Layer Governance
+- **Layer 1 (Linter/Guard)**: Static analysis and basic request protection.
+- **Layer 2 (EHP Warden)**: Real-time event interception and RBAC enforcement. AI Agents are now strictly filtered before executing tools like `shell_exec` or accessing infra folders like `.forge`.
+
+[2026-04-30] PATTERN: Centralized Path Security
+- Migrated all workspace jailing and path safety logic to `src/utils/pathUtility.ts`. 
+- Use `validateFilePath(unsafePath, user, workspace)` to enforce kernel-style restrictions (preventing hidden file access, etc.).
+
 ---
 
 ## REFLECTION CHECKPOINTS
 [2026-04-27] Initialized memory system for AI Studio environment setup.
 [2026-04-27] Completed: GIDE rebranding to RapidForge, core server logging fix, FilesystemGuardProtocol integration, and basic git commit/push via nexus-git-sync package.
 [2026-04-28] Debugged and resolved critical startup crash related to `window.fetch` property descriptor constraints in AI Studio's iframe. Hardened Firebase Admin initialization for production parity.
-[2026-04-28] Architectural Upgrade: Integrated NexusPersistence unified storage layer. Implemented intelligent context pruner and self-improving RAG pipeline based on interaction success weighting.
+[2026-04-30] Milestone: Platform Integrity. Deployed EHP/POL/Warden infrastructure. Centralized path security. Created the RapidForge Portability Guide for private environment migration.
+[2026-04-30] Milestone: Eco-system Documentation. Restructured and updated documentation to match Enterprise Standards, including usage, deployment, and troubleshooting guides.

@@ -1,0 +1,13 @@
+[project]
+name = "rapidforge-vault"
+version = "0.1.0"
+description = "Core encryption and vault engine for RapidForge"
+dependencies = [
+    "pynacl",
+    "argon2-cffi",
+    "shamir-secret-sharing"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

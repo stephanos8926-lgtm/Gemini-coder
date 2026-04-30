@@ -9,12 +9,18 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import crypto from 'crypto';
 import git from 'isomorphic-git';
+import { v4 as uuidv4 } from 'uuid';
 import { Server } from 'socket.io';
 import http from 'http';
 import https from 'https';
 import { HttpClient } from 'isomorphic-git';
 import { LogTool } from './packages/nexus/telemetry/LogTool';
 import { ForgeGuard } from './packages/nexus/guard/ForgeGuard';
+import { db, auth } from './src/lib/firebaseAdmin.js';
+import { authenticateUser, authorizeAdmin } from './server/middleware/auth.js';
+import { FileController } from './server/controllers/FileController.js';
+import { McpController } from './server/controllers/McpController.js';
+import { getSafePath, WORKSPACE_ROOT, validateFilePath } from './src/utils/pathUtility';
 import { FileCacheManager } from './src/utils/FileCacheManager';
 import { BackgroundTaskManager } from './src/lib/backgroundTaskManager';
 import { ProjectContextEngine } from './src/utils/ProjectContextEngine';
@@ -36,8 +42,13 @@ import adminRouter from './src/admin/AdminRouter';
 import { routeTask, initBackgroundWorker } from './src/services/TaskRouter';
 import { coordinateSwarm } from './src/services/SwarmRouter';
 import { sandboxExecute, validateCode } from './src/services/ExecutionSandbox';
+import { workspaceController } from './server/controllers/workspaceController';
+import { ChatController } from './server/controllers/ChatController';
+import { GitController } from './server/controllers/GitController';
+import { ContextController } from './server/controllers/ContextController';
 
 const fileCache = FileCacheManager.getInstance();
+const buildProcesses: Map<string, ChildProcess> = new Map();
 
 export interface AuthenticatedRequest extends Request {
   user?: any;
@@ -58,6 +69,18 @@ const logger = new LogTool('server');
 
 import { nexusPersist } from './src/lib/persistence/NexusPersistence';
 import { FilePersistenceAdapter } from './server_persistence/adapters/FilePersistenceAdapter';
+
+// --- Event Horizon Pipeline & Platform Orchestration ---
+import { bus } from './src/lib/ehp/Bus';
+import { orchestrator } from './src/services/OrchestrationLayer';
+import { warden } from './src/services/SecurityWarden';
+import { EHPMessageType, PrincipalType } from './src/lib/ehp/types';
+
+// Initialize EHP components
+const ehpBus = bus;
+const ehpOrchestrator = orchestrator;
+const ehpWarden = warden;
+// -------------------------------------------------------
 
 // Initialize Guard via Factory
 const nexusFactory = NexusFactory.getInstance();
@@ -135,7 +158,17 @@ import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import AdmZip from 'adm-zip';
 import { z } from 'zod';
-import { FileSaveSchema, FileCreateSchema } from './src/lib/schemas';
+import { 
+  FileSaveSchema, 
+  FileCreateSchema, 
+  FileDeleteSchema, 
+  FileRenameSchema,
+  RunToolSchema,
+  FindSymbolSchema,
+  DiagnosticsSchema,
+  GitRequestSchema,
+  ChatRequestSchema
+} from './src/lib/schemas';
 import { env } from './server-config';
 // @ts-ignore — no types needed for rate-limit config
 
@@ -166,12 +199,7 @@ function errorHandler(err: any, req: express.Request, res: express.Response, nex
   });
 }
 
-// Validation Schemas
-const RunToolSchema = z.object({
-  command: z.string().min(1),
-  workspace: z.string().default(''),
-});
-
+// Validation Schemas - Moved to src/lib/schemas.ts
 const AdminRequestSchema = z.object({
   secretKey: z.string().min(1),
 });
@@ -192,103 +220,7 @@ const GitPullSchema = AdminRequestSchema.extend({
   target: z.enum(['root', 'workspaces']).default('workspaces'),
 });
 
-
-const FileDeleteSchema = z.object({
-  path: z.string().min(1),
-  workspace: z.string().default(''),
-});
-
-const FileRenameSchema = z.object({
-  oldPath: z.string().min(1),
-  newPath: z.string().min(1),
-  workspace: z.string().default(''),
-});
-
-export let db: admin.firestore.Firestore;
-export let auth: admin.auth.Auth;
-
-// Initialize Firebase Admin
-async function initializeFirebase() {
-  let config: any = { projectId: undefined, firestoreDatabaseId: undefined };
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    try {
-      if (fsSync.existsSync(configPath)) {
-        const fileContent = await fs.readFile(configPath, 'utf8');
-        const parsedConfig = safeJsonParse(fileContent, 'firebase-applet-config.json');
-        if (parsedConfig) {
-          config = { ...config, ...parsedConfig };
-        }
-        logger.info('Loaded firebase config', { config });
-      }
-    } catch(e) {
-        logger.warn('Could not read firebase config', e);
-    }
-    
-    let app: App;
-    const existingApps = getApps();
-    
-    if (existingApps.length === 0) {
-      if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-        try {
-          const serviceAccount = safeJsonParse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY, 'FIREBASE_SERVICE_ACCOUNT_KEY');
-          if (serviceAccount) {
-            app = initializeApp({
-              credential: admin.credential.cert(serviceAccount),
-              projectId: config.projectId,
-            });
-            logger.info('Firebase Admin initialized with service account key');
-          } else {
-            throw new Error('Failed to parse service account JSON');
-          }
-        } catch (keyError) {
-          logger.error('CRITICAL: Malformed FIREBASE_SERVICE_ACCOUNT_KEY provided', keyError as Error);
-          app = initializeApp({
-            credential: admin.credential.applicationDefault(),
-            projectId: config.projectId,
-          });
-          logger.info('Firebase Admin fell back to applicationDefault() due to parse error', { projectId: config.projectId });
-        }
-      } else {
-        // Fallback to application default credentials (which may lack IAM permissions in AI Studio)
-        app = initializeApp({
-          credential: admin.credential.applicationDefault(),
-          projectId: config.projectId,
-        });
-        logger.info('Firebase Admin initialized with applicationDefault (Note: this often lacks permissions unless FIREBASE_SERVICE_ACCOUNT_KEY is set)', { projectId: config.projectId });
-      }
-    } else {
-      app = existingApps[0];
-      logger.info('Firebase Admin already initialized, using existing app');
-    }
-    
-    // Initialize Firestore
-    try {
-      db = getFirestore(app, config.firestoreDatabaseId);
-      logger.info(`Firestore initialized with database: ${config.firestoreDatabaseId || 'default'}`);
-    } catch (firestoreError: unknown) {
-      logger.error('CRITICAL: Failed to initialize Firestore', firestoreError as Error);
-      // Do not continue if Firestore is essential
-      throw firestoreError;
-    }
-    
-    auth = getAuth(app);
-  } catch (e) {
-    logger.error('Failed to initialize Firebase Admin', e as any);
-    // Last resort fallback
-    try {
-      const app = getApps().length === 0 ? initializeApp() : getApps()[0];
-      db = getFirestore(app, config.firestoreDatabaseId);
-      auth = getAuth(app);
-      logger.info('Firebase Admin initialized with last resort fallback');
-    } catch (err) {
-      logger.error('Critical: Failed to initialize Firebase Admin fallback', err as any);
-    }
-  }
-
-  // Initialize Background Workers
-  initBackgroundWorker();
-}
+// Removed internal initializeFirebase, authenticateUser, authorizeAdmin, getEnabledTools etc
 
 
 
@@ -356,65 +288,20 @@ toolRegistry.registerTool({
   execute: async (args, context) => await executeTool('web_search', args, context)
 });
 
-async function connectToMCP(serverPath: string, args: string[], workspaceRoot: string) {
-  const transport = new StdioClientTransport({
-    command: serverPath,
-    args: args,
-    env: {
-      ...process.env,
-      CWD: workspaceRoot,
-    },
-  });
-  const client = new Client({
-    name: "gide-mcp-client",
-    version: "1.0.0",
-  }, {
-    capabilities: {},
-  });
-  await client.connect(transport);
-  return client;
-}
 
 
 
-const mcpClientPool = new Map<string, { client: Client, lastUsed: number }>();
 
-async function getMcpClient(serverName: string, serverDef: any, workspaceRoot: string) {
-  const existing = mcpClientPool.get(serverName);
-  if (existing) {
-    try {
-      await existing.client.listTools();
-      existing.lastUsed = Date.now();
-      return existing.client;
-    } catch {
-      logger.warn(`MCP client ${serverName} unresponsive, recreating...`);
-      mcpClientPool.delete(serverName);
-    }
-  }
-  const client = await connectToMCP(serverDef.command, serverDef.args, workspaceRoot);
-  mcpClientPool.set(serverName, { client, lastUsed: Date.now() });
-  return client;
-}
+import { mcpClientPool, getMcpClient } from './server/mcpClient.js';
 
-// Periodically clean up unused MCP clients
-setInterval(() => {
-  const now = Date.now();
-  for (const [name, entry] of mcpClientPool.entries()) {
-    if (now - entry.lastUsed > FIVE_MINUTES_MS) { // 5 minutes
-      entry.client.close();
-      mcpClientPool.delete(name);
-      logger.info(`Cleaned up unused MCP client: ${name}`);
-    }
-  }
-}, ONE_MINUTE_MS); // 1 minute
-
-const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
+// Removed local WORKSPACE_ROOT definition as it is now imported from pathUtility
+// const WORKSPACE_ROOT = path.join(process.cwd(), 'workspaces');
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const upload = multer({ dest: UPLOAD_DIR });
 
 // Server Initialization Function
 async function startServer() {
-  await initializeFirebase();
+  initBackgroundWorker();
   logger.info('Initializing express app...');
   const app = express();
   const PORT = 3000;
@@ -483,123 +370,15 @@ async function startServer() {
     message: { error: 'Too many requests to MCP endpoints' }
   });
 
-  app.get('/api/mcp/servers', mcpLimiter, async (req, res, next) => {
-    try {
-      await guard.protect(async () => {
-        const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
-        const servers = [];
-        
-        for (const [serverName, serverDef] of Object.entries(config.tools as Record<string, any>)) {
-          const isConnected = mcpClientPool.has(serverName);
-          let tools: any[] = [];
-          
-          if (isConnected) {
-            try {
-              const entry = mcpClientPool.get(serverName)!;
-              const toolsResponse = await entry.client.listTools();
-              tools = toolsResponse.tools || [];
-            } catch (e: any) {
-              logger.error(`Error listing tools for ${serverName}:`, e);
-            }
-          }
-          
-          servers.push({
-            name: serverName,
-            status: isConnected ? 'connected' : 'disconnected',
-            command: (serverDef as any).command,
-            tools
-          });
-        }
-        
-        res.json(servers);
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/mcp/servers' });
-    } catch (error: any) {
-      logger.error('Error getting MCP servers:', error);
-      if (!res.headersSent) res.status(500).json({ error: 'Failed to get MCP servers' });
-    }
-  });
-
-  // Endpoint to explicitly connect to an MCP server
-  app.post('/api/mcp/connect', mcpLimiter, async (req, res, next) => {
-    try {
-      await guard.protect(async () => {
-        const { serverName } = req.body;
-        const config = JSON.parse(await fs.readFile('./mcp-config.json', 'utf-8'));
-        const serverDef = config.tools[serverName];
-        
-        if (!serverDef) {
-          res.status(404).json({ error: 'Server not found' });
-          return;
-        }
-        
-        await getMcpClient(serverName, serverDef, WORKSPACE_ROOT);
-        res.json({ success: true });
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/mcp/connect' });
-    } catch (error) {
-      logger.error('Error connecting to MCP server', error as any);
-      if (!res.headersSent) res.status(500).json({ error: 'Failed to connect to server' });
-    }
-  });
+  app.get('/api/mcp/servers', mcpLimiter, McpController.listServers);
+  app.post('/api/mcp/connect', mcpLimiter, McpController.connectServer);
 
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
   if (!ADMIN_EMAIL) {
     logger.error('CRITICAL: ADMIN_EMAIL environment variable is not set');
   }
 
-  // Authentication Middleware
-  async function authenticateUser(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    const idToken = req.headers.authorization?.split('Bearer ')[1] || req.body.idToken || req.query.idToken;
-    
-    if (!idToken) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
 
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken);
-      let userData = {};
-      
-      try {
-        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
-        if (userDoc.exists) {
-          userData = userDoc.data() || {};
-        }
-      } catch (firestoreError: unknown) {
-        const errorMessage = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-        if (!errorMessage.includes('NOT_FOUND')) {
-          logger.warn('Failed to fetch user data from Firestore, using token data only', { 
-            uid: decodedToken.uid, 
-            error: errorMessage
-          });
-        }
-      }
-
-      req.user = {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        displayName: decodedToken.name,
-        photoURL: decodedToken.picture,
-        role: decodedToken.email === ADMIN_EMAIL ? 'admin' : (userData as any).role || 'user',
-        ...userData
-      };
-      
-      // Initialize user-specific logger
-      (req as any).logger = new LogTool('server', req.user.uid);
-      
-      next();
-    } catch (error) {
-      logger.error('Authentication failed', error as any);
-      res.status(401).json({ error: 'Unauthorized: Invalid token' });
-    }
-  }
-
-  // Admin Authorization Middleware
-  async function authorizeAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    if (req.user?.email !== ADMIN_EMAIL) {
-      (req as any).logger?.warn('Unauthorized admin access attempt');
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-  }
 
   app.get('/api/admin/mcp/tools', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     // FIXED: 2026-04-10 - Add authentication to admin endpoints
@@ -686,137 +465,23 @@ async function startServer() {
     }
   });
 
-  // Helper to validate path is within workspace
-  function validateFilePath(unsafePath: string, user: any, workspace: string = '') {
-    const resolvedPath = getSafePath(unsafePath, user, workspace);
-    // Additional validation: prevent access to hidden files or system files
-    const pathComponents = resolvedPath.split(path.sep);
-    for (const component of pathComponents) {
-      if (component.startsWith('.') && component !== '.') {
-        throw new Error('Access denied: Hidden files are not accessible');
-      }
-    }
-    return resolvedPath;
-  }
 
-  function getSafePath(unsafePath: string, user: any, workspace: string = '') {
-    const base = user.role === 'admin' 
-      ? (workspace ? path.join(WORKSPACE_ROOT, workspace) : WORKSPACE_ROOT)
-      : path.join(WORKSPACE_ROOT, workspace);
-    
-    // Ensure base directory exists so we can at least validate against it
-    if (!fsSync.existsSync(base)) {
-      try {
-        fsSync.mkdirSync(base, { recursive: true });
-      } catch (err) {
-        // Ignore errors here, realpathSync will catch it if it's a real problem
-      }
-    }
-
-    const resolvedPath = path.resolve(base, unsafePath);
-    
-    let realBasePath;
-    try {
-      realBasePath = fsSync.realpathSync(base);
-    } catch { 
-      realBasePath = path.resolve(base);
-    }
-
-    // Check if the resolved path is within the base path
-    // We don't use realpathSync on the resolvedPath because it might not exist yet (e.g. for creation)
-    const normalizedResolved = path.normalize(resolvedPath);
-    const normalizedBase = path.normalize(realBasePath);
-
-    if (!normalizedResolved.startsWith(normalizedBase + path.sep) && normalizedResolved !== normalizedBase) {
-      throw new Error('Access denied: Path is outside of workspace root');
-    }
-    
-    if (user.role !== 'admin' && (!workspace || !workspace.includes(user.uid) || workspace.split(/[/\\]/).filter(Boolean).length < 2)) {
-      throw new Error('Access denied: Workspace name is required');
-    }
-    return resolvedPath;
-  }
-
-  // Helper to list files (non-recursive by default for lazy loading)
-  async function listFiles(dir: string, baseDir: string = '', recursive: boolean = false, depth: number = 0, maxDepth: number = 5): Promise<any[]> {
-    if (depth > maxDepth) return [];
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-      const files = await Promise.all(entries.map(async (entry) => {
-        const res = path.resolve(dir, entry.name);
-        const relativePath = path.relative(baseDir || dir, res);
-        
-        // Ignore common noise
-        if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === '.next') {
-          return [];
-        }
-
-        const stats = await fs.stat(res);
-
-        if (entry.isDirectory()) {
-          if (recursive) {
-            const subFiles = await listFiles(res, baseDir || dir, true, depth + 1, maxDepth);
-            return [{ path: relativePath + '/', isDir: true, size: 0 }, ...subFiles];
-          }
-          return [{ path: relativePath + '/', isDir: true, size: 0 }];
-        } else {
-          return [{ path: relativePath, isDir: false, size: stats.size }];
-        }
-      }));
-      return files.flat();
-    } catch (e) {
-      return [];
-    }
-  }
-
-  // API Routes
   app.get('/api/workspaces', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
-        logger.info('Listing workspaces', { uid: req.user.uid, role: req.user.role });
-        
-        if (req.user.role === 'admin') {
-          const entries = await fs.readdir(WORKSPACE_ROOT, { withFileTypes: true });
-          const allWorkspaces: string[] = [];
-          
-          for (const userDir of entries) {
-            if (userDir.isDirectory()) {
-              const userPath = path.join(WORKSPACE_ROOT, userDir.name);
-              const workspaceEntries = await fs.readdir(userPath, { withFileTypes: true });
-              workspaceEntries
-                .filter(entry => entry.isDirectory())
-                .forEach(entry => allWorkspaces.push(`${userDir.name}/${entry.name}`));
-            }
-          }
-          
-          logger.info(`Admin found ${allWorkspaces.length} total workspaces`, { count: allWorkspaces.length });
-          return res.json(allWorkspaces);
-        }
-
-        const userRoot = path.join(WORKSPACE_ROOT, req.user.uid);
-        await fs.mkdir(userRoot, { recursive: true });
-        
-        const entries = await fs.readdir(userRoot, { withFileTypes: true });
-        const workspaces = entries
-          .filter(entry => entry.isDirectory())
-          .map(entry => `${req.user.uid}/${entry.name}`);
-        
-        logger.info(`Found ${workspaces.length} workspaces for user ${req.user.uid}`, { workspaces });
-        res.json(workspaces);
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/workspaces' });
+        await workspaceController.listWorkspaces(req, res, next);
+      }, { path: '/api/workspaces' });
     } catch (error) {
-      logger.error('Failed to list workspaces', error as any);
       next(error);
     }
   });
 
   app.get('/api/telemetry/stats', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
-      // Only admins or the owner should see raw telemetry
-      if (req.user.role !== 'admin' && req.user.email !== 'stedor7@gmail.com') {
+      // Only admins should see raw telemetry - use env variable
+      if (req.user.role !== 'admin' && req.user.email !== process.env.ADMIN_EMAIL) {
         return res.status(403).json({ error: 'Permission denied' });
       }
-
       const signals = await persistenceManager.getRecentSignals(100);
       res.json({ signals });
     } catch (error) {
@@ -824,25 +489,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/files', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      await guard.protect(async () => {
-        const workspace = (req.query.workspace as string) || '';
-        const subPath = (req.query.path as string) || '';
-        const recursive = req.query.recursive === 'true';
-
-        const targetDir = getSafePath(subPath, req.user, workspace);
-        const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
-        
-        await fs.mkdir(targetDir, { recursive: true });
-        const files = await listFiles(targetDir, root, recursive);
-        res.json(files);
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/files' });
-    } catch (error) {
-      logger.error('Failed to list files', error as any);
-      next(error);
-    }
-  });
+  app.get('/api/files', authenticateUser, FileController.getFiles);
 
   app.post('/api/tools/run', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
@@ -895,7 +542,7 @@ async function startServer() {
   app.post('/api/tools/find_symbol', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
-        const { symbol, file_pattern, workspace } = req.body;
+        const { symbol, file_pattern, workspace } = FindSymbolSchema.parse(req.body);
         const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
         
         const execAsync = util.promisify(exec);
@@ -937,7 +584,7 @@ async function startServer() {
   app.post('/api/tools/diagnostics', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await guard.protect(async () => {
-        const { file_path, workspace } = req.body;
+        const { file_path, workspace } = DiagnosticsSchema.parse(req.body);
         const targetPath = getSafePath(file_path, req.user, workspace);
         const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
         
@@ -1131,138 +778,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/git', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      await guard.protect(async () => {
-        const { command, message, workspace } = z.object({
-          command: z.string(),
-          message: z.string().optional(),
-          workspace: z.string().optional()
-        }).parse(req.body);
-
-        // Ensure workspace belongs to the user
-        if (workspace && !workspace.startsWith(req.user.uid)) {
-          res.status(403).json({ error: 'Access denied: Workspace does not belong to user' });
-          return;
-        }
-
-        const execAsync = util.promisify(exec);
-        
-        const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
-        
-        // SECURITY: Validate canonical path to prevent traversal attacks
-        const canonicalRoot = await fs.realpath(root).catch(() => root);
-        const canonicalWorkspaceRoot = await fs.realpath(WORKSPACE_ROOT).catch(() => WORKSPACE_ROOT);
-        
-        if (!canonicalRoot.startsWith(canonicalWorkspaceRoot)) {
-          logger.error('Path traversal attempt blocked', new Error('Path traversal'), { 
-            workspace, 
-            root, 
-            canonicalRoot, 
-            canonicalWorkspaceRoot 
-          });
-          res.status(403).json({ error: 'Invalid workspace path' });
-          return;
-        }
-        
-        switch (command) {
-          case 'status':
-            const status = await execAsync('git status --short', { cwd: root });
-            const branch = await execAsync('git branch --show-current', { cwd: root });
-            res.json({ success: true, stdout: status.stdout, branch: branch.stdout.trim() });
-            return;
-          case 'init': 
-            await execAsync('git init', { cwd: root });
-            res.json({ success: true });
-            return;
-          case 'add': 
-            await execAsync('git add .', { cwd: root });
-            res.json({ success: true });
-            return;
-          case 'commit': 
-            // PRE-COMMIT AI AUDIT (ForgeGuard+)
-            const auditResults = await (async () => {
-              try {
-                const { execSync } = await import('node:child_process');
-                // Use --cached to check staged changes
-                const changedFiles = execSync('git diff --name-only --cached', { cwd: root }).toString().split('\n').filter(Boolean);
-                const issues: any[] = [];
-                const { scanFile } = await import('./src/security/scanner.js');
-                
-                const fsSync = await import('node:fs');
-                for (const file of changedFiles) {
-                  const fullPath = path.join(root, file);
-                  // Only scan TS/JS files in src/
-                  if (fsSync.existsSync(fullPath) && (file.endsWith('.ts') || file.endsWith('.tsx') || file.endsWith('.js'))) {
-                    const fileIssues = scanFile(fullPath, false); // false = not backend (user project)
-                    issues.push(...fileIssues.filter((i: any) => i.severity === 'critical' || i.severity === 'high'));
-                  }
-                }
-                return issues;
-              } catch (e) {
-                console.error('Pre-commit audit failed:', e);
-                return [];
-              }
-            })();
-
-            if (auditResults.length > 0) {
-              res.status(400).json({ 
-                success: false, 
-                error: 'AI Audit Blocked: High-severity issues detected in staged changes.',
-                issues: auditResults 
-              });
-              return;
-            }
-
-            // Proceed with commit if audit passes
-            await new Promise((resolve, reject) => {
-              const child = spawn('git', ['commit', '-m', message || 'Update'], { cwd: root });
-              const errorChunks: Buffer[] = [];
-              
-              child.stderr?.on('data', (chunk) => errorChunks.push(chunk));
-              child.on('close', (code) => {
-                if (code === 0) {
-                  resolve(true);
-                } else {
-                  const stderr = Buffer.concat(errorChunks).toString();
-                  reject(new Error(`Git commit failed with code ${code}: ${stderr}`));
-                }
-              });
-              child.on('error', reject);
-            });
-            res.json({ success: true });
-            return;
-          case 'push':
-            await execAsync('git push', { cwd: root });
-            res.json({ success: true });
-            return;
-          case 'remote-set':
-            // Try to add, if fails (already exists), set-url
-            await execAsync(`git remote add origin ${message}`, { cwd: root }).catch(async () => {
-              await execAsync(`git remote set-url origin ${message}`, { cwd: root });
-            });
-            res.json({ success: true });
-            return;
-          case 'remote-get':
-            const remote = await execAsync('git remote get-url origin', { cwd: root }).catch(() => ({ stdout: '' }));
-            res.json({ success: true, stdout: remote.stdout.trim() });
-            return;
-          case 'pull': 
-            await execAsync('git pull', { cwd: root });
-            res.json({ success: true });
-            return;
-          case 'diff':
-            const diff = await execAsync('git diff --cached', { cwd: root });
-            res.json({ success: true, stdout: diff.stdout });
-            return;
-          default: 
-            res.status(400).json({ error: 'Invalid git command' });
-        }
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/git' });
-    } catch (error) {
-      next(error);
-    }
-  });
+  app.post('/api/git', authenticateUser, GitController.handleGit);
 
   app.post('/api/admin/logs', async (req, res, next) => {
     try {
@@ -1508,169 +1024,25 @@ async function startServer() {
 
   // SECURITY: Chat endpoint REQUIRES authentication
   // Without this, anyone can access the endpoint and potentially leak/abuse API keys
-  app.post('/api/chat', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    try {
-      await guard.protect(async () => {
-        const { messages, model, apiKey, systemInstruction, temperature, skillName, skillState, workspace } = req.body;
-        const userId = req.user.uid || 'anonymous';
-        const workspaceId = workspace || 'default';
-        const cacheKey = `${userId}:${workspaceId}:${model}`;
-
-        // Skill-based orchestration
-        if (skillName) {
-          const { result, nextState } = await skillExecutor.execute(skillName, messages[messages.length - 1].content, skillState);
-          return res.json({ response: result, nextState });
-        }
-        
-        let currentMessages = messages;
-
-        if (!apiKey) {
-          logger.warn('Chat request missing API key');
-          res.status(400).json({ error: 'API key required' });
-          return;
-        }
-
-        if (messages.length > 20) {
-          logger.info('Summarizing chat history');
-          const cached = chatSummaries.get(cacheKey);
-          
-          // Only re-summarize if we have at least 10 new messages
-      if (!cached || messages.length - cached.lastMessageCount >= 10) {
-        const summary = await summarizeChatHistory(messages.slice(0, -10), apiKey, cached?.summary);
-        chatSummaries.set(cacheKey, { summary, lastMessageCount: messages.length - 10 });
-        currentMessages = [
-          { role: 'system', content: `Previous context summary: ${summary}` },
-          ...messages.slice(-10)
-        ];
-      } else {
-        currentMessages = [
-          { role: 'system', content: `Previous context summary: ${cached.summary}` },
-          ...messages.slice(-10)
-        ];
-      }
-    }
-    
-    const ai = new GoogleGenerativeAI(apiKey);
-    const generativeModel = ai.getGenerativeModel({ model, systemInstruction });
-    
-    const formattedMessages = currentMessages.map((m: any) => {
-      const parts: any[] = [];
-      if (m.content) {
-        parts.push({ text: m.content });
-      }
-      if (m.functionCalls) {
-        m.functionCalls.forEach((fc: any) => {
-          parts.push({ functionCall: { name: fc.name, args: fc.args } });
-        });
-      }
-      if (m.functionResponses) {
-        m.functionResponses.forEach((fr: any) => {
-          parts.push({ functionResponse: { name: fr.name, response: fr.response } });
-        });
-      }
-      return {
-        role: m.role === 'function' ? 'user' : m.role, // Gemini uses 'user' role for function responses
-        parts
-      };
-    });
-
-    const enabledMcpTools = await getEnabledTools();
-    const mcpFunctionDeclarations = enabledMcpTools.map(tool => ({
-      name: tool.name.replace(/[^a-zA-Z0-9_]/g, '_'), // Ensure valid function name
-      description: tool.description || `Execute a tool on the ${tool.name} MCP server.`,
-      parameters: {
-        type: SchemaType.OBJECT,
-        properties: {
-          toolName: { type: SchemaType.STRING, description: 'The specific tool to execute on this server (e.g., read_file, search).' },
-          args: { type: SchemaType.STRING, description: 'JSON string of arguments for the tool.' }
-        },
-        required: ['toolName', 'args']
-      }
-    }));
-
-    const tools = [
-      ...toolRegistry.getSystemPromptBlock(),
-      {
-        functionDeclarations: [
-          ...mcpFunctionDeclarations
-        ]
-      }
-    ];
-
-    try {
-      logger.info('Sending request to Gemini API');
-      
-      let currentMessages = formattedMessages;
-      let resultStream = await generativeModel.generateContentStream({
-        contents: currentMessages,
-        generationConfig: {
-          temperature: temperature,
-        },
-        tools: tools as any
-      });
-
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-
-      let finalResponse = '';
-      for await (const chunk of resultStream.stream) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        finalResponse += chunk.text();
-      }
-
-      // Check if the model wants to call a tool
-      let lastResponse = await resultStream.response;
-      let functionCalls = lastResponse.functionCalls();
-      while (functionCalls && functionCalls.length > 0) {
-        logger.info('Model requested tool calls', { functionCalls: functionCalls });
-        
-        const functionResponses: any[] = [];
-        for (const call of functionCalls) {
-          const result = await executeTool(call.name, call.args, {});
-          functionResponses.push({ name: call.name, response: result });
-        }
-
-        // Add tool results to messages
-        currentMessages.push({ role: 'model', parts: [{ functionCall: functionCalls[0] }] });
-        currentMessages.push({ role: 'function', parts: functionResponses.map(fr => ({ functionResponse: { name: fr.name, response: fr.response } })) });
-        
-        // Loop back to Gemini
-        resultStream = await generativeModel.generateContentStream({
-          contents: currentMessages,
-          generationConfig: {
-            temperature: temperature,
-          },
-          tools: tools as any
-        });
-
-        for await (const chunk of resultStream.stream) {
-          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-        }
-        lastResponse = await resultStream.response;
-        functionCalls = lastResponse.functionCalls();
-      }
-
-      res.write('data: [DONE]\n\n');
-      res.end();
-    } catch (error: any) {
-      if (error.name === 'AbortError') return;
-      if (!res.headersSent) res.status(500).json({ error: String(error) });
-      else res.end();
-    }
-      }, { requestId: req.headers['x-request-id'] as string, path: '/api/chat' });
-    } catch (error) {
-      next(error);
-    }
-  });
+  app.post('/api/chat', authenticateUser, ChatController.handleChat);
 
 
   app.get('/api/security/audit', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
     try {
       const workspace = (req.query.workspace as string) || req.user.uid;
+      
+      // Fix 3.1: Ensure workspace variable is validated against the authenticated UID
+      // If user is not admin, they can only view their own uid-based workspace or workspaces starting with their uid
+      const isAuthorized = req.user.role === 'admin' || workspace === req.user.uid || workspace.startsWith(`${req.user.uid}/`);
+      
+      if (!isAuthorized) {
+        logger.warn('Unauthorized security audit access attempt', { uid: req.user.uid, requestedWorkspace: workspace });
+        return res.status(403).json({ error: 'Unauthorized workspace audit access' });
+      }
+
       const tenantPrefix = `${workspace}:`;
 
-      // Filter global issues map by tenant prefix
+      // Filter global issues map by tenant prefix - Ensure exact tenant match using colon delimiter
       const allIssues = Array.from(globalSecurityIssues.entries())
         .filter(([key]) => key.startsWith(tenantPrefix))
         .flatMap(([key, issues]) => {
@@ -1693,21 +1065,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/context/stats', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const workspace = (req.query.workspace as string) || req.user.uid;
-      const tenant = { userId: req.user.uid, workspaceId: workspace };
-      const symbols = SymbolGraph.getInstance(tenant);
-
-      res.json({
-        stats: symbols.getIndexStats(),
-        recentSymbols: symbols.getRecentSymbols(15)
-      });
-    } catch (e) {
-      logger.error('Failed to fetch context stats', e instanceof Error ? e : new Error(String(e)));
-      res.status(500).json({ error: 'Failed to fetch context stats' });
-    }
-  });
+  app.get('/api/context/stats', authenticateUser, ContextController.getStats);
 
   // Task & Swarm Endpoints
   const TaskSubmitSchema = z.object({
@@ -1843,22 +1201,7 @@ async function startServer() {
   });
 
   // Project Context Engine Endpoints
-  app.post('/api/context/index', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { workspace } = req.body;
-      const root = workspace ? path.join(WORKSPACE_ROOT, workspace) : path.join(WORKSPACE_ROOT, req.user.uid);
-      
-      // Start indexing in background
-      ProjectContextEngine.getInstance().indexProject(root).catch(err => {
-        logger.error('Background indexing failed', err);
-        logRedirector.push('system', 'error', `Indexing failed: ${err.message}`);
-      });
-      
-      res.json({ status: 'indexing_started' });
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
+  app.post('/api/context/index', authenticateUser, ContextController.indexWorkspace);
 
   app.get('/api/context/search', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
     const { q } = req.query;
@@ -1868,19 +1211,7 @@ async function startServer() {
     res.json({ results });
   });
 
-  app.post('/api/context/relevant', authenticateUser, async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { query, limit, skillContext, clientContext, workspace } = req.body;
-      if (typeof query !== 'string') return res.status(400).json({ error: 'Query required' });
-      
-      const tenant = { userId: req.user.uid, workspaceId: workspace || 'default' };
-      const results = await ProjectContextEngine.getInstance(tenant).getRelevantContext(query, limit, skillContext, clientContext);
-      res.json({ results });
-    } catch (error) {
-      logger.error('Failed to get relevant context', error as any);
-      res.status(500).json({ error: String(error) });
-    }
-  });
+  app.post('/api/context/relevant', authenticateUser, ContextController.getRelevant);
 
   app.get('/api/context/index', authenticateUser, (req: AuthenticatedRequest, res: Response) => {
     const index = ProjectContextEngine.getInstance().getIndex();
@@ -2065,30 +1396,30 @@ async function startServer() {
   watcher.on('all', async (event, filePath) => {
     logger.info(`File system event: ${event} on ${filePath}`);
     
-    // Extract tenant from path: workspaces/{userId}/...
+    // Extract tenant from path: workspaces/{userId}/{workspaceName}/...
     const relativePath = path.relative('workspaces', filePath);
     const pathParts = relativePath.split(path.sep);
-    const tenantId = pathParts[0];
+    const userId = pathParts[0];
+    const workspaceId = pathParts.length >= 2 ? `${userId}/${pathParts[1]}` : userId;
 
-    if (!tenantId) return;
+    if (!userId) return;
 
     // Notify only the specific user/workspace room
-    io.to(tenantId).emit('fs-event', { event, path: filePath });
+    io.to(workspaceId).emit('fs-event', { event, path: filePath });
 
     // Update Symbol Graph on change
     if ((event === 'add' || event === 'change') && (filePath.endsWith('.ts') || filePath.endsWith('.tsx'))) {
       try {
         const content = await fs.readFile(filePath, 'utf-8');
-        // We use tenantId as both userId and workspaceId for the path-based identifier
-        SymbolGraph.getInstance({ userId: tenantId, workspaceId: tenantId }).updateFile(filePath, content);
+        SymbolGraph.getInstance({ userId, workspaceId }).updateFile(filePath, content);
 
         // Proactive Security Scan
         const scanner = fork('./src/scripts/run-audit.ts', [filePath]);
         scanner.on('message', (issues: any[]) => {
             if (Array.isArray(issues)) {
-              const securityKey = `${tenantId}:${filePath}`;
+              const securityKey = `${workspaceId}:${filePath}`;
               globalSecurityIssues.set(securityKey, issues);
-              io.to(tenantId).emit('security-alert', { path: filePath, issues });
+              io.to(workspaceId).emit('security-alert', { path: filePath, issues });
             }
         });
         scanner.on('close', (code) => {

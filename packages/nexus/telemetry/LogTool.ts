@@ -10,7 +10,7 @@ export class LogTool {
   constructor(moduleName: string, userId?: string) {
     this.guard = ForgeGuard.init(moduleName);
 
-    const logDir = userId ? path.join(process.cwd(), 'logs', `user_${userId}`) : path.join(process.cwd(), 'logs', 'system');
+    const logDir = userId ? path.join(process.cwd(), 'data', 'logs', `user_${userId}`) : path.join(process.cwd(), 'data', 'logs', 'system');
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }
@@ -20,6 +20,22 @@ export class LogTool {
       level: this.guard.config.get('LOG_LEVEL', 'info'),
       format: winston.format.combine(
         winston.format.timestamp(),
+        winston.format((info) => {
+          const sensitiveFields = ['apiKey', 'secretKey', 'password', 'token', 'idToken'];
+          const mask = (obj: any) => {
+            if (!obj || typeof obj !== 'object') return obj;
+            for (const key in obj) {
+              if (sensitiveFields.some(field => key.toLowerCase().includes(field.toLowerCase()))) {
+                obj[key] = '***REDACTED***';
+              } else if (typeof obj[key] === 'object') {
+                mask(obj[key]);
+              }
+            }
+            return obj;
+          };
+          mask(info);
+          return info;
+        })(),
         winston.format.json()
       ),
       defaultMeta: { service: moduleName, userId },
