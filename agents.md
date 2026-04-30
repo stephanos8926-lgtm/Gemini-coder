@@ -75,11 +75,6 @@ This file serves as your persistent memory across sessions. It contains:
   - Disabled `eruda` (Mobile Debug Console) as it fundamentally relies on network interception.
 
 ### Documentation & Workflow Policy
-[2026-04-28] POLICY: Distinction between `FORGE.md` and Builder behavior
-- **FORGE.md**: Application asset containing instructions for the **internal AI** of the RapidForge IDE. I (the Google AI Studio agent) MUST NOT follow these instructions. 
-  - They govern the *app's* AI, not me.
-  - The staged-review mechanism (`/.staging/`) is a **feature of the app** I am building. I implement it, but I do not use it for my own work.
-- **My Operational Directives**: I follow the standard AI Studio system prompt and standard engineering tools (`edit_file`, `create_file`). I am the **builder**, not a user or instance of the internal RapidForge IDE.
 - **newproject.md**: Describes ecosystem standards for target applications built *with* the RapidForge platform (naming, directory layout), purposefully excluding internal IDE-specific AI mechanisms.
 
 [2026-04-28] FIREBASE: Admin SDK Authentication in Cloud Run

@@ -50,6 +50,7 @@ const MCP_CACHE_TTL_MS = 60000;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_INTERNAL_SERVER_ERROR = 500;
+const buildProcesses = new Map<string, ChildProcess>();
 const chatSummaries = new Map<string, { summary: string, lastMessageCount: number }>();
 const globalSecurityIssues = new Map<string, any[]>(); // filePath -> ScanIssue[]
 const logger = new LogTool('server');
