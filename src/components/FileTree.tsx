@@ -94,6 +94,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
 
   const copyPath = (path: string) => {
     navigator.clipboard.writeText(path);
+    toast.success(`Path copied: ${path}`);
     setContextMenu(null);
   };
 
@@ -205,16 +206,18 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => { e.stopPropagation(); onDownload(fullPath); }}
-                      className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
+                      className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#007acc]"
                       title="Download file"
+                      aria-label={`Download ${key}`}
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
                     {onRename && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onRename(fullPath); }}
-                        className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
+                        className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#007acc]"
                         title="Rename file"
+                        aria-label={`Rename ${key}`}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
@@ -222,8 +225,9 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                     {onDelete && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onDelete(fullPath); }}
-                        className="p-1 hover:bg-red-900/50 rounded text-red-400 hover:text-red-300"
+                        className="p-1 hover:bg-red-900/50 rounded text-red-400 hover:text-red-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
                         title="Delete file"
+                        aria-label={`Delete ${key}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -300,18 +304,21 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
         {/* Search Input */}
         <div className="px-3 pb-2">
           <div className="relative group">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#858585] group-focus-within:text-[#007acc] transition-colors" />
+            <label htmlFor="file-search" className="sr-only">Search files</label>
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#858585] group-focus-within:text-[#007acc] transition-colors" aria-hidden="true" />
             <input
+              id="file-search"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search files..."
-              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-8 py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-8 py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-[#007acc] focus:ring-1 focus:ring-[#007acc] transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[#3c3c3c] rounded text-[#858585] hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#007acc]"
+                aria-label="Clear search"
               >
                 <X className="w-3 h-3" />
               </button>
