@@ -97,6 +97,17 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
     setContextMenu(null);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, path: string, isFile: boolean) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (isFile) {
+        onSelect(path);
+      } else {
+        toggleFolder(path);
+      }
+    }
+  };
+
   // Build tree
   const tree: any = {};
   Object.keys(files).forEach(path => {
@@ -189,10 +200,14 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                 exit={{ opacity: 0, scale: 0.95, backgroundColor: 'rgba(248, 113, 113, 0.2)' }}
                 transition={{ duration: 0.5 }}
                 key={`file-${fullPath}`}
-                className={`flex items-center justify-between group cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 ${selectedFile === fullPath ? 'bg-[#37373d] text-white' : 'text-[#cccccc]'}`}
+                className={`flex items-center justify-between group cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 focus-visible:bg-[#37373d] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#007acc] ${selectedFile === fullPath ? 'bg-[#37373d] text-white' : 'text-[#cccccc]'}`}
                 style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={() => onSelect(fullPath)}
                 onContextMenu={(e) => handleContextMenu(e, fullPath, true)}
+                tabIndex={0}
+                role="treeitem"
+                aria-selected={selectedFile === fullPath}
+                onKeyDown={(e) => handleKeyDown(e, fullPath, true)}
               >
                 <div className="flex items-center gap-2 truncate flex-1">
                   <FileIcon filename={key} className="w-4 h-4" />
@@ -236,10 +251,14 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             return (
               <motion.div layout key={`folder-${fullPath}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
                 <div
-                  className="flex items-center gap-2 cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 text-[#cccccc]"
+                  className="flex items-center gap-2 cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 text-[#cccccc] focus-visible:bg-[#2a2d2e] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#007acc]"
                   style={{ paddingLeft: `${depth * 12 + 8}px` }}
                   onClick={() => toggleFolder(fullPath)}
                   onContextMenu={(e) => handleContextMenu(e, fullPath, false)}
+                  tabIndex={0}
+                  role="treeitem"
+                  aria-expanded={isExpanded}
+                  onKeyDown={(e) => handleKeyDown(e, fullPath, false)}
                 >
                   {isExpanded ? <FolderOpen className="w-4 h-4 text-blue-300" /> : <Folder className="w-4 h-4 text-blue-300" />}
                   <span className="text-sm">{key}</span>
@@ -273,24 +292,27 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
           <div className="flex items-center gap-1">
             <button
               onClick={onImportZip}
-              className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+              className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
               title="Import ZIP"
+              aria-label="Import ZIP Archive"
             >
               <Upload className="w-4 h-4" />
             </button>
             {onCreateFile && (
               <button
                 onClick={onCreateFile}
-                className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+                className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
                 title="New File"
+                aria-label="Create New File"
               >
                 <FilePlus className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={onDownloadZip}
-              className="p-1 text-[#007acc] hover:text-[#005f9e] hover:bg-[#3c3c3c] rounded transition-colors"
+              className="p-1 text-[#007acc] hover:text-[#005f9e] hover:bg-[#3c3c3c] rounded transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
               title="Download ZIP"
+              aria-label="Download Project as ZIP"
             >
               <Download className="w-4 h-4" />
             </button>

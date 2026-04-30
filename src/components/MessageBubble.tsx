@@ -8,7 +8,12 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
     <div className="w-full space-y-1.5 mt-2">
       {functionCalls.map((call, idx) => (
         <div key={`call-${idx}-${call.name}`} className="bg-[#252526] border border-[#3c3c3c] rounded-md overflow-hidden transition-all">
-          <button onClick={() => setExpanded(expanded === idx ? null : idx)} className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors">
+          <button
+            onClick={() => setExpanded(expanded === idx ? null : idx)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
+            aria-label={`${expanded === idx ? 'Hide' : 'Show'} tool call details for ${call.name}`}
+            aria-expanded={expanded === idx}
+          >
             <div className="flex items-center gap-2">
               <Activity className="w-3 h-3 text-[#007acc]" />
               <span className="text-[11px] font-mono font-medium text-[#cccccc]">{call.name}</span>
@@ -61,7 +66,12 @@ const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
       </div>
     )}
     <div className="border-l-2 border-[#007acc]/30 pl-3 py-1">
-      <button onClick={setExpanded} className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-opacity">
+      <button
+        onClick={setExpanded}
+        className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-opacity focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none rounded px-1"
+        aria-label={expanded ? 'Hide Thought' : 'View Thought'}
+        aria-expanded={expanded}
+      >
         <BrainCircuit className="w-3 h-3 text-[#007acc]" />
         <span className="text-[9px] font-bold text-[#e5e5e5] uppercase tracking-widest">{expanded ? 'Hide Thought' : 'View Thought'}</span>
         <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-2.5 h-2.5 text-[#858585]" /></motion.div>
@@ -127,14 +137,16 @@ const ProceedPrompt = ({ onSendMessage, isStreaming }: any) => (
       <button
         disabled={isStreaming}
         onClick={() => onSendMessage('y')}
-        className="flex-1 sm:flex-none px-4 py-2 bg-[#007acc] text-white rounded-lg hover:bg-[#005f9e] transition-all text-xs font-bold shadow-lg shadow-[#007acc]/20 disabled:opacity-50"
+        className="flex-1 sm:flex-none px-4 py-2 bg-[#007acc] text-white rounded-lg hover:bg-[#005f9e] transition-all text-xs font-bold shadow-lg shadow-[#007acc]/20 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
+        aria-label="Yes, proceed"
       >
         Yes, proceed
       </button>
       <button
         disabled={isStreaming}
         onClick={() => onSendMessage('n')}
-        className="flex-1 sm:flex-none px-4 py-2 bg-transparent text-[#d4d4d4] border border-[#4d4d4d] rounded-lg hover:bg-[#3c3c3c] transition-all text-xs font-bold disabled:opacity-50"
+        className="flex-1 sm:flex-none px-4 py-2 bg-transparent text-[#d4d4d4] border border-[#4d4d4d] rounded-lg hover:bg-[#3c3c3c] transition-all text-xs font-bold disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
+        aria-label="No, cancel"
       >
         No, cancel
       </button>
@@ -209,7 +221,7 @@ export const MessageBubble = ({
           {isProceedPrompt && <ProceedPrompt onSendMessage={onSendMessage} i={i} isStreaming={isStreaming} />}
         </div>
         
-        {/* User identification and copy */}
+        {/* User identification */}
         <div className="flex items-center gap-3 px-1">
           <span className="text-[9px] text-[#858585] font-bold uppercase tracking-widest opacity-60">
             {isUser ? (settings.userName || 'You') : 'GIDE AI'}

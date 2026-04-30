@@ -1,0 +1,3 @@
+## 2026-04-28 - [Standardizing Keyboard Navigation & ARIA in IDE Components]
+**Learning:** In complex IDE interfaces, icon-only buttons and tree-like structures (file explorers, tool call lists) often lack the necessary ARIA labels and keyboard focus states, making them inaccessible to screen readers and keyboard-only users. High-density UIs benefit from `focus-visible:ring-2` to clearly indicate focus without cluttering the visual design for mouse users.
+**Action:** Always include `aria-label` for icon-only buttons. For tree-like or list-based interactive elements, implement `tabIndex={0}` and `onKeyDown` handlers (supporting Enter/Space) alongside appropriate ARIA roles like `treeitem` and states like `aria-expanded` and `aria-selected`.

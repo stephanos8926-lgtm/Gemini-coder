@@ -72,8 +72,9 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onToggleLeftSidebar}
           id="toggle-left-sidebar-btn"
-          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+          className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none ${isLeftSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
           title="Toggle Side Bar (Ctrl+B)"
+          aria-label="Toggle Left Sidebar"
         >
           <PanelLeft className="w-5 h-5" />
         </button>
@@ -87,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[10px] text-[#858585] font-medium uppercase tracking-wider mt-1">{RW_APP_SUBTITLE}</span>
           </div>
           <button
-            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors text-[#007acc] sm:hidden"
+            className="p-1.5 hover:bg-[#3c3c3c] rounded-lg transition-colors text-[#007acc] sm:hidden focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             onClick={() => onShowExplorer()}
             id="mobile-toggle-explorer-btn"
             aria-label="Toggle Project Explorer"
@@ -123,8 +124,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onSaveAll}
             id="header-save-all-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             title="Save All"
+            aria-label="Save All Files"
           >
             <Download className="w-4 h-4 rotate-180" />
           </button>
@@ -132,8 +134,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowCommandPalette}
             id="header-command-palette-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             title="Command Palette (Ctrl+K)"
+            aria-label="Open Command Palette"
           >
             <Search className="w-4 h-4" />
           </button>
@@ -141,8 +144,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowGitPanel}
             id="header-git-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             title="Git Operations"
+            aria-label="Open Git Panel"
           >
             <GitBranch className="w-4 h-4" />
           </button>
@@ -150,8 +154,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowSettingsModal}
             id="header-settings-btn"
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all"
+            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none"
             title="Settings"
+            aria-label="Open Settings"
           >
             <SettingsIcon className="w-4 h-4" />
           </button>
@@ -159,8 +164,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onToggleRightSidebar}
             id="toggle-right-sidebar-btn"
-            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
+            className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-[#007acc] focus-visible:outline-none ${isRightSidebarOpen ? 'text-[#007acc] bg-[#1e1e1e]' : 'text-[#858585] hover:text-white'}`}
             title="Toggle AI Assistant"
+            aria-label="Toggle AI Assistant Panel"
           >
             <PanelRight className="w-5 h-5" />
           </button>
