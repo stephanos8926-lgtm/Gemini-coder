@@ -37,8 +37,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
       <button
         onClick={onSignOut}
         id="header-signout-btn"
-        className="p-1.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] rounded-full transition-all border border-[#4c4c4c]"
+        className="p-1.5 bg-[#3c3c3c] hover:bg-[#4c4c4c] rounded-full transition-all border border-[#4c4c4c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007acc]"
         title="Sign Out"
+        aria-label="Sign out of your account"
       >
         <LogOut className="w-3.5 h-3.5 text-[#cccccc]" />
       </button>

@@ -1,5 +1,5 @@
 import { MessageBubble } from './MessageBubble';
-import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus } from 'lucide-react';
+import { Send, Loader2, Sparkles, User, Copy, Check, BrainCircuit, Zap, Terminal, Activity, Code2, CheckCircle2, AlertCircle, ChevronRight, Plus, Bug } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Message } from '../lib/gemini';
 import { toast } from 'sonner';
@@ -62,6 +62,7 @@ interface ChatPanelProps {
 export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, isStreaming, settings }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [isFixingBuild, setIsFixingBuild] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<number | null>(null);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState('default-coder');
@@ -145,6 +146,7 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
   }, []);
 
   const formatContent = (content: string) => {
+    if (!content) return { thinking: null, main: '', taskList: null };
     const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
     const mainContent = content.replace(/<thinking>[\s\S]*?<\/thinking>/, '').trim();
     
@@ -213,17 +215,41 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
       <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 scroll-smooth">
         <div className="max-w-4xl mx-auto p-4 space-y-6 pb-12">
           {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-            <div className="w-16 h-16 bg-[#252526] rounded-2xl flex items-center justify-center border border-[#3c3c3c] shadow-xl">
-              <Sparkles className="w-8 h-8 text-[#007acc]" />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="h-full flex flex-col items-center justify-center text-center p-8 space-y-6"
+          >
+            <div className="w-20 h-20 bg-gradient-to-br from-[#252526] to-[#1e1e1e] rounded-3xl flex items-center justify-center border border-[#3c3c3c] shadow-2xl relative group">
+              <div className="absolute inset-0 bg-[#007acc]/5 rounded-3xl blur-xl group-hover:bg-[#007acc]/10 transition-all" />
+              <Sparkles className="w-10 h-10 text-[#007acc] relative z-10 animate-pulse" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-white font-bold text-lg">Welcome to GIDE AI</h3>
-              <p className="text-xs text-[#858585] max-w-[240px] leading-relaxed">
-                I can help you write code, refactor projects, or explain complex logic. How can I assist you today?
+            <div className="space-y-2">
+              <h3 className="text-white font-extrabold text-2xl tracking-tight">RapidForge <span className="text-[#007acc]">AI</span></h3>
+              <p className="text-sm text-[#858585] max-w-[320px] leading-relaxed font-medium">
+                Your high-performance engineering assistant. I can architect features, debug complex systems, and refactor code with precision.
               </p>
             </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-md">
+              {[
+                { icon: <Code2 className="w-4 h-4" />, label: 'Build Feature', prompt: 'Build a responsive landing page with Tailwind' },
+                { icon: <Zap className="w-4 h-4" />, label: 'Refactor Code', prompt: 'Refactor this component to use React context' },
+                { icon: <Bug className="w-4 h-4" />, label: 'Debug Error', prompt: 'Debug why this async operation is failing' },
+                { icon: <Terminal className="w-4 h-4" />, label: 'Explain Logic', prompt: 'Explain how this authentication flow works' }
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSendMessage(item.prompt)}
+                  className="flex items-center gap-3 p-3 bg-[#252526] hover:bg-[#3c3c3c] border border-[#3c3c3c] rounded-xl text-left transition-all group"
+                >
+                  <div className="p-2 bg-[#1e1e1e] rounded-lg text-[#858585] group-hover:text-[#007acc] transition-colors">
+                    {item.icon}
+                  </div>
+                  <span className="text-xs font-bold text-[#cccccc] group-hover:text-white uppercase tracking-wider">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
         )}        {messages.map((msg, i) => (
           <MessageBubble
             key={msg.id || `msg-${i}-${msg.role}-${msg.content.substring(0, 20)}`}
@@ -278,6 +304,7 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
           </div>
           <button
             onClick={async () => {
+              setIsFixingBuild(true);
               try {
                 const data = await apiClient<{ logs: any[] }>('/api/logs?source=build');
                 if (data.logs && data.logs.length > 0) {
@@ -292,12 +319,16 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
                 }
               } catch (e) {
                 toast.error('Failed to fetch logs');
+              } finally {
+                setIsFixingBuild(false);
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-[#007acc]/10 hover:bg-[#007acc]/20 text-[#007acc] border border-[#007acc]/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
+            disabled={isFixingBuild || isStreaming}
+            className={`flex items-center gap-1.5 px-3 py-1 bg-[#007acc]/10 hover:bg-[#007acc]/20 text-[#007acc] border border-[#007acc]/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
+            aria-label="Find and fix latest build error"
           >
-            <Zap className="w-3 h-3" />
-            Fix Build Error
+            {isFixingBuild ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+            {isFixingBuild ? 'Checking Logs...' : 'Fix Build Error'}
           </button>
         </div>
         <form onSubmit={handleSubmit} className="relative group max-w-3xl mx-auto">

@@ -12,12 +12,15 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isTerminalVisible, onToggl
   return (
     <div className="h-6 w-full bg-[#007acc] text-white flex items-center justify-between px-3 text-[10px] sm:text-[11px] font-medium select-none z-50">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 opacity-90">
+        <div className="flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity cursor-default">
           <ShieldCheck className="w-3 h-3" />
           <span>v{APP_VERSION}</span>
         </div>
-        <div className="flex items-center gap-1.5 opacity-90">
-          <Cpu className="w-3 h-3" />
+        <div className="flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-opacity cursor-default">
+          <div className="relative">
+            <Cpu className="w-3 h-3" />
+            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse border border-[#007acc]" />
+          </div>
           <span>System Healthy</span>
         </div>
       </div>

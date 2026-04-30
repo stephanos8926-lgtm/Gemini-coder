@@ -1,28 +1,36 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, User, Activity, BrainCircuit, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, User, Activity, BrainCircuit, ChevronRight, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; args: any }[] }) => {
   const [expanded, setExpanded] = useState<number | null>(null);
   return (
     <div className="w-full space-y-1.5 mt-2">
       {functionCalls.map((call, idx) => (
-        <div key={`call-${idx}-${call.name}`} className="bg-[#252526] border border-[#3c3c3c] rounded-md overflow-hidden transition-all">
-          <button onClick={() => setExpanded(expanded === idx ? null : idx)} className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors">
-            <div className="flex items-center gap-2">
-              <Activity className="w-3 h-3 text-[#007acc]" />
-              <span className="text-[11px] font-mono font-medium text-[#cccccc]">{call.name}</span>
+        <div key={`call-${idx}-${call.name}`} className="bg-[#252526] border border-[#3c3c3c] rounded-xl overflow-hidden transition-all shadow-sm">
+          <button
+            onClick={() => setExpanded(expanded === idx ? null : idx)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(expanded === idx ? null : idx); } }}
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#2d2d2d] transition-colors focus-visible:outline-none focus-visible:bg-[#2d2d2d]"
+            aria-expanded={expanded === idx}
+            aria-label={`Tool call: ${call.name}`}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="p-1 bg-[#007acc]/10 rounded-lg">
+                <Activity className="w-3.5 h-3.5 text-[#007acc]" />
+              </div>
+              <span className="text-[11px] font-mono font-bold text-[#e5e5e5]">{call.name}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[#858585] font-bold uppercase tracking-wider">Tool</span>
-              <motion.div animate={{ rotate: expanded === idx ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-3 h-3 text-[#858585]" /></motion.div>
+              <span className="text-[8px] text-[#858585] font-black uppercase tracking-[0.15em] bg-[#1e1e1e] px-1.5 py-0.5 rounded border border-[#3c3c3c]">Tool</span>
+              <motion.div animate={{ rotate: expanded === idx ? 90 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}><ChevronRight className="w-3.5 h-3.5 text-[#858585]" /></motion.div>
             </div>
           </button>
           <AnimatePresence>
             {expanded === idx && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <div className="p-2.5 border-t border-[#3c3c3c] bg-[#1a1a1a]">
-                  <pre className="text-[10px] text-[#3794ff] font-mono overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(call.args, null, 2)}</pre>
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: "easeInOut" }} className="overflow-hidden">
+                <div className="p-3 border-t border-[#3c3c3c] bg-[#0d0d0d]">
+                  <pre className="text-[10px] text-[#3794ff] font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">{JSON.stringify(call.args, null, 2)}</pre>
                 </div>
               </motion.div>
             )}
@@ -34,24 +42,34 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
 };
 
 const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
-  <div className="w-full space-y-2 my-2">
+  <div className="w-full space-y-3 my-3">
     {taskList && (
-      <div className="bg-[#252526] border border-[#007acc]/20 rounded-lg p-3 shadow-sm">
-        <div className="flex items-center gap-2 mb-2">
-          <Activity className="w-3 h-3 text-[#007acc]" />
-          <span className="text-[10px] font-bold text-[#858585] uppercase tracking-widest">Active Task List</span>
+      <div className="bg-[#252526] border border-[#007acc]/30 rounded-xl p-4 shadow-lg relative overflow-hidden group">
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#007acc]" />
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="p-1 bg-[#007acc]/10 rounded-md">
+            <Activity className="w-3.5 h-3.5 text-[#007acc]" />
+          </div>
+          <span className="text-[10px] font-black text-[#858585] uppercase tracking-[0.15em]">Execution Roadmap</span>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-2">
           {taskList.split('\n').map((task: string, idx: number) => {
             const isDone = task.includes('[x]');
             const isInProg = task.includes('[~]');
             const isBlocked = task.includes('[!]');
             return (
-              <div key={`task-${idx}`} className="flex items-start gap-2 text-[11px]">
-                <span className={`font-mono shrink-0 ${isDone ? 'text-green-500' : isInProg ? 'text-blue-400 animate-pulse' : isBlocked ? 'text-red-500' : 'text-[#858585]'}`}>
-                  {task.match(/\[.\]/)?.[0] || '[ ]'}
-                </span>
-                <span className={`${isDone ? 'text-[#858585] line-through' : 'text-[#cccccc]'}`}>
+              <div key={`task-${idx}`} className="flex items-center gap-3 text-[11px] group/task">
+                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                  isDone ? 'bg-green-500/20 border-green-500/50' :
+                  isInProg ? 'bg-blue-500/20 border-blue-500/50 animate-pulse' :
+                  isBlocked ? 'bg-red-500/20 border-red-500/50' :
+                  'bg-[#1e1e1e] border-[#3c3c3c]'
+                }`}>
+                  {isDone && <CheckCircle2 className="w-3 h-3 text-green-500" />}
+                  {isBlocked && <AlertCircle className="w-3 h-3 text-red-500" />}
+                  {isInProg && <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />}
+                </div>
+                <span className={`transition-all ${isDone ? 'text-[#666666] line-through' : 'text-[#e5e5e5] font-medium'}`}>
                   {task.replace(/\[.\]/, '').trim()}
                 </span>
               </div>
@@ -60,16 +78,26 @@ const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
         </div>
       </div>
     )}
-    <div className="border-l-2 border-[#007acc]/30 pl-3 py-1">
-      <button onClick={setExpanded} className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-opacity">
-        <BrainCircuit className="w-3 h-3 text-[#007acc]" />
-        <span className="text-[9px] font-bold text-[#e5e5e5] uppercase tracking-widest">{expanded ? 'Hide Thought' : 'View Thought'}</span>
-        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-2.5 h-2.5 text-[#858585]" /></motion.div>
+    <div className="pl-4 py-1 relative">
+      <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-[#007acc]/40 to-transparent rounded-full" />
+      <button
+        onClick={setExpanded}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(); } }}
+        className="flex items-center gap-2.5 group/thought transition-all outline-none"
+        aria-expanded={expanded}
+      >
+        <div className="p-1 bg-[#007acc]/5 rounded-md group-hover/thought:bg-[#007acc]/10 transition-colors">
+          <BrainCircuit className="w-3.5 h-3.5 text-[#007acc]" />
+        </div>
+        <span className="text-[10px] font-black text-[#858585] uppercase tracking-[0.15em] group-hover/thought:text-[#007acc] transition-colors">{expanded ? 'Conceal Internal Monologue' : 'Analyze Internal Monologue'}</span>
+        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}><ChevronRight className="w-3 h-3 text-[#858585] group-hover/thought:text-[#007acc]" /></motion.div>
       </button>
       <AnimatePresence>
         {expanded && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-[#858585] italic leading-relaxed whitespace-pre-wrap pb-2">{thinking}</p>
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: "easeOut" }} className="overflow-hidden">
+            <div className="mt-2 p-3 bg-[#1a1a1a]/50 rounded-lg border border-[#3c3c3c]/30">
+              <p className="text-[12px] text-[#a0a0a0] leading-relaxed whitespace-pre-wrap italic font-serif">{thinking}</p>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
