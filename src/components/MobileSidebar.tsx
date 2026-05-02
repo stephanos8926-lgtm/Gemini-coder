@@ -59,7 +59,7 @@ export function MobileSidebar({
       <div className="flex items-center justify-between bg-[#252526] border-b border-[#3c3c3c] px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="font-bold text-lg text-[#007acc]">&gt;_</span>
-          <span className="font-bold text-lg text-[#e5e5e5]">GIDE</span>
+          <span className="font-bold text-lg text-[#e5e5e5]">RapidForge</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-[#3c3c3c] rounded">
           <X className="w-5 h-5 text-[#858585]" />

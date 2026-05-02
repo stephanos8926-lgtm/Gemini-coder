@@ -200,7 +200,7 @@ export function CommandPalette({
             <span className="flex items-center gap-1"><span className="px-1 bg-surface-accent rounded">Enter</span> to select</span>
             <span className="flex items-center gap-1"><span className="px-1 bg-surface-accent rounded">Esc</span> to close</span>
           </div>
-          <div className="font-mono">GIDE v1.0</div>
+          <div className="font-mono">RapidForge v1.0</div>
         </div>
       </motion.div>
     </div>

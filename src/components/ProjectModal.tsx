@@ -94,7 +94,7 @@ export function ProjectModal({
               <Upload className="w-4 h-4" />
               Import ZIP
             </button>
-            <span className="text-xs text-[#858585]">Import a previously exported GIDE project</span>
+            <span className="text-xs text-[#858585]">Import a previously exported RapidForge project</span>
           </div>
         </div>
 

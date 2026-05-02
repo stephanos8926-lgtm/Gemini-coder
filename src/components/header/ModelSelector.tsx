@@ -22,7 +22,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           key={m.id}
           onClick={() => setModel(m.id)}
           id={`model-select-${m.id.replace(/[^a-z0-9]/gi, '-')}`}
-          className={`px-2 py-1 rounded text-[10px] font-bold transition-all ${model === m.id ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
+          className={`px-2 py-1 rounded text-[10px] font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:outline-none ${model === m.id ? 'bg-accent-intel text-white' : 'text-text-subtle hover:text-text-primary hover:bg-surface-accent'}`}
+          aria-label={`Select model ${m.name}`}
+          aria-pressed={model === m.id}
         >
           {m.name.split(' ').pop()?.toUpperCase()}
         </button>
@@ -33,7 +35,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       <button
         onClick={onShowMcpModal}
         id="header-mcp-btn"
-        className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all ${showMcpModal ? 'bg-[#007acc] text-white' : 'text-[#858585] hover:text-[#cccccc]'}`}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:outline-none ${showMcpModal ? 'bg-accent-intel text-white' : 'text-text-subtle hover:text-text-primary hover:bg-surface-accent'}`}
+        aria-label="Model Context Protocol Settings"
       >
         <SettingsIcon className="w-3 h-3" />
         <span className="hidden md:inline">MCP</span>
