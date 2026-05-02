@@ -7,22 +7,27 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
   return (
     <div className="w-full space-y-1.5 mt-2">
       {functionCalls.map((call, idx) => (
-        <div key={`call-${idx}-${call.name}`} className="bg-[#252526] border border-[#3c3c3c] rounded-md overflow-hidden transition-all">
-          <button onClick={() => setExpanded(expanded === idx ? null : idx)} className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors">
+        <div key={`call-${idx}-${call.name}`} className="bg-surface-card border border-border-subtle rounded-md overflow-hidden transition-all duration-200">
+          <button
+            onClick={() => setExpanded(expanded === idx ? null : idx)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-surface-accent transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:inset focus-visible:outline-none"
+            aria-expanded={expanded === idx}
+            aria-label={`View tool call: ${call.name}`}
+          >
             <div className="flex items-center gap-2">
-              <Activity className="w-3 h-3 text-[#007acc]" />
-              <span className="text-[11px] font-mono font-medium text-[#cccccc]">{call.name}</span>
+              <Activity className="w-3 h-3 text-accent-intel" />
+              <span className="text-[11px] font-mono font-medium text-text-primary">{call.name}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[#858585] font-bold uppercase tracking-wider">Tool</span>
-              <motion.div animate={{ rotate: expanded === idx ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-3 h-3 text-[#858585]" /></motion.div>
+              <span className="text-[9px] text-text-subtle font-bold uppercase tracking-wider">Tool</span>
+              <motion.div animate={{ rotate: expanded === idx ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-3 h-3 text-text-subtle" /></motion.div>
             </div>
           </button>
           <AnimatePresence>
             {expanded === idx && (
               <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                <div className="p-2.5 border-t border-[#3c3c3c] bg-[#1a1a1a]">
-                  <pre className="text-[10px] text-[#3794ff] font-mono overflow-x-auto whitespace-pre-wrap break-all">{JSON.stringify(call.args, null, 2)}</pre>
+                <div className="p-2.5 border-t border-border-subtle bg-surface-base">
+                  <pre className="text-[10px] text-accent-intel font-mono overflow-x-auto whitespace-pre-wrap break-all opacity-80">{JSON.stringify(call.args, null, 2)}</pre>
                 </div>
               </motion.div>
             )}
@@ -36,10 +41,10 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
 const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
   <div className="w-full space-y-2 my-2">
     {taskList && (
-      <div className="bg-[#252526] border border-[#007acc]/20 rounded-lg p-3 shadow-sm">
+      <div className="bg-surface-card border border-accent-intel/20 rounded-lg p-3 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
-          <Activity className="w-3 h-3 text-[#007acc]" />
-          <span className="text-[10px] font-bold text-[#858585] uppercase tracking-widest">Active Task List</span>
+          <Activity className="w-3 h-3 text-accent-intel" />
+          <span className="text-[10px] font-bold text-text-subtle uppercase tracking-widest">Active Task List</span>
         </div>
         <div className="space-y-1">
           {taskList.split('\n').map((task: string, idx: number) => {
@@ -48,10 +53,10 @@ const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
             const isBlocked = task.includes('[!]');
             return (
               <div key={`task-${idx}`} className="flex items-start gap-2 text-[11px]">
-                <span className={`font-mono shrink-0 ${isDone ? 'text-green-500' : isInProg ? 'text-blue-400 animate-pulse' : isBlocked ? 'text-red-500' : 'text-[#858585]'}`}>
+                <span className={`font-mono shrink-0 ${isDone ? 'text-accent-ops' : isInProg ? 'text-accent-intel animate-pulse' : isBlocked ? 'text-accent-security' : 'text-text-subtle'}`}>
                   {task.match(/\[.\]/)?.[0] || '[ ]'}
                 </span>
-                <span className={`${isDone ? 'text-[#858585] line-through' : 'text-[#cccccc]'}`}>
+                <span className={`${isDone ? 'text-text-subtle line-through' : 'text-text-primary'}`}>
                   {task.replace(/\[.\]/, '').trim()}
                 </span>
               </div>
@@ -60,16 +65,21 @@ const ThinkingBlock = ({ thinking, taskList, expanded, setExpanded }: any) => (
         </div>
       </div>
     )}
-    <div className="border-l-2 border-[#007acc]/30 pl-3 py-1">
-      <button onClick={setExpanded} className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-opacity">
-        <BrainCircuit className="w-3 h-3 text-[#007acc]" />
-        <span className="text-[9px] font-bold text-[#e5e5e5] uppercase tracking-widest">{expanded ? 'Hide Thought' : 'View Thought'}</span>
-        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-2.5 h-2.5 text-[#858585]" /></motion.div>
+    <div className="border-l-2 border-accent-intel/30 pl-3 py-1">
+      <button
+        onClick={setExpanded}
+        className="flex items-center gap-2 mb-1 opacity-60 hover:opacity-100 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:outline-none rounded-sm px-1 -ml-1"
+        aria-expanded={expanded}
+        aria-label={expanded ? "Hide Thought" : "View Thought"}
+      >
+        <BrainCircuit className="w-3 h-3 text-accent-intel" />
+        <span className="text-[9px] font-bold text-text-primary uppercase tracking-widest">{expanded ? 'Hide Thought' : 'View Thought'}</span>
+        <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-2.5 h-2.5 text-text-subtle" /></motion.div>
       </button>
       <AnimatePresence>
         {expanded && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-            <p className="text-xs text-[#858585] italic leading-relaxed whitespace-pre-wrap pb-2">{thinking}</p>
+            <p className="text-xs text-text-subtle italic leading-relaxed whitespace-pre-wrap pb-2">{thinking}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -82,14 +92,14 @@ const FunctionResponses = ({ responses }: any) => (
     {responses.map((res: any, idx: number) => {
       const isError = typeof res.response === 'object' && res.response !== null && ('error' in res.response || (res.response.stderr));
       return (
-        <div key={`resp-${idx}-${res.name}`} className={`bg-[#1e1e1e] border ${isError ? 'border-red-500/20' : 'border-[#3c3c3c]'} rounded-lg overflow-hidden shadow-sm`}>
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#252526] border-b border-[#3c3c3c]">
-            {isError ? <AlertCircle className="w-3 h-3 text-red-400" /> : <CheckCircle2 className="w-3 h-3 text-green-400" />}
-            <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-red-400' : 'text-[#858585]'}`}>
+        <div key={`resp-${idx}-${res.name}`} className={`bg-surface-base border ${isError ? 'border-accent-security/20' : 'border-border-subtle'} rounded-lg overflow-hidden shadow-sm`}>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-surface-card border-b border-border-subtle">
+            {isError ? <AlertCircle className="w-3 h-3 text-accent-security" /> : <CheckCircle2 className="w-3 h-3 text-accent-ops" />}
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${isError ? 'text-accent-security' : 'text-text-subtle'}`}>
               {res.name} Output
             </span>
           </div>
-          <div className={`text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all p-3 bg-black/10 ${isError ? 'text-red-300' : 'text-[#cccccc]'}`}>
+          <div className={`text-[11px] font-mono overflow-x-auto whitespace-pre-wrap break-all p-3 bg-black/10 ${isError ? 'text-red-300' : 'text-text-primary'}`}>
             {typeof res.response === 'string' ? res.response : JSON.stringify(res.response, null, 2)}
           </div>
         </div>
@@ -108,7 +118,8 @@ const ReviewButtons = ({ content, onReviewChange }: any) => (
           <button
             key={`review-${idx}-${filename}`}
             onClick={() => onReviewChange?.(filename, content)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007acc]/10 border border-[#007acc]/30 text-[#007acc] rounded-md hover:bg-[#007acc]/20 transition-all text-[10px] font-bold uppercase tracking-wider"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-intel/10 border border-accent-intel/30 text-accent-intel rounded-md hover:bg-accent-intel/20 transition-all duration-200 text-[10px] font-bold uppercase tracking-wider focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:outline-none"
+            aria-label={`Review changes in ${filename}`}
           >
             <Sparkles className="w-3 h-3" />
             <span>Review {filename}</span>
@@ -121,20 +132,22 @@ const ReviewButtons = ({ content, onReviewChange }: any) => (
 );
 
 const ProceedPrompt = ({ onSendMessage, isStreaming }: any) => (
-  <div className="mt-5 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl shadow-inner">
-    <p className="text-xs text-[#d4d4d4] mb-3 font-bold uppercase tracking-widest opacity-70">How would you like to proceed?</p>
+  <div className="mt-5 p-4 bg-surface-base border border-border-subtle rounded-xl shadow-inner">
+    <p className="text-xs text-text-primary mb-3 font-bold uppercase tracking-widest opacity-70">How would you like to proceed?</p>
     <div className="flex flex-wrap gap-2">
       <button
         disabled={isStreaming}
         onClick={() => onSendMessage('y')}
-        className="flex-1 sm:flex-none px-4 py-2 bg-[#007acc] text-white rounded-lg hover:bg-[#005f9e] transition-all text-xs font-bold shadow-lg shadow-[#007acc]/20 disabled:opacity-50"
+        className="flex-1 sm:flex-none px-4 py-2 bg-accent-intel text-white rounded-lg hover:bg-accent-intel/80 transition-all duration-200 text-xs font-bold shadow-lg shadow-accent-intel/20 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+        aria-label="Proceed with suggested changes"
       >
         Yes, proceed
       </button>
       <button
         disabled={isStreaming}
         onClick={() => onSendMessage('n')}
-        className="flex-1 sm:flex-none px-4 py-2 bg-transparent text-[#d4d4d4] border border-[#4d4d4d] rounded-lg hover:bg-[#3c3c3c] transition-all text-xs font-bold disabled:opacity-50"
+        className="flex-1 sm:flex-none px-4 py-2 bg-transparent text-text-primary border border-border-subtle rounded-lg hover:bg-surface-accent transition-all duration-200 text-xs font-bold disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent-intel focus-visible:outline-none"
+        aria-label="Cancel suggested changes"
       >
         No, cancel
       </button>
@@ -169,8 +182,8 @@ export const MessageBubble = ({
     >
       <div className={`w-8 h-8 rounded-lg shrink-0 flex items-center justify-center border shadow-sm ${
         isUser 
-          ? 'bg-[#007acc] border-[#007acc]/50 text-white' 
-          : 'bg-[#252526] border-[#3c3c3c] text-[#007acc]'
+          ? 'bg-accent-intel border-accent-intel/50 text-white'
+          : 'bg-surface-card border-border-subtle text-accent-intel'
       }`}>
         {isUser ? (
           settings.userAvatar ? (
@@ -192,8 +205,8 @@ export const MessageBubble = ({
         {/* Main Message Bubble */}
         <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative group break-words max-w-full overflow-hidden shadow-sm ${
           isUser 
-            ? 'bg-[#007acc] text-white border border-[#007acc]/50 rounded-tr-none' 
-            : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'
+            ? 'bg-accent-intel text-white border border-accent-intel/50 rounded-tr-none'
+            : 'bg-surface-card text-text-primary border border-border-subtle rounded-tl-none'
         }`}>
           {renderMarkdown(contentToRender)}
 
@@ -211,8 +224,8 @@ export const MessageBubble = ({
         
         {/* User identification and copy */}
         <div className="flex items-center gap-3 px-1">
-          <span className="text-[9px] text-[#858585] font-bold uppercase tracking-widest opacity-60">
-            {isUser ? (settings.userName || 'You') : 'GIDE AI'}
+          <span className="text-[9px] text-text-subtle font-bold uppercase tracking-widest opacity-60">
+            {isUser ? (settings.userName || 'You') : 'RapidForge AI'}
           </span>
         </div>
       </div>

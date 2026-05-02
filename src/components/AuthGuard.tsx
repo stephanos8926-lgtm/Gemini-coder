@@ -27,7 +27,7 @@ const SignInView = ({ onSignInGithub, onSignInGoogle }: any) => (
       <div className="w-16 h-16 bg-[#007acc]/10 rounded-full flex items-center justify-center mx-auto mb-6">
         <LogIn className="w-8 h-8 text-[#007acc]" />
       </div>
-      <h2 className="text-2xl font-bold text-white mb-2">Welcome to GIDE</h2>
+      <h2 className="text-2xl font-bold text-white mb-2">Welcome to RapidForge</h2>
       <p className="text-[#858585] mb-8">Please sign in to access your secure development workspaces.</p>
       <div className="flex flex-col gap-4">
         <button 
