@@ -72,8 +72,9 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onToggleLeftSidebar}
           id="toggle-left-sidebar-btn"
-          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
+          className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none ${isLeftSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
           title="Toggle Side Bar (Ctrl+B)"
+          aria-label="Toggle Left Sidebar"
         >
           <PanelLeft className="w-5 h-5" />
         </button>
@@ -123,8 +124,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onSaveAll}
             id="header-save-all-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
             title="Save All"
+            aria-label="Save All Files"
           >
             <Download className="w-4 h-4 rotate-180" />
           </button>
@@ -132,8 +134,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowCommandPalette}
             id="header-command-palette-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
             title="Command Palette (Ctrl+K)"
+            aria-label="Open Command Palette"
           >
             <Search className="w-4 h-4" />
           </button>
@@ -141,8 +144,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowGitPanel}
             id="header-git-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
             title="Git Operations"
+            aria-label="Open Git Panel"
           >
             <GitBranch className="w-4 h-4" />
           </button>
@@ -150,8 +154,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowSettingsModal}
             id="header-settings-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
             title="Settings"
+            aria-label="Open Settings"
           >
             <SettingsIcon className="w-4 h-4" />
           </button>
@@ -159,8 +164,9 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onToggleRightSidebar}
             id="toggle-right-sidebar-btn"
-            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
+            className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none ${isRightSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
             title="Toggle AI Assistant"
+            aria-label="Toggle AI Assistant Panel"
           >
             <PanelRight className="w-5 h-5" />
           </button>
