@@ -15,16 +15,21 @@ export const ErudaToggle: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center space-x-2 p-4 bg-gray-100 rounded-md">
-      <label htmlFor="eruda-toggle" className="text-sm font-medium text-gray-700">
+    <div className="flex items-center justify-between p-4 bg-surface-card border border-border-subtle rounded-xl shadow-sm">
+      <label htmlFor="eruda-toggle" className="text-sm font-medium text-text-primary">
         Enable Mobile Debug Console (Eruda)
       </label>
       <button
         id="eruda-toggle"
         onClick={toggle}
-        className={`px-3 py-1 rounded text-white ${enabled ? 'bg-green-600' : 'bg-gray-400'}`}
+        aria-label={enabled ? "Disable Mobile Debug Console" : "Enable Mobile Debug Console"}
+        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all focus-visible:ring-2 focus-visible:ring-accent-intel focus:outline-none ${
+          enabled
+            ? 'bg-accent-ops text-white shadow-lg shadow-accent-ops/20'
+            : 'bg-surface-accent text-text-subtle hover:text-text-primary border border-border-subtle'
+        }`}
       >
-        {enabled ? 'On' : 'Off'}
+        {enabled ? 'Enabled' : 'Disabled'}
       </button>
     </div>
   );
