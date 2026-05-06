@@ -52,9 +52,14 @@ export function BuildPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="npm run build"
-            className="bg-[#1e1e1e] border border-[#3c3c3c] px-2 py-1 text-xs text-white rounded"
+            aria-label="Build command"
+            className="bg-[#1e1e1e] border border-[#3c3c3c] px-2 py-1 text-xs text-white rounded focus:outline-none focus:border-accent-intel"
           />
-          <button onClick={() => runTask(input)} className="p-1.5 bg-[#007acc] text-white rounded hover:bg-[#005f9e]">
+          <button
+            onClick={() => runTask(input)}
+            className="p-1.5 bg-accent-intel text-white rounded hover:opacity-90 transition-all focus-visible:ring-2 focus-visible:ring-accent-intel focus:outline-none shadow-sm shadow-accent-intel/20"
+            aria-label="Run build task"
+          >
             <Play className="w-3 h-3" />
           </button>
         </div>
@@ -63,9 +68,13 @@ export function BuildPanel() {
         {tasks.map(task => (
           <div key={task.id} className="bg-[#252526] border border-[#3c3c3c] rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono text-[#007acc]">{task.command}</span>
+              <span className="text-xs font-mono text-accent-intel">{task.command}</span>
               {task.status === 'running' ? (
-                <button onClick={() => stopTask(task.id)}>
+                <button
+                  onClick={() => stopTask(task.id)}
+                  className="p-1 hover:bg-red-500/10 rounded transition-colors"
+                  aria-label="Stop task"
+                >
                   <Square className="w-3 h-3 text-red-500" />
                 </button>
               ) : <Square className="w-3 h-3 text-gray-500" />}
