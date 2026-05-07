@@ -1,0 +1,4 @@
+{"type":"info","payload":{"message":"Initializing express app..."},"timestamp":1778181352316,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Workspace root initialized","meta":{"WORKSPACE_ROOT":"/app/workspaces"}},"timestamp":1778181352327,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"Upload directory initialized","meta":{"UPLOAD_DIR":"/app/uploads"}},"timestamp":1778181352471,"context":{"moduleName":"server"}}
+{"type":"info","payload":{"message":"RapidForge Server running on http://localhost:3000"},"timestamp":1778181353342,"context":{"moduleName":"server"}}

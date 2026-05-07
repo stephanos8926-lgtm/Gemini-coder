@@ -7,15 +7,19 @@ const ToolCallRenderer = ({ functionCalls }: { functionCalls: { name: string; ar
   return (
     <div className="w-full space-y-1.5 mt-2">
       {functionCalls.map((call, idx) => (
-        <div key={`call-${idx}-${call.name}`} className="bg-[#252526] border border-[#3c3c3c] rounded-md overflow-hidden transition-all">
-          <button onClick={() => setExpanded(expanded === idx ? null : idx)} className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-[#2d2d2d] transition-colors">
+        <div key={`call-${idx}-${call.name}`} className="bg-surface-card border border-border-subtle rounded-md overflow-hidden transition-all">
+          <button
+            onClick={() => setExpanded(expanded === idx ? null : idx)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-surface-accent transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+            aria-label={`${expanded === idx ? 'Hide' : 'View'} tool call ${call.name}`}
+          >
             <div className="flex items-center gap-2">
-              <Activity className="w-3 h-3 text-[#007acc]" />
-              <span className="text-[11px] font-mono font-medium text-[#cccccc]">{call.name}</span>
+              <Activity className="w-3 h-3 text-accent-intel" />
+              <span className="text-[11px] font-mono font-medium text-text-primary">{call.name}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[#858585] font-bold uppercase tracking-wider">Tool</span>
-              <motion.div animate={{ rotate: expanded === idx ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-3 h-3 text-[#858585]" /></motion.div>
+              <span className="text-[9px] text-text-subtle font-bold uppercase tracking-wider">Tool</span>
+              <motion.div animate={{ rotate: expanded === idx ? 180 : 0 }} transition={{ duration: 0.2 }}><ChevronRight className="w-3 h-3 text-text-subtle" /></motion.div>
             </div>
           </button>
           <AnimatePresence>
@@ -108,7 +112,8 @@ const ReviewButtons = ({ content, onReviewChange }: any) => (
           <button
             key={`review-${idx}-${filename}`}
             onClick={() => onReviewChange?.(filename, content)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007acc]/10 border border-[#007acc]/30 text-[#007acc] rounded-md hover:bg-[#007acc]/20 transition-all text-[10px] font-bold uppercase tracking-wider"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent-intel/10 border border-accent-intel/30 text-accent-intel rounded-md hover:bg-accent-intel/20 transition-all text-[10px] font-bold uppercase tracking-wider focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+            aria-label={`Review changes for ${filename}`}
           >
             <Sparkles className="w-3 h-3" />
             <span>Review {filename}</span>

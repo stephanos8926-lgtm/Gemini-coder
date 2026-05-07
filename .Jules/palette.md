@@ -1,0 +1,3 @@
+## 2025-05-15 - [Accessibility & Semantic Tokens]
+**Learning:** Hardcoded hex values in UI components (like #007acc) lead to fragmented design systems. Transitioning to semantic tokens (e.g., accent-intel) not only improves maintainability but also ensures visual consistency across the app. Additionally, accessibility (ARIA labels) should be baked into every interactive element, not added as an afterthought.
+**Action:** Always verify if a semantic Tailwind token exists before using a hex value. Prioritize keyboard accessibility by ensuring all buttons have `focus-visible` styles and proper labels.
