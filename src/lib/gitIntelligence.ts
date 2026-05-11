@@ -37,7 +37,7 @@ export class GitIntelligence {
    */
   public async indexRemoteRepo(url: string, branch: string = 'main'): Promise<RemoteRepoIndex> {
     return await this.guard.protect(async () => {
-      const repoId = Buffer.from(url).toString('base64').substring(0, 12);
+      const repoId = btoa(url).substring(0, 12);
       const targetDir = path.join(this.TEMP_ROOT, repoId);
 
       logRedirector.push('system', 'info', `Indexing remote repo: ${url} [${branch}]`);

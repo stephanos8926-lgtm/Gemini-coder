@@ -37,7 +37,17 @@ export class NexusFactory {
     guard.registerSensor('local-file', new LocalFileSensor(process.cwd()));
     
     // Conditional sensors based on environment
-    if (process.env.FIREBASE_PROJECT_ID) {
+    const hasFirebase = (() => {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        return fs.existsSync(path.join(process.cwd(), 'firebase-applet-config.json'));
+      } catch (e) {
+        return !!process.env.FIREBASE_PROJECT_ID;
+      }
+    })();
+    
+    if (hasFirebase) {
       guard.registerSensor('firestore', new FirestoreSensor());
     }
   }

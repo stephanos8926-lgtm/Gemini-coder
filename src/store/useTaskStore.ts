@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { BackgroundTask, TaskStatus } from '../lib/backgroundTaskManager';
+import type { BackgroundTask, TaskStatus } from '../lib/backgroundTaskManager';
 
 // Define frontend types matching backend
 export interface ClientBackgroundTask {
