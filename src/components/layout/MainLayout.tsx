@@ -26,6 +26,9 @@ interface MainLayoutProps {
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
   onDeleteFile: (path: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void;
+  onCreateFile: (path: string) => void;
+  onCreateFolder: (path: string) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -34,7 +37,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   onSendMessage,
   onDownloadFile,
   onDownloadZip,
-  onDeleteFile
+  onDeleteFile,
+  onRenameFile,
+  onCreateFile,
+  onCreateFolder
 }) => {
   const { isLeftSidebarOpen, isRightSidebarOpen, activeBottomTab, setActiveBottomTab } = useAppStore();
   const { RW_fileStore, RW_activeFile, setActiveFile, RW_openFiles } = useFileStore();
@@ -51,6 +57,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 onDownloadFile={onDownloadFile}
                 onDownloadZip={onDownloadZip}
                 onDeleteFile={onDeleteFile}
+                onRenameFile={onRenameFile}
+                onCreateFile={onCreateFile}
+                onCreateFolder={onCreateFolder}
               />
             </Panel>
             <PanelResizeHandle className="w-[1px] bg-border-subtle hover:bg-accent-primary transition-colors z-20" />

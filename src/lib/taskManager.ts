@@ -1,9 +1,15 @@
 import { db, auth } from '../firebase';
-import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, where, updateDoc, deleteDoc } from 'firebase/firestore';
+
+export interface TaskLog {
+  timestamp: number;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  message: string;
+}
 
 export interface TaskData {
   id: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'paused';
   type: 'foreground' | 'background';
   userId: string;
   projectId: string;
@@ -12,6 +18,9 @@ export interface TaskData {
   currentStep: string;
   result?: any;
   error?: string;
+  createdAt: number;
+  completedAt?: number;
+  logs?: TaskLog[];
 }
 
 export interface SwarmData {
@@ -105,7 +114,7 @@ export function watchActiveTasks(projectId: string, onUpdate: (tasks: TaskData[]
   const q = query(
     collection(db, 'tasks'),
     where('projectId', '==', projectId),
-    where('status', 'in', ['queued', 'running'])
+    where('status', 'in', ['queued', 'running', 'completed', 'failed', 'paused'])
   );
 
   return onSnapshot(q, (snapshot) => {
@@ -130,4 +139,28 @@ export function watchActiveSwarms(projectId: string, onUpdate: (swarms: SwarmDat
     const swarms = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SwarmData));
     onUpdate(swarms);
   });
+}
+
+export async function cancelTask(taskId: string) {
+  try {
+    await updateDoc(doc(db, 'tasks', taskId), { status: 'failed', result: { error: 'Cancelled by user' } });
+  } catch (e) {
+    console.error('Failed to cancel task', e);
+  }
+}
+
+export async function pauseTask(taskId: string) {
+  try {
+    await updateDoc(doc(db, 'tasks', taskId), { status: 'paused', currentStep: 'Paused' });
+  } catch (e) {
+    console.error('Failed to pause task', e);
+  }
+}
+
+export async function resumeTask(taskId: string) {
+  try {
+    await updateDoc(doc(db, 'tasks', taskId), { status: 'queued', currentStep: 'Resumed' });
+  } catch (e) {
+    console.error('Failed to resume task', e);
+  }
 }

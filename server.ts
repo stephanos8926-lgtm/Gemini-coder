@@ -40,6 +40,9 @@ import { safeJsonParse } from './src/lib/utils';
 import { SkillExecutor } from './src/lib/SkillExecutor';
 import adminRouter from './src/admin/AdminRouter';
 import { routeTask, initBackgroundWorker } from './src/services/TaskRouter';
+import { TaskReviewerAgent } from './src/services/ai/core/TaskReviewerAgent';
+
+const taskReviewer = new TaskReviewerAgent();
 import { coordinateSwarm } from './src/services/SwarmRouter';
 import { sandboxExecute, validateCode } from './src/services/ExecutionSandbox';
 import { workspaceController } from './server/controllers/workspaceController';
@@ -490,6 +493,23 @@ async function startServer() {
   });
 
   app.get('/api/files', authenticateUser, FileController.getFiles);
+
+  app.post('/api/tasks/review', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const { taskId } = req.body;
+      const taskDoc = await db.collection('tasks').doc(taskId).get();
+      if (!taskDoc.exists) {
+        return res.status(404).json({ error: 'Task not found' });
+      }
+      
+      const taskData = { id: taskDoc.id, ...taskDoc.data() };
+      const recommendation = await taskReviewer.reviewTask(taskData);
+      
+      res.json({ recommendation });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   app.post('/api/tools/run', authenticateUser, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     try {

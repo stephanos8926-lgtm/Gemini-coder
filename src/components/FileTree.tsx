@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
-import { File, Folder, FolderOpen, Download, Upload, Trash2, Edit2, FilePlus, Search, X, Copy } from 'lucide-react';
+import { File, Folder, FolderOpen, Download, Upload, Trash2, Edit2, FilePlus, Search, X, Copy, FolderPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { FileStore } from '../lib/fileStore';
 import { FileIcon } from './FileIcon';
@@ -14,8 +14,9 @@ interface FileTreeProps {
   onDownloadZip: () => void;
   onImportZip: () => void;
   onDelete?: (path: string) => void;
-  onRename?: (path: string) => void;
-  onCreateFile?: () => void;
+  onRename?: (oldPath: string, newPath: string) => void;
+  onCreateFile?: (path: string) => void;
+  onCreateFolder?: (path: string) => void;
   onFolderExpand?: (path: string) => void;
   showDetails?: boolean;
 }
@@ -94,6 +95,36 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
 
   const copyPath = (path: string) => {
     navigator.clipboard.writeText(path);
+    setContextMenu(null);
+  };
+
+  const handleRename = (path: string) => {
+    const name = path.split('/').pop() || '';
+    const newName = window.prompt('Enter new name:', name);
+    if (newName && newName !== name) {
+      const parts = path.split('/');
+      parts[parts.length - 1] = newName;
+      const newPath = parts.join('/');
+      if (onRename) onRename(path, newPath);
+    }
+    setContextMenu(null);
+  };
+
+  const handleCreateFile = (parentFolder: string) => {
+    const fileName = window.prompt('Enter new file name:');
+    if (fileName) {
+      const newPath = parentFolder === '/' ? fileName : `${parentFolder}${fileName}`;
+      if (onCreateFile) onCreateFile(newPath);
+    }
+    setContextMenu(null);
+  };
+
+  const handleCreateFolder = (parentFolder: string) => {
+    const folderName = window.prompt('Enter new folder name:');
+    if (folderName) {
+      const newPath = parentFolder === '/' ? `${folderName}/` : `${parentFolder}${folderName}/`;
+      if (onCreateFolder) onCreateFolder(newPath);
+    }
     setContextMenu(null);
   };
 
@@ -280,7 +311,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             </button>
             {onCreateFile && (
               <button
-                onClick={onCreateFile}
+                onClick={() => handleCreateFile('/')}
                 className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
                 title="New File"
               >
@@ -364,10 +395,28 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
               <Copy className="w-4 h-4" />
               Copy Path
             </button>
+            {!contextMenu.isFile && (
+              <>
+                <button
+                  onClick={() => handleCreateFile(contextMenu.path)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+                >
+                  <FilePlus className="w-4 h-4 text-green-400" />
+                  New File
+                </button>
+                <button
+                  onClick={() => handleCreateFolder(contextMenu.path)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+                >
+                  <FolderPlus className="w-4 h-4 text-blue-400" />
+                  New Folder
+                </button>
+              </>
+            )}
             <div className="h-px bg-[#454545] my-1" />
             {onRename && (
               <button
-                onClick={() => { onRename(contextMenu.path); setContextMenu(null); }}
+                onClick={() => handleRename(contextMenu.path)}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
               >
                 <Edit2 className="w-4 h-4" />

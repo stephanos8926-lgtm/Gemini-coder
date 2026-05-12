@@ -187,6 +187,23 @@ export function useAppFileOperations({
     }
   };
 
+  const handleCreateFolder = async (path: string) => {
+    if (!path) return;
+    try {
+      await createFileMutation.mutateAsync({ workspace: workspaceName, path, isDir: true });
+    } catch (e) {
+      alert('Failed to create folder on filesystem');
+      return;
+    }
+
+    setFileStore(prev => {
+      if (prev[path]) return prev;
+      const newStore = { ...prev };
+      newStore[path] = { content: '', isNew: true, isModified: false, size: 0, isDir: true };
+      return newStore;
+    });
+  };
+
   return {
     handleSaveAll,
     handleDownloadZip,
@@ -195,6 +212,7 @@ export function useAppFileOperations({
     confirmDelete,
     handleRenameFile,
     handleCreateFile,
+    handleCreateFolder,
     fileToDelete,
     setFileToDelete,
     fileToRename,

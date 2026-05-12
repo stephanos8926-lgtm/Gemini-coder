@@ -18,6 +18,9 @@ interface DesktopIDEProps {
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
   onDeleteFile: (path: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void;
+  onCreateFile: (path: string) => void;
+  onCreateFolder: (path: string) => void;
 }
 
 export const DesktopIDE: React.FC<DesktopIDEProps> = ({
@@ -26,7 +29,10 @@ export const DesktopIDE: React.FC<DesktopIDEProps> = ({
   onSendMessage,
   onDownloadFile,
   onDownloadZip,
-  onDeleteFile
+  onDeleteFile,
+  onRenameFile,
+  onCreateFile,
+  onCreateFolder
 }) => {
   return (
     <div className="hidden sm:flex flex-1 h-full overflow-hidden">
@@ -37,6 +43,9 @@ export const DesktopIDE: React.FC<DesktopIDEProps> = ({
         onDownloadFile={onDownloadFile}
         onDownloadZip={onDownloadZip}
         onDeleteFile={onDeleteFile}
+        onRenameFile={onRenameFile}
+        onCreateFile={onCreateFile}
+        onCreateFolder={onCreateFolder}
       />
     </div>
   );

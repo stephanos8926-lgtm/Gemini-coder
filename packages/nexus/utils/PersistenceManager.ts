@@ -10,9 +10,10 @@ export class PersistenceManager {
 
   constructor(dbPath: string, workerPath: string) {
     this.workerPath = workerPath;
+    const mode = process.env.RW_PERSISTENCE_MODE || 'sqlite';
 
     if (isServer) {
-        this.initServer(dbPath);
+        this.initServer(dbPath, mode);
     } else {
         this.initClient();
     }
@@ -22,7 +23,7 @@ export class PersistenceManager {
       // IndexedDB initialization for client
   }
 
-  private async initServer(dbPath: string) {
+  private async initServer(dbPath: string, mode: string) {
     const { Worker } = await import('node:worker_threads');
     const fs = await import('node:fs');
     const path = await import('node:path');
@@ -32,8 +33,13 @@ export class PersistenceManager {
       fs.mkdirSync(dir, { recursive: true });
     }
 
+    const logDir = path.join(process.cwd(), 'data', 'telemetry', 'logs');
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+
     this.worker = new Worker(this.workerPath, { 
-      workerData: { dbPath }
+      workerData: { dbPath, mode, logDir }
     });
 
     this.worker.on('error', (err: any) => {

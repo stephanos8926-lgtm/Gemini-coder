@@ -67,6 +67,9 @@ export async function routeTask(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       estimatedDuration: complexity.estimatedTime,
       requestedAgent: options.agentId || 'default-coder',
+      logs: [
+        { timestamp: Date.now(), level: 'info', message: 'Task submitted and complexity evaluated.' }
+      ],
       metrics: {
         startTime: admin.firestore.FieldValue.serverTimestamp()
       }
@@ -128,12 +131,25 @@ async function processTask(doc: admin.firestore.QueryDocumentSnapshot) {
     await doc.ref.update({
       status: 'running',
       startedAt: admin.firestore.FieldValue.serverTimestamp(),
-      currentStep: 'Starting AI engine...'
+      currentStep: 'Starting AI engine...',
+      logs: admin.firestore.FieldValue.arrayUnion({
+        timestamp: Date.now(),
+        level: 'info',
+        message: 'Agent environment initialization started.'
+      })
     });
 
     // 2. Execute AI logic
-    const result = await executeAITaskWithProgress(task, async (progress, step) => {
-      await doc.ref.update({ progress, currentStep: step });
+    const result = await executeAITaskWithProgress(task, async (progress, step, logMessage) => {
+      const updateData: any = { progress, currentStep: step };
+      if (logMessage) {
+        updateData.logs = admin.firestore.FieldValue.arrayUnion({
+          timestamp: Date.now(),
+          level: 'info',
+          message: logMessage
+        });
+      }
+      await doc.ref.update(updateData);
     });
 
     // 3. Complete
@@ -147,6 +163,11 @@ async function processTask(doc: admin.firestore.QueryDocumentSnapshot) {
       progress: 1.0,
       currentStep: 'Completed',
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      logs: admin.firestore.FieldValue.arrayUnion({
+        timestamp: Date.now(),
+        level: 'info',
+        message: 'Task completed successfully.'
+      }),
       'metrics.endTime': admin.firestore.FieldValue.serverTimestamp(),
       'metrics.duration': duration,
       'metrics.iterations': result.iterations || 1
@@ -158,21 +179,26 @@ async function processTask(doc: admin.firestore.QueryDocumentSnapshot) {
     await doc.ref.update({
       status: 'failed',
       result: { error: error instanceof Error ? error.message : String(error) },
-      completedAt: admin.firestore.FieldValue.serverTimestamp()
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      logs: admin.firestore.FieldValue.arrayUnion({
+        timestamp: Date.now(),
+        level: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
     });
   } finally {
     activeTasks.delete(taskId);
   }
 }
 
-async function executeAITaskWithProgress(task: any, onProgress: (p: number, s: string) => Promise<void>) {
+async function executeAITaskWithProgress(task: any, onProgress: (p: number, s: string, l?: string) => Promise<void>) {
   const modelName = task.context.model || 'gemini-2.0-flash-exp';
   const model = genAI.getGenerativeModel({ model: modelName });
 
   let iterationCount = 0;
   const maxIterations = 5; // Restricted for safety in this environment
   
-  await onProgress(0.1, 'Analyzing codebase context...');
+  await onProgress(0.1, 'Analyzing codebase context...', 'Parsing semantic symbol index...');
   
   // Detect language for specialized focus points
   const files = task.files || {};
@@ -201,10 +227,11 @@ LANGUAGE FOCUS: ${focus}
 User Request: ${task.prompt}`;
 
   try {
+    await onProgress(0.4, 'Generating implementation draft...', 'Model inference triggered.');
     const result = await model.generateContent(systemPrompt);
     const responseText = result.response.text();
     
-    await onProgress(0.9, 'Finalizing code structure...');
+    await onProgress(0.9, 'Finalizing code structure...', 'Code synthesis complete.');
     
     // Simple parsing logic (can be expanded)
     return {

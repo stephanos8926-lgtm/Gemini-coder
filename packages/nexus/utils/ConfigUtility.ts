@@ -15,11 +15,16 @@ export class ConfigUtility {
   }
 
   private loadFromFile() {
-    const path = fs.existsSync('config.yaml') ? 'config.yaml' : (fs.existsSync('config.json') ? 'config.json' : null);
-    if (path) {
-      const content = fs.readFileSync(path, 'utf8');
-      const loaded = path.endsWith('.yaml') ? yaml.load(content) : JSON.parse(content);
-      this.config = { ...this.config, ...(loaded as object) };
+    const paths = ['nexus-config.json', 'nexus-config.yaml', 'config.json', 'config.yaml'];
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf8');
+        const loaded = (p.endsWith('.yaml') || p.endsWith('.yml')) 
+          ? yaml.load(content) 
+          : JSON.parse(content);
+        this.config = { ...this.config, ...(loaded as object) };
+        break; // Stop at first found config
+      }
     }
   }
 

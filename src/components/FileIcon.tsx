@@ -16,7 +16,14 @@ import {
   Terminal,
   Database,
   Key,
-  Shield
+  Shield,
+  Settings,
+  Cog,
+  FileSearch,
+  Globe,
+  Info,
+  Trash2,
+  EyeOff
 } from 'lucide-react';
 
 interface FileIconProps {
@@ -26,13 +33,24 @@ interface FileIconProps {
 
 export const FileIcon: React.FC<FileIconProps> = ({ filename, className }) => {
   const ext = filename.split('.').pop()?.toLowerCase();
+  const lowerFilename = filename.toLowerCase();
+
+  // Special files
+  if (lowerFilename === 'package.json') return <Settings className={`${className} text-red-500`} />;
+  if (lowerFilename.includes('tsconfig')) return <FileCode className={`${className} text-blue-500`} />;
+  if (lowerFilename.includes('vite.config')) return <Cog className={`${className} text-purple-500`} />;
+  if (lowerFilename.includes('tailwind.config')) return <Layout className={`${className} text-cyan-400`} />;
+  if (lowerFilename === '.gitignore') return <EyeOff className={`${className} text-orange-500`} />;
+  if (lowerFilename === 'readme.md') return <Info className={`${className} text-blue-400`} />;
+  if (lowerFilename.endsWith('.test.ts') || lowerFilename.endsWith('.spec.ts') || lowerFilename.endsWith('.test.tsx')) return <FileSearch className={`${className} text-green-400`} />;
 
   switch (ext) {
     case 'js':
     case 'jsx':
+      return <FileCode className={`${className} text-yellow-500`} />;
     case 'ts':
     case 'tsx':
-      return <FileCode className={`${className} text-yellow-500`} />;
+      return <FileCode className={`${className} text-blue-400`} />;
     case 'json':
       return <FileJson className={`${className} text-orange-400`} />;
     case 'html':

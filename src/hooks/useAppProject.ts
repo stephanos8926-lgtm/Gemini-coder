@@ -77,6 +77,13 @@ export function useAppProject({
       setActiveFile(null);
       setMessages([]);
       setShowProjectModal(false);
+
+      // Trigger server-side indexing
+      fetch('/api/context/index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace: project.name }) // Assuming project name matches workspace name
+      }).catch(err => console.error('Indexing trigger failed', err));
     }
   };
 

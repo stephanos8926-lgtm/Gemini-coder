@@ -1,9 +1,13 @@
 import fs from 'fs/promises';
 import path from 'path';
+import chokidar from 'chokidar';
 import { ForgeGuard } from './ForgeWrappers';
 import { SymbolGraph } from '../lib/symbolGraph';
 import { EmbeddingEngine } from '../lib/embeddingEngine';
 import { activeTabTracker } from '../lib/activeTabTracker';
+import { bus } from '../lib/ehp/Bus';
+import { EHPMessageType, PrincipalType } from '../lib/ehp/types';
+import { v4 as uuidv4 } from 'uuid';
 
 import { nexusPersist } from '../lib/persistence/NexusPersistence';
 import { TenantContext, PersistenceTier } from '../lib/persistence/types';
@@ -24,6 +28,8 @@ export class ProjectContextEngine {
   private guard = ForgeGuard.init('context-engine');
   private isIndexing = false;
   private tenant: TenantContext;
+  private watcher: chokidar.FSWatcher | null = null;
+  private rootPath: string | null = null;
 
   private constructor(tenant: TenantContext) {
     this.tenant = tenant;
@@ -120,12 +126,101 @@ export class ProjectContextEngine {
       };
 
       await scan(rootPath);
+      this.rootPath = rootPath;
       this.index = newIndex;
       this.docIndex = newDocIndex;
+      this.setupWatcher(rootPath);
       console.log(`[ContextEngine] Indexing complete. Indexed ${this.index.size} files and ${this.docIndex.size} docs.`);
     }, { rootPath });
 
     this.isIndexing = false;
+  }
+
+  /**
+   * Setup real-time watcher
+   */
+  private setupWatcher(rootPath: string) {
+    if (this.watcher) this.watcher.close();
+
+    this.watcher = chokidar.watch(rootPath, {
+      ignored: [/node_modules/, /\.git/, /dist/, /\.next/],
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 300,
+        pollInterval: 100
+      }
+    });
+
+    this.watcher
+      .on('add', p => this.handleFileChange(p, 'add'))
+      .on('change', p => this.handleFileChange(p, 'change'))
+      .on('unlink', p => this.handleFileChange(p, 'unlink'));
+
+    console.log(`[ContextEngine] Watcher active for: ${rootPath}`);
+  }
+
+  private async handleFileChange(fullPath: string, type: 'add' | 'change' | 'unlink') {
+    if (!this.rootPath) return;
+    const relPath = path.relative(this.rootPath, fullPath);
+
+    if (type === 'unlink') {
+      this.index.delete(relPath);
+      this.docIndex.delete(relPath);
+      // Notify bus
+      this.emitEvent('index.deleted', { path: relPath });
+      return;
+    }
+
+    try {
+      const stats = await fs.stat(fullPath);
+      const content = await fs.readFile(fullPath, 'utf8');
+
+      if (fullPath.match(/\.(ts|tsx|js|jsx|py)$/)) {
+        await this.symbols.indexFile(relPath, content);
+      }
+
+      await this.embeddings.indexFile(relPath, content);
+
+      if (fullPath.toLowerCase().endsWith('.md')) {
+        this.docIndex.set(relPath, content.substring(0, 2000));
+      }
+
+      this.index.set(relPath, {
+        path: relPath,
+        size: stats.size,
+        lastModified: stats.mtimeMs,
+        intent: this.inferIntent(relPath, path.basename(fullPath))
+      });
+
+      this.emitEvent(`index.${type}`, { path: relPath });
+    } catch (e) {
+      console.warn(`[ContextEngine] Failed to live-index ${relPath}:`, e);
+    }
+  }
+
+  private emitEvent(topic: string, payload: any) {
+    bus.publish({
+      id: uuidv4(),
+      type: EHPMessageType.EVENT,
+      timestamp: Date.now(),
+      priority: 0,
+      source: { id: 'ContextEngine', type: PrincipalType.SYSTEM },
+      topic,
+      payload,
+      destination: 'BROADCAST',
+      context: { 
+        sessionId: 'index-worker', 
+        requestId: uuidv4(),
+        workspaceId: this.tenant.workspaceId
+      },
+      auth: { 
+        uid: this.tenant.userId, 
+        role: 'system',
+        permissions: ['system'],
+        emailVerified: true 
+      }
+    }).catch(err => console.error('EHP Publish fail', err));
   }
 
   private inferIntent(relPath: string, fileName: string): string | undefined {

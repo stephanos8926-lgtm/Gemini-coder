@@ -153,6 +153,9 @@ export default function App() {
           onDownloadFile={fileOperationsHook.handleDownloadFile}
           onDownloadZip={fileOperationsHook.handleDownloadZip}
           onDeleteFile={fileOperationsHook.handleDeleteFile}
+          onRenameFile={fileOperationsHook.handleRenameFile}
+          onCreateFile={fileOperationsHook.handleCreateFile}
+          onCreateFolder={fileOperationsHook.handleCreateFolder}
         />
 
         <div className="sm:hidden flex-1 h-full relative">
@@ -181,6 +184,9 @@ export default function App() {
                 onImportZip={() => {}}
                 workspaceName={RW_workspaceName}
                 onDelete={fileOperationsHook.handleDeleteFile}
+                onRename={fileOperationsHook.handleRenameFile}
+                onCreateFile={fileOperationsHook.handleCreateFile}
+                onCreateFolder={fileOperationsHook.handleCreateFolder}
               />
             }
             editorComponent={

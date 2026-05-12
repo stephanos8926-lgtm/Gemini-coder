@@ -8,12 +8,18 @@ interface LeftSidebarProps {
   onDownloadFile: (path: string) => void;
   onDownloadZip: () => void;
   onDeleteFile: (path: string) => void;
+  onRenameFile: (oldPath: string, newPath: string) => void;
+  onCreateFile: (path: string) => void;
+  onCreateFolder: (path: string) => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onDownloadFile,
   onDownloadZip,
-  onDeleteFile
+  onDeleteFile,
+  onRenameFile,
+  onCreateFile,
+  onCreateFolder
 }) => {
   const { RW_fileStore, RW_activeFile, setActiveFile } = useFileStore();
   const { RW_workspaceName } = useWorkspaceStore();
@@ -30,6 +36,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           onImportZip={() => {}} 
           workspaceName={RW_workspaceName}
           onDelete={onDeleteFile}
+          onRename={onRenameFile}
+          onCreateFile={onCreateFile}
+          onCreateFolder={onCreateFolder}
         />
       </ErrorBoundary>
     </div>

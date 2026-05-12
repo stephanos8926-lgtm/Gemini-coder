@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { ForgeGuard } from '../guard/ForgeGuard';
 
+import { PersistenceManager } from './PersistenceManager';
+
 export interface ShadowResult {
   success: boolean;
   output: string;
@@ -13,13 +15,14 @@ export class ShadowExecutionEngine {
   private static instance: ShadowExecutionEngine;
   private guard: ForgeGuard;
 
-  private constructor(persistence: any) {
+  private constructor(persistence: PersistenceManager) {
     this.guard = ForgeGuard.init('shadow-execution', {}, persistence);
   }
 
-  public static getInstance(persistence: any): ShadowExecutionEngine {
+  public static getInstance(persistence?: PersistenceManager): ShadowExecutionEngine {
     if (!ShadowExecutionEngine.instance) {
-      ShadowExecutionEngine.instance = new ShadowExecutionEngine(persistence);
+      const pm = persistence || PersistenceManager.getInstance();
+      ShadowExecutionEngine.instance = new ShadowExecutionEngine(pm);
     }
     return ShadowExecutionEngine.instance;
   }

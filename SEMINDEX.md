@@ -1,145 +1,36 @@
 # RapidForge Documentation Index
+> Generated: May 2026
 
-Generated automatically via RapidForge CLI.
+## 🚀 Core Ecosystem
+- [**README.md**](/README.md) - Platform overview.
+- [**agents.md**](/agents.md) - Active knowledge base and session continuity.
+- [**FORGE.md**](/FORGE.md) - Internal IDE operational directives.
+- [**newproject.md**](/newproject.md) - Standards for new project initialization.
 
-- **.docs/**
-  - [DEPLOYMENT_GUIDE.md](./.docs/DEPLOYMENT_GUIDE.md)
-  - [FORGE_v2_Upgrade_Guide.md](./.docs/FORGE_v2_Upgrade_Guide.md)
-  - [SKILL_SYSTEM_ADOPTION_GUIDE.md](./.docs/SKILL_SYSTEM_ADOPTION_GUIDE.md)
-  - [TROUBLESHOOTING.md](./.docs/TROUBLESHOOTING.md)
-  - [USAGE_GUIDE.md](./.docs/USAGE_GUIDE.md)
-  - **adrs/**
-    - [adr-2026-04-02-codebase-audit.md](./.docs/adrs/adr-2026-04-02-codebase-audit.md)
-    - [adr-2026-04-17-crypto-stack.md](./.docs/adrs/adr-2026-04-17-crypto-stack.md)
-    - [adr-2026-04-18-Nexus-Integration.md](./.docs/adrs/adr-2026-04-18-Nexus-Integration.md)
-    - [adr-2026-04-19-SingletonToDI.md](./.docs/adrs/adr-2026-04-19-SingletonToDI.md)
-    - [adr-2026-04-23-swarm-context-engineering.md](./.docs/adrs/adr-2026-04-23-swarm-context-engineering.md)
-    - [adr-2026-04-24-log-pruning.md](./.docs/adrs/adr-2026-04-24-log-pruning.md)
-    - [adr-2026-04-24-path-security.md](./.docs/adrs/adr-2026-04-24-path-security.md)
-    - [adr-2026-04-24-validator-filter.md](./.docs/adrs/adr-2026-04-24-validator-filter.md)
-  - **archive/**
-    - [nexus-audit-2026-04-18.md](./.docs/archive/nexus-audit-2026-04-18.md)
-    - [status-admin-fixes.md](./.docs/archive/status-admin-fixes.md)
-    - [status-codebase-audit-resilience.md](./.docs/archive/status-codebase-audit-resilience.md)
-    - [status-codebase-audit.md](./.docs/archive/status-codebase-audit.md)
-    - [status-gide.md](./.docs/archive/status-gide.md)
-    - [status-hook-fix.md](./.docs/archive/status-hook-fix.md)
-    - [status-refactor-conversation-engine.md](./.docs/archive/status-refactor-conversation-engine.md)
-  - [audit-report-2026-04-24.md](./.docs/audit-report-2026-04-24.md)
-  - **canonical/**
-    - **adrs/**
-      - [adr-2026-04-02-refactor-roadmap.md](./.docs/canonical/adrs/adr-2026-04-02-refactor-roadmap.md)
-  - **design/**
-    - [agentic-orchestration.md](./.docs/design/agentic-orchestration.md)
-    - [paradigm-shift.md](./.docs/design/paradigm-shift.md)
-    - [rapidvault.md](./.docs/design/rapidvault.md)
-  - [engineering-insights-nexus.md](./.docs/engineering-insights-nexus.md)
-  - **guides/**
-    - [deployment-guide.md](./.docs/guides/deployment-guide.md)
-    - [firebase-config-guide.md](./.docs/guides/firebase-config-guide.md)
-  - [nexus-audit-endpoints.md](./.docs/nexus-audit-endpoints.md)
-  - **plans/**
-    - [build_plan.md](./.docs/plans/build_plan.md)
-    - [enterprise-roadmap.md](./.docs/plans/enterprise-roadmap.md)
-    - [plan-admin-fixes.md](./.docs/plans/plan-admin-fixes.md)
-    - [plan-ai-scratchpad-and-admin-docs.md](./.docs/plans/plan-ai-scratchpad-and-admin-docs.md)
-    - [plan-audit-remediation.md](./.docs/plans/plan-audit-remediation.md)
-    - [plan-auth-and-editor.md](./.docs/plans/plan-auth-and-editor.md)
-    - [plan-codebase-audit-resilience.md](./.docs/plans/plan-codebase-audit-resilience.md)
-    - [plan-codebase-audit.md](./.docs/plans/plan-codebase-audit.md)
-    - [plan-debug.md](./.docs/plans/plan-debug.md)
-    - [plan-documentation-update.md](./.docs/plans/plan-documentation-update.md)
-    - [plan-ehp-pol.md](./.docs/plans/plan-ehp-pol.md)
-    - [plan-file-manager-system.md](./.docs/plans/plan-file-manager-system.md)
-    - [plan-forgeguard-debugger.md](./.docs/plans/plan-forgeguard-debugger.md)
-    - [plan-gide.md](./.docs/plans/plan-gide.md)
-    - [plan-gui-revamp.md](./.docs/plans/plan-gui-revamp.md)
-    - [plan-hook-fix.md](./.docs/plans/plan-hook-fix.md)
-    - [plan-refactor-conversation-engine.md](./.docs/plans/plan-refactor-conversation-engine.md)
-    - [plan-refactoring-and-audit.md](./.docs/plans/plan-refactoring-and-audit.md)
-    - [plan-security-refactor.md](./.docs/plans/plan-security-refactor.md)
-    - [plan-skill-orchestration.md](./.docs/plans/plan-skill-orchestration.md)
-    - [plan-swarm-migration.md](./.docs/plans/plan-swarm-migration.md)
-    - [plan-wasm-terminal.md](./.docs/plans/plan-wasm-terminal.md)
-    - [plan-web-terminal.md](./.docs/plans/plan-web-terminal.md)
-  - [quality-control.md](./.docs/quality-control.md)
-  - **reports/**
-    - [coverage-audit.md](./.docs/reports/coverage-audit.md)
-    - [status-endeavor.md](./.docs/reports/status-endeavor.md)
-  - **research/**
-    - [advanced-context-strategies.md](./.docs/research/advanced-context-strategies.md)
-    - [caching-infrastructure.md](./.docs/research/caching-infrastructure.md)
-    - [codebase-paradigms-audit.md](./.docs/research/codebase-paradigms-audit.md)
-    - [feature-parity-roadmap.md](./.docs/research/feature-parity-roadmap.md)
-    - [intelligence-cache-plan.md](./.docs/research/intelligence-cache-plan.md)
-    - [long-horizon-agents.md](./.docs/research/long-horizon-agents.md)
-    - [mobile-ui-and-cli-parity.md](./.docs/research/mobile-ui-and-cli-parity.md)
-  - [research-report-terminal-constraints.md](./.docs/research-report-terminal-constraints.md)
-  - **standards/**
-    - [ENTERPRISE_STANDARDS.md](./.docs/standards/ENTERPRISE_STANDARDS.md)
-  - [status-documentation-update.md](./.docs/status-documentation-update.md)
-  - [status-nexus-refactor.md](./.docs/status-nexus-refactor.md)
-  - [status-rapidforge.md](./.docs/status-rapidforge.md)
-  - **strategy/**
-    - [AI_ASSISTED_DEV_STRATEGY_2026.md](./.docs/strategy/AI_ASSISTED_DEV_STRATEGY_2026.md)
-- **.skills/**
-- [CHANGELOG.md](./CHANGELOG.md)
-- [CODEBASE_ANALYSIS.md](./CODEBASE_ANALYSIS.md)
-- [FORGE.md](./FORGE.md)
-- [ISSUE_SUMMARY.md](./ISSUE_SUMMARY.md)
-- [RAPIDFORGE_PORTABILITY_GUIDE.md](./RAPIDFORGE_PORTABILITY_GUIDE.md)
-- [README.md](./README.md)
-- [agents.md](./agents.md)
-- [decisions.md](./decisions.md)
-- [fetched_analysis.md](./fetched_analysis.md)
-- **logs/**
-- [newproject.md](./newproject.md)
-- **packages/**
-  - **nexus/**
-    - **guard/**
-      - **sensors/**
-      - **taggers/**
-    - **telemetry/**
-    - **utils/**
-  - **nexus-git-sync/**
-    - **src/**
-  - **rapidforge-vault/**
-    - [VAULT_PLAN.md](./packages/rapidforge-vault/VAULT_PLAN.md)
-- [progress_log.md](./progress_log.md)
-- **scripts/**
-- **server_persistence/**
-  - **adapters/**
-- **src/**
-  - **admin/**
-  - **components/**
-    - **admin/**
-    - **header/**
-    - **layout/**
-    - **modals/**
-    - **panels/**
-      - **tools/**
-    - **security/**
-    - **ui/**
-  - **constants/**
-  - **contexts/**
-  - **hooks/**
-  - **lib/**
-    - **ehp/**
-    - **persistence/**
-      - **adapters/**
-  - **scripts/**
-  - **security/**
-  - **services/**
-    - **ai/**
-      - **filters/**
-  - **skills/**
-    - **definitions/**
-  - **store/**
-  - **test/**
-    - **backend/**
-  - **types/**
-  - **utils/**
-    - **patchEngine/**
-- [task_plan.md](./task_plan.md)
-- **tests/**
-  - **e2e/**
+## 🏛 Platform Guidelines
+- [**Enterprise Standards**](/.docs/standards/ENTERPRISE_STANDARDS.md) - Mandatory development protocols.
+- [**Skill System Adoption**](/.docs/SKILL_SYSTEM_ADOPTION_GUIDE.md) - Integrating modular agent capabilities.
+- [**Usage Guide**](/.docs/USAGE_GUIDE.md) - Operational manual for developers.
+- [**Troubleshooting**](/.docs/TROUBLESHOOTING.md) - Common issues and remediation steps.
+
+## 📐 Architecture & Design
+- [**Design Paradigm**](/.docs/design/paradigm-shift.md) - Unified vision for rapid integration.
+- [**Agentic Orchestration**](/.docs/design/agentic-orchestration.md) - Theory of LangGraph-based agents.
+- [**RapidVault Design**](/.docs/design/rapidvault.md) - Multi-layer encryption and SSS protocols.
+
+## 📜 ADRs (Architectural Decision Records)
+- [**ADR-2026-05-12: Agent Hierarchy**](/.docs/adrs/adr-2026-05-12-agent-hierarchy.md)
+- [**ADR-2026-05-12: Agent Standardization**](/.docs/adrs/adr-2026-05-12-agent-standardization.md)
+- [**ADR-2026-05-12: Automated Patching**](/.docs/adrs/adr-2026-05-12-automated-patching.md)
+- [**ADR-2026-05-12: Unified Config**](/.docs/adrs/adr-2026-05-12-unified-config.md)
+- [**ADR-2026-04-23: Swarm Context**](/.docs/adrs/adr-2026-04-23-swarm-context-engineering.md)
+
+## 🗺 Roadmap & Strategy
+- [**Project Roadmap May 2026**](/.docs/Project Roadmap as of May 2026.md) - Current strategic queue.
+- [**Dev Strategy 2026**](/.docs/strategy/AI_ASSISTED_DEV_STRATEGY_2026.md) - Collaborative human-AI workflows.
+
+## 📦 Sub-Packages
+- [**Vault Plan**](/packages/rapidforge-vault/VAULT_PLAN.md) - Implementation plan for encryption services.
+
+---
+*Historical logs and superseded plans can be found in `/.docs/archive/`.*
