@@ -125,6 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-save-all-btn"
             className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Save All"
+            aria-label="Save All Files"
           >
             <Download className="w-4 h-4 rotate-180" />
           </button>
@@ -134,6 +135,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-command-palette-btn"
             className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Command Palette (Ctrl+K)"
+            aria-label="Open Command Palette"
           >
             <Search className="w-4 h-4" />
           </button>
@@ -143,6 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-git-btn"
             className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Git Operations"
+            aria-label="Git Operations"
           >
             <GitBranch className="w-4 h-4" />
           </button>
@@ -152,6 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
             id="header-settings-btn"
             className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
             title="Settings"
+            aria-label="Open Settings"
           >
             <SettingsIcon className="w-4 h-4" />
           </button>
