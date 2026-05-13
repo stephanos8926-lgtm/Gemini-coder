@@ -38,7 +38,7 @@ renderer.code = ({ text, lang }: { text: string; lang?: string }) => {
         <pre><code class="hljs language-${language}">${highlighted}</code></pre>
       </div>
       ${isLarge ? `
-        <button class="expand-btn absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-[#0d0d0d] to-transparent text-[10px] font-bold text-[#007acc] hover:text-[#3794ff] transition-all flex items-center justify-center gap-1">
+        <button class="expand-btn absolute bottom-0 left-0 right-0 py-2 bg-gradient-to-t from-[#0d0d0d] to-transparent text-[10px] font-bold text-accent-intel hover:text-white transition-all flex items-center justify-center gap-1">
           <span>Show More</span>
         </button>
       ` : ''}
@@ -238,12 +238,12 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
         <div className="max-w-4xl mx-auto p-4 space-y-6 pb-12">
           {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-            <div className="w-16 h-16 bg-[#252526] rounded-2xl flex items-center justify-center border border-[#3c3c3c] shadow-xl">
-              <Sparkles className="w-8 h-8 text-[#007acc]" />
+            <div className="w-16 h-16 bg-surface-card rounded-2xl flex items-center justify-center border border-border-subtle shadow-xl">
+              <Sparkles className="w-8 h-8 text-accent-intel" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-white font-bold text-lg">Welcome to GIDE AI</h3>
-              <p className="text-xs text-[#858585] max-w-[240px] leading-relaxed">
+              <h3 className="text-text-primary font-bold text-lg">Welcome to GIDE AI</h3>
+              <p className="text-xs text-text-subtle max-w-[240px] leading-relaxed">
                 I can help you write code, refactor projects, or explain complex logic. How can I assist you today?
               </p>
             </div>
@@ -266,14 +266,14 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
         ))}
         {isStreaming && (
           <div className="flex gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#252526] border border-[#3c3c3c] flex items-center justify-center text-[#007acc] shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-surface-card border border-border-subtle flex items-center justify-center text-accent-intel shrink-0 shadow-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
             </div>
-            <div className="bg-[#252526] border border-[#3c3c3c] px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
+            <div className="bg-surface-card border border-border-subtle px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
               <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-[#007acc] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-1.5 h-1.5 bg-[#007acc] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-1.5 h-1.5 bg-[#007acc] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="w-1.5 h-1.5 bg-accent-intel rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-1.5 h-1.5 bg-accent-intel rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-1.5 h-1.5 bg-accent-intel rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
@@ -286,15 +286,16 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
         <div className="max-w-3xl mx-auto mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {agents.length > 0 && (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-[#252526] border border-[#3c3c3c] rounded-md transition-all">
-                <span className="text-[9px] font-bold text-[#858585] uppercase tracking-widest">Agent:</span>
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-card border border-border-subtle rounded-md transition-all">
+                <span className="text-[9px] font-bold text-text-subtle uppercase tracking-widest">Agent:</span>
                 <select 
                   value={selectedAgentId}
                   onChange={(e) => setSelectedAgentId(e.target.value)}
-                  className="bg-transparent text-[10px] text-[#cccccc] font-medium focus:outline-none cursor-pointer"
+                  className="bg-transparent text-[10px] text-text-primary font-medium focus:outline-none cursor-pointer"
+                  aria-label="Select AI Agent"
                 >
                   {agents.map(a => (
-                    <option key={a.id} value={a.id} className="bg-[#252526]">{a.name}</option>
+                    <option key={a.id} value={a.id} className="bg-surface-card">{a.name}</option>
                   ))}
                 </select>
               </div>
@@ -318,7 +319,8 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
                 toast.error('Failed to fetch logs');
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-1 bg-[#007acc]/10 hover:bg-[#007acc]/20 text-[#007acc] border border-[#007acc]/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all"
+            className="flex items-center gap-1.5 px-3 py-1 bg-accent-intel/10 hover:bg-accent-intel/20 text-accent-intel border border-accent-intel/30 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
+            aria-label="Fix Build Error"
           >
             <Zap className="w-3 h-3" />
             Fix Build Error
@@ -400,10 +402,11 @@ export function ChatPanel({ messages, onSendMessage, onNewChat, onReviewChange, 
             <button
               type="submit"
               disabled={!input.trim() || isStreaming}
-              className={`absolute right-2 bottom-2 p-2 rounded-xl transition-all ${
+              aria-label="Send message"
+              className={`absolute right-2 bottom-2 p-2 rounded-xl transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none ${
                 input.trim() && !isStreaming 
-                  ? 'bg-[#007acc] text-white hover:bg-[#0062a3]' 
-                  : 'text-[#858585] cursor-not-allowed'
+                  ? 'bg-accent-intel text-white hover:opacity-90'
+                  : 'text-text-subtle cursor-not-allowed'
               }`}
             >
               {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
