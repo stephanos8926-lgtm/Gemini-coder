@@ -51,15 +51,15 @@ export const DiffStagingPanel: React.FC = () => {
         exit={{ opacity: 0, y: 20 }}
         className="fixed inset-x-0 bottom-12 z-50 p-4 pointer-events-none"
       >
-        <div className="max-w-5xl mx-auto bg-[#252526] border border-[#3c3c3c] rounded-lg shadow-2xl overflow-hidden pointer-events-auto flex flex-col h-[60vh]">
+        <div className="max-w-5xl mx-auto bg-surface-card border border-border-subtle rounded-lg shadow-2xl overflow-hidden pointer-events-auto flex flex-col h-[60vh]">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#3c3c3c]">
+          <div className="flex items-center justify-between px-4 py-2 bg-surface-accent border-b border-border-subtle">
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="p-1 rounded bg-[#007acc]/10 text-[#007acc]">
+              <div className="p-1 rounded bg-accent-intel/10 text-accent-intel">
                 <AlertCircle size={14} />
               </div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#cccccc] truncate">
-                Review AI Suggestion: <span className="text-[#007acc]">{activePath}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-subtle truncate">
+                Review AI Suggestion: <span className="text-accent-intel">{activePath}</span>
               </span>
             </div>
             
@@ -68,7 +68,8 @@ export const DiffStagingPanel: React.FC = () => {
                 id="reject-edit-btn"
                 disabled={isProcessing}
                 onClick={handleReject}
-                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-[#cccccc] hover:text-white hover:bg-white/5 rounded disabled:opacity-50 transition-colors"
+                aria-label="Reject AI Suggestion"
+                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-text-subtle hover:text-text-primary hover:bg-white/5 rounded disabled:opacity-50 transition-colors focus-visible:ring-1 focus-visible:ring-accent-security outline-none"
               >
                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
                 Reject
@@ -77,7 +78,8 @@ export const DiffStagingPanel: React.FC = () => {
                 id="accept-edit-btn"
                 disabled={isProcessing}
                 onClick={handleAccept}
-                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-white bg-[#007acc] hover:bg-[#1f8ad2] rounded disabled:opacity-50 transition-shadow shadow-sm active:scale-95"
+                aria-label="Accept AI Suggestion"
+                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-white bg-accent-intel hover:opacity-90 rounded disabled:opacity-50 transition-shadow shadow-sm active:scale-95 focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
               >
                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Accept Changes
@@ -106,7 +108,7 @@ export const DiffStagingPanel: React.FC = () => {
           </div>
 
           {/* Footer Info */}
-          <div className="px-4 py-1.5 bg-[#252526] text-[10px] text-[#858585] border-t border-[#3c3c3c] flex justify-between items-center">
+          <div className="px-4 py-1.5 bg-surface-card text-[10px] text-text-subtle border-t border-border-subtle flex justify-between items-center">
             <span>Authorizing this change will overwrite the existing file at {activePath}</span>
             <span>{pendingPaths.length} suggestion(s) pending</span>
           </div>
