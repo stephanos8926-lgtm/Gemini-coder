@@ -32,6 +32,17 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
   const lang = activeFile ? detectLanguage(activeFile) : 'html';
   const mode = getExecutionMode(lang);
 
+  const getTabClass = (tab: string) => {
+    const isActive = activeTab === tab;
+    const accentColor = tab === 'forge' ? 'border-accent-intel text-accent-intel' : 'border-accent-intel text-text-primary';
+
+    return `flex items-center gap-2 px-4 py-2 text-sm transition-colors focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-accent-intel outline-none ${
+      isActive
+        ? `bg-surface-base border-t-2 ${accentColor}`
+        : 'bg-surface-accent/50 text-text-subtle hover:bg-surface-accent border-t-2 border-transparent'
+    }`;
+  };
+
   const refreshPreview = () => {
     // Find the most recently generated .html file, or index.html
     let htmlFile = Object.keys(files).find(p => p.endsWith('.html'));
@@ -85,16 +96,12 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
   }, [activeTab, files]);
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] border-t border-[#3c3c3c]">
-      <div className="flex items-center bg-[#252526] border-b border-[#3c3c3c]">
+    <div className="flex flex-col h-full bg-surface-base border-t border-border-subtle">
+      <div className="flex items-center bg-surface-card border-b border-border-subtle">
         {hasPreviewableFiles && (
           <button
             onClick={() => onTabChange('preview')}
-            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-              activeTab === 'preview'
-                ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
-                : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-            }`}
+            className={getTabClass('preview')}
           >
             {mode === 'preview' ? <Play className="w-4 h-4" /> : mode === 'execute' ? <Terminal className="w-4 h-4" /> : <Code2 className="w-4 h-4" />}
             {mode === 'preview' ? 'Preview' : mode === 'execute' ? 'Run' : 'Build'}
@@ -102,55 +109,35 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
         )}
         <button
           onClick={() => onTabChange('tree')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'tree'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
-              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-          }`}
+          className={getTabClass('tree')}
         >
           <FolderTree className="w-4 h-4" />
           File Details
         </button>
         <button
           onClick={() => onTabChange('tools')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'tools'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
-              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-          }`}
+          className={getTabClass('tools')}
         >
           <Terminal className="w-4 h-4" />
           Tools
         </button>
         <button
           onClick={() => onTabChange('debug')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'debug'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
-              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-          }`}
+          className={getTabClass('debug')}
         >
           <Bug className="w-4 h-4" />
           Debugger
         </button>
         <button
           onClick={() => onTabChange('terminal')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'terminal'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
-              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-          }`}
+          className={getTabClass('terminal')}
         >
           <Terminal className="w-4 h-4" />
           Terminal
         </button>
         <button
           onClick={() => onTabChange('forge')}
-          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-            activeTab === 'forge'
-              ? 'bg-[#1e1e1e] text-[#ce9178] border-t-2 border-[#ce9178]'
-              : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
-          }`}
+          className={getTabClass('forge')}
         >
           <RefreshCw className="w-4 h-4" />
           Forge Intelligence
@@ -159,7 +146,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
         {activeTab === 'preview' && hasPreviewableFiles && (
           <button
             onClick={refreshPreview}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-[#007acc] hover:bg-[#2d2d2d] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-accent-intel hover:bg-surface-accent transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+            aria-label="Refresh preview"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -193,8 +181,8 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           )
         ) : activeTab === 'tools' ? (
           <Suspense fallback={
-            <div className="flex items-center justify-center h-full text-[#858585]">
-              <Loader2 className="w-6 h-6 animate-spin text-[#007acc]" />
+            <div className="flex items-center justify-center h-full text-text-subtle">
+              <Loader2 className="w-6 h-6 animate-spin text-accent-intel" />
             </div>
           }>
             <ToolsPanel />
