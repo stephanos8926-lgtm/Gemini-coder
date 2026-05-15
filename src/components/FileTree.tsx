@@ -220,23 +220,28 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                 exit={{ opacity: 0, scale: 0.95, backgroundColor: 'rgba(248, 113, 113, 0.2)' }}
                 transition={{ duration: 0.5 }}
                 key={`file-${fullPath}`}
-                className={`flex items-center justify-between group cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 ${selectedFile === fullPath ? 'bg-[#37373d] text-white' : 'text-[#cccccc]'}`}
+                className={`flex items-center justify-between group cursor-pointer hover:bg-surface-accent py-1 px-2 focus-visible:ring-1 focus-visible:ring-accent-intel outline-none ${selectedFile === fullPath ? 'bg-surface-accent text-text-primary' : 'text-text-subtle'}`}
                 style={{ paddingLeft: `${depth * 12 + 8}px` }}
                 onClick={() => onSelect(fullPath)}
+                onKeyDown={(e) => e.key === 'Enter' && onSelect(fullPath)}
                 onContextMenu={(e) => handleContextMenu(e, fullPath, true)}
+                tabIndex={0}
+                role="button"
+                aria-label={`Select ${key}`}
               >
                 <div className="flex items-center gap-2 truncate flex-1">
                   <FileIcon filename={key} className="w-4 h-4" />
                   <span className="truncate text-sm">{key}</span>
-                  {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-green-900/50 text-green-400 rounded shrink-0">NEW</span>}
-                  {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-blue-900/50 text-blue-400 rounded shrink-0">MODIFIED</span>}
+                  {showDetails && fileData.isNew && <span className="text-[10px] px-1 bg-accent-ops/20 text-accent-ops rounded shrink-0">NEW</span>}
+                  {showDetails && fileData.isModified && <span className="text-[10px] px-1 bg-accent-intel/20 text-accent-intel rounded shrink-0">MODIFIED</span>}
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
-                  {showDetails && <span className="text-[10px] text-[#858585] w-16 text-right tabular-nums">{formatSize(fileData.size || 0)}</span>}
+                  {showDetails && <span className="text-[10px] text-text-subtle w-16 text-right tabular-nums">{formatSize(fileData.size || 0)}</span>}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={(e) => { e.stopPropagation(); onDownload(fullPath); }}
-                      className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
+                      className="p-1 hover:bg-surface-accent rounded text-text-subtle hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+                      aria-label="Download file"
                       title="Download file"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -244,7 +249,8 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                     {onRename && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onRename(fullPath); }}
-                        className="p-1 hover:bg-[#4d4d4d] rounded text-[#cccccc] hover:text-white"
+                        className="p-1 hover:bg-surface-accent rounded text-text-subtle hover:text-text-primary focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+                        aria-label="Rename file"
                         title="Rename file"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -253,7 +259,8 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                     {onDelete && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onDelete(fullPath); }}
-                        className="p-1 hover:bg-red-900/50 rounded text-red-400 hover:text-red-300"
+                        className="p-1 hover:bg-accent-security/20 rounded text-accent-security hover:opacity-80 focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+                        aria-label="Delete file"
                         title="Delete file"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -267,12 +274,17 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             return (
               <motion.div layout key={`folder-${fullPath}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
                 <div
-                  className="flex items-center gap-2 cursor-pointer hover:bg-[#2a2d2e] py-1 px-2 text-[#cccccc]"
+                  className="flex items-center gap-2 cursor-pointer hover:bg-surface-accent py-1 px-2 text-text-subtle focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
                   style={{ paddingLeft: `${depth * 12 + 8}px` }}
                   onClick={() => toggleFolder(fullPath)}
+                  onKeyDown={(e) => e.key === 'Enter' && toggleFolder(fullPath)}
                   onContextMenu={(e) => handleContextMenu(e, fullPath, false)}
+                  tabIndex={0}
+                  role="button"
+                  aria-expanded={isExpanded}
+                  aria-label={`Toggle ${key} folder`}
                 >
-                  {isExpanded ? <FolderOpen className="w-4 h-4 text-blue-300" /> : <Folder className="w-4 h-4 text-blue-300" />}
+                  {isExpanded ? <FolderOpen className="w-4 h-4 text-accent-intel opacity-80" /> : <Folder className="w-4 h-4 text-accent-intel opacity-80" />}
                   <span className="text-sm">{key}</span>
                 </div>
                 <AnimatePresence initial={false}>
@@ -297,14 +309,15 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#252526] border-l border-[#3c3c3c] relative">
-      <div className="flex flex-col border-b border-[#3c3c3c]">
+    <div className="flex flex-col h-full bg-surface-card border-l border-border-subtle relative">
+      <div className="flex flex-col border-b border-border-subtle">
         <div className="flex items-center justify-between px-4 py-2">
-          <span className="text-xs font-semibold text-[#cccccc] uppercase tracking-wider">Explorer</span>
+          <span className="text-xs font-semibold text-text-subtle uppercase tracking-wider">Explorer</span>
           <div className="flex items-center gap-1">
             <button
               onClick={onImportZip}
-              className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+              className="p-1 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+              aria-label="Import ZIP"
               title="Import ZIP"
             >
               <Upload className="w-4 h-4" />
@@ -312,7 +325,8 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             {onCreateFile && (
               <button
                 onClick={() => handleCreateFile('/')}
-                className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
+                className="p-1 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+                aria-label="New File"
                 title="New File"
               >
                 <FilePlus className="w-4 h-4" />
@@ -320,7 +334,8 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             )}
             <button
               onClick={onDownloadZip}
-              className="p-1 text-[#007acc] hover:text-[#005f9e] hover:bg-[#3c3c3c] rounded transition-colors"
+              className="p-1 text-accent-intel hover:opacity-80 hover:bg-surface-accent rounded transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+              aria-label="Download ZIP"
               title="Download ZIP"
             >
               <Download className="w-4 h-4" />
@@ -331,13 +346,13 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
         {/* Search Input */}
         <div className="px-3 pb-2">
           <div className="relative group">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#858585] group-focus-within:text-[#007acc] transition-colors" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-subtle group-focus-within:text-accent-intel transition-colors" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search files..."
-              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-8 py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+              className="w-full bg-surface-base border border-border-subtle rounded-md pl-8 pr-8 py-1 text-xs text-text-primary focus:outline-none focus:border-accent-intel transition-all"
             />
             {searchQuery && (
               <button

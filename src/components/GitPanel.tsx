@@ -160,15 +160,15 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-[#252526] border border-[#454545] rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh]">
-        <div className="flex justify-between items-center p-6 border-b border-[#3c3c3c]">
+        <div className="flex justify-between items-center p-6 border-b border-border-subtle bg-surface-accent">
           <div className="flex flex-col">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <GitBranch className="w-5 h-5 text-[#007acc]" />
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+              <GitBranch className="w-5 h-5 text-accent-intel" />
               Source Control
             </h2>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-[#858585]">Status:</span>
-              <span className={`text-xs font-mono ${isUninitialized ? 'text-amber-400 bg-amber-400/10' : 'text-[#007acc] bg-[#007acc]/10'} px-2 py-0.5 rounded`}>
+              <span className="text-xs text-text-subtle">Status:</span>
+              <span className={`text-xs font-mono ${isUninitialized ? 'text-amber-400 bg-amber-400/10' : 'text-accent-intel bg-accent-intel/10'} px-2 py-0.5 rounded`}>
                 {isUninitialized ? 'Uninitialized' : `Branch: ${currentBranch}`}
               </span>
             </div>
@@ -176,12 +176,17 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
           <div className="flex items-center gap-2">
             <button 
               onClick={fetchStatus} 
-              className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-colors"
+              aria-label="Refresh git status"
+              className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
               title="Refresh Status"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
-            <button onClick={onClose} className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-colors">
+            <button
+              onClick={onClose}
+              aria-label="Close panel"
+              className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -243,11 +248,12 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
           {/* Commit Section */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Commit</h3>
+              <h3 className="text-xs font-bold text-text-subtle uppercase tracking-wider">Commit</h3>
               <button 
                 onClick={handleAiSummarize}
                 disabled={isLoading}
-                className="text-[10px] text-[#007acc] hover:text-white flex items-center gap-1 transition-colors disabled:opacity-50"
+                aria-label="Generate commit message with AI"
+                className="text-[10px] text-accent-intel hover:text-text-primary flex items-center gap-1 transition-colors disabled:opacity-50 focus-visible:ring-1 focus-visible:ring-accent-intel outline-none px-1 rounded"
                 title="AI Summarize Changes"
               >
                 <Sparkles className="w-3 h-3" />
@@ -258,20 +264,22 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               value={message} 
               onChange={e => setMessage(e.target.value)} 
               placeholder="Message (Enter to commit, Cmd+Enter to commit & push)"
-              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md p-3 text-sm text-white focus:outline-none focus:border-[#007acc] resize-none h-24"
+              className="w-full bg-surface-base border border-border-subtle rounded-md p-3 text-sm text-text-primary focus:outline-none focus:border-accent-intel resize-none h-24 transition-all"
             />
             <div className="flex gap-2">
               <button 
                 onClick={() => runGitCommand('add')} 
                 disabled={isLoading}
-                className="flex-1 bg-[#3c3c3c] hover:bg-[#4c4c4c] text-white py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                aria-label="Stage all changes"
+                className="flex-1 bg-surface-accent hover:bg-surface-accent/80 text-text-primary py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
               >
                 <Plus className="w-4 h-4" /> Stage All
               </button>
               <button 
                 onClick={() => runGitCommand('commit')} 
                 disabled={isLoading || !message}
-                className="flex-1 bg-[#007acc] hover:bg-[#0062a3] text-white py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                aria-label="Commit staged changes"
+                className="flex-1 bg-accent-intel hover:opacity-90 text-white py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
               >
                 <Check className="w-4 h-4" /> Commit
               </button>
@@ -367,13 +375,13 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
                   const [hash, ...msgParts] = log.split(' ');
                   const msg = msgParts.join(' ');
                   return (
-                    <div key={hash} className="flex items-center gap-3 px-3 py-2 border-b border-[#3c3c3c] last:border-0 hover:bg-[#2d2d2d] group">
+                    <div key={hash} className="flex items-center gap-3 px-3 py-2 border-b border-border-subtle last:border-0 hover:bg-surface-accent group">
                       <div className="flex flex-col items-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#007acc]" />
-                        {i < history.length - 1 && <div className="w-0.5 h-full bg-[#3c3c3c] my-0.5" />}
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-intel" />
+                        {i < history.length - 1 && <div className="w-0.5 h-full bg-border-subtle my-0.5" />}
                       </div>
-                      <span className="text-[10px] text-[#007acc] font-bold w-12">{hash}</span>
-                      <span className="text-[11px] text-[#cccccc] truncate">{msg}</span>
+                      <span className="text-[10px] text-accent-intel font-bold w-12">{hash}</span>
+                      <span className="text-[11px] text-text-primary truncate">{msg}</span>
                     </div>
                   );
                 })}

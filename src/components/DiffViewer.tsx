@@ -25,38 +25,41 @@ export function DiffViewer({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
-      className="fixed inset-0 z-[110] flex flex-col bg-[#1e1e1e] border border-[#3c3c3c] shadow-2xl rounded-xl overflow-hidden m-2 sm:m-10"
+      className="fixed inset-0 z-[110] flex flex-col bg-surface-base border border-border-subtle shadow-2xl rounded-xl overflow-hidden m-2 sm:m-10"
     >
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-[#252526] border-b border-[#3c3c3c] gap-4 sm:gap-0">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-surface-card border-b border-border-subtle gap-4 sm:gap-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#007acc]/10 rounded-lg shrink-0">
-            <FileText className="w-5 h-5 text-[#007acc]" />
+          <div className="p-2 bg-accent-intel/10 rounded-lg shrink-0">
+            <FileText className="w-5 h-5 text-accent-intel" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-white leading-none mb-1 truncate">Review Changes</h2>
-            <p className="text-[10px] text-[#858585] font-mono truncate">{filename}</p>
+            <h2 className="text-sm font-bold text-text-primary leading-none mb-1 truncate">Review Changes</h2>
+            <p className="text-[10px] text-text-subtle font-mono truncate">{filename}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={onDiscard}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium text-[#cccccc] hover:bg-[#3c3c3c] rounded-lg transition-all"
+            aria-label="Discard changes"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium text-text-primary hover:bg-surface-accent rounded-lg transition-all focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
           >
             <X className="w-4 h-4" />
             <span className="hidden xs:inline">Discard</span>
           </button>
           <button
             onClick={onAccept}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium bg-[#007acc] text-white hover:bg-[#0062a3] rounded-lg shadow-lg shadow-[#007acc]/20 transition-all"
+            aria-label="Apply changes"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium bg-accent-intel text-white hover:opacity-90 rounded-lg shadow-lg shadow-accent-intel/20 transition-all focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
           >
             <Check className="w-4 h-4" />
             <span className="hidden xs:inline">Apply</span>
           </button>
-          <div className="hidden sm:block w-[1px] h-6 bg-[#3c3c3c] mx-2" />
+          <div className="hidden sm:block w-[1px] h-6 bg-border-subtle mx-2" />
           <button
             onClick={onClose}
-            className="p-2 text-[#858585] hover:text-white hover:bg-[#3c3c3c] rounded-lg transition-all"
+            aria-label="Back to editor"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-lg transition-all focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -83,7 +86,7 @@ export function DiffViewer({
         />
       </div>
 
-      <div className="px-6 py-3 bg-[#252526] border-t border-[#3c3c3c] flex items-center justify-between text-[10px] text-[#858585]">
+      <div className="px-6 py-3 bg-surface-card border-t border-border-subtle flex items-center justify-between text-[10px] text-text-subtle">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-500/20 border border-red-500/30 rounded" />

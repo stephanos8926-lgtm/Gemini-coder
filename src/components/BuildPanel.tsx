@@ -44,26 +44,30 @@ export function BuildPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] border-l border-[#3c3c3c]">
-      <div className="px-4 py-3 border-b border-[#3c3c3c] bg-[#252526] flex items-center justify-between">
-        <span className="text-xs font-bold text-[#cccccc] uppercase tracking-widest">Build & Tasks</span>
+    <div className="flex flex-col h-full bg-surface-base border-l border-border-subtle">
+      <div className="px-4 py-3 border-b border-border-subtle bg-surface-card flex items-center justify-between">
+        <span className="text-xs font-bold text-text-subtle uppercase tracking-widest">Build & Tasks</span>
         <div className="flex gap-2">
           <input 
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="npm run build"
-            className="bg-[#1e1e1e] border border-[#3c3c3c] px-2 py-1 text-xs text-white rounded"
+            className="bg-surface-base border border-border-subtle px-2 py-1 text-xs text-text-primary rounded focus:outline-none focus:border-accent-intel transition-all"
           />
-          <button onClick={() => runTask(input)} className="p-1.5 bg-[#007acc] text-white rounded hover:bg-[#005f9e]">
+          <button
+            onClick={() => runTask(input)}
+            aria-label="Run task"
+            className="p-1.5 bg-accent-intel text-white rounded hover:opacity-90 focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
+          >
             <Play className="w-3 h-3" />
           </button>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {tasks.map(task => (
-          <div key={task.id} className="bg-[#252526] border border-[#3c3c3c] rounded-lg p-3">
+          <div key={task.id} className="bg-surface-card border border-border-subtle rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono text-[#007acc]">{task.command}</span>
+              <span className="text-xs font-mono text-accent-intel">{task.command}</span>
               {task.status === 'running' ? (
                 <button onClick={() => stopTask(task.id)}>
                   <Square className="w-3 h-3 text-red-500" />

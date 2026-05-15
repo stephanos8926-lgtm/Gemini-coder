@@ -13,8 +13,8 @@ import { type Settings } from '../../lib/settingsStore';
 const CodeEditor = lazy(() => import('../CodeEditor').then(m => ({ default: m.CodeEditor })));
 
 const PanelLoader = () => (
-  <div className="flex-1 flex flex-col items-center justify-center h-full bg-[#1e1e1e] text-[#858585] gap-3">
-    <div className="w-6 h-6 rounded-full border-2 border-[#007acc] border-t-transparent animate-spin" />
+  <div className="flex-1 flex flex-col items-center justify-center h-full bg-surface-base text-text-subtle gap-3">
+    <div className="w-6 h-6 rounded-full border-2 border-accent-intel border-t-transparent animate-spin" />
     <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Hydrating Panel</span>
   </div>
 );
@@ -89,7 +89,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
             {showTerminal && (
               <>
-                <PanelResizeHandle className="h-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
+                <PanelResizeHandle className="h-[1px] bg-border-subtle hover:bg-accent-intel transition-colors z-20" />
                 <Panel defaultSize={30} minSize={20}>
                   <ErrorBoundary name="Bottom Panel">
                     <BottomPanel
@@ -112,7 +112,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {/* Right Sidebar */}
         {isRightSidebarOpen && (
           <>
-            <PanelResizeHandle className="w-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
+            <PanelResizeHandle className="w-[1px] bg-border-subtle hover:bg-accent-intel transition-colors z-20" />
             <Panel defaultSize={30} minSize={20} maxSize={40}>
               <RightSidebar 
                 settings={settings}

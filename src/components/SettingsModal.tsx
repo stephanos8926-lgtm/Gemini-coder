@@ -385,10 +385,11 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[#2d2d2d] border-t border-[#3c3c3c] flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-surface-accent border-t border-border-subtle flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
           <button
             onClick={handleReset}
-            className="flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-[#f48771] hover:bg-[#3c3c3c] rounded-md transition-colors order-2 sm:order-1"
+            aria-label="Reset to default settings"
+            className="flex items-center justify-center gap-2 px-4 py-2 text-xs sm:text-sm font-medium text-accent-security hover:bg-surface-base rounded-md transition-colors order-2 sm:order-1 focus-visible:ring-1 focus-visible:ring-accent-security outline-none"
           >
             <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Reset to Defaults
@@ -396,13 +397,15 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
           <div className="flex gap-2 sm:gap-3 order-1 sm:order-2">
             <button
               onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2 text-xs sm:text-sm font-medium text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded-md transition-colors"
+              aria-label="Cancel settings"
+              className="flex-1 sm:flex-none px-4 py-2 text-xs sm:text-sm font-medium text-text-subtle hover:text-text-primary hover:bg-surface-base rounded-md transition-colors focus-visible:ring-1 focus-visible:ring-accent-intel outline-none"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-md text-xs sm:text-sm font-medium transition-colors shadow-lg shadow-[#007acc]/20"
+              aria-label="Save changes"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-accent-intel hover:opacity-90 text-white rounded-md text-xs sm:text-sm font-medium transition-colors shadow-lg shadow-accent-intel/20 focus-visible:ring-2 focus-visible:ring-accent-intel outline-none"
             >
               <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Save Changes

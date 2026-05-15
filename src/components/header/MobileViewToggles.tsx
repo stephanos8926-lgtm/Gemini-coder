@@ -11,11 +11,12 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
   setMobileView
 }) => {
   return (
-    <div className="flex sm:hidden items-center gap-1 bg-[#1e1e1e] p-1 rounded-lg border border-[#3c3c3c] mr-1">
+    <div className="flex sm:hidden items-center gap-1 bg-surface-base p-1 rounded-lg border border-border-subtle mr-1">
       <button
         onClick={() => setMobileView('chat')}
         id="mobile-view-chat-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'chat' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        aria-label="Chat view"
+        className={`p-1.5 rounded transition-all focus-visible:ring-1 focus-visible:ring-accent-intel outline-none ${mobileView === 'chat' ? 'bg-accent-intel text-white' : 'text-text-subtle'}`}
         title="Chat View"
       >
         <Sparkles className="w-3.5 h-3.5" />
@@ -23,7 +24,8 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
       <button
         onClick={() => setMobileView('editor')}
         id="mobile-view-editor-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'editor' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        aria-label="Editor view"
+        className={`p-1.5 rounded transition-all focus-visible:ring-1 focus-visible:ring-accent-intel outline-none ${mobileView === 'editor' ? 'bg-accent-intel text-white' : 'text-text-subtle'}`}
         title="Editor View"
       >
         <Code2 className="w-3.5 h-3.5" />
@@ -31,7 +33,8 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
       <button
         onClick={() => setMobileView('preview')}
         id="mobile-view-preview-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'preview' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        aria-label="Preview view"
+        className={`p-1.5 rounded transition-all focus-visible:ring-1 focus-visible:ring-accent-intel outline-none ${mobileView === 'preview' ? 'bg-accent-intel text-white' : 'text-text-subtle'}`}
         title="Preview View"
       >
         <Play className="w-3.5 h-3.5" />
