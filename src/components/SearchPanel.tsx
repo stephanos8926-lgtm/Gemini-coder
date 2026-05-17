@@ -49,7 +49,7 @@ export function SearchPanel({ onSelectFile }: SearchPanelProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search in workspace..."
-            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded px-3 py-2 pl-9 text-sm text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+            className="w-full bg-surface-base border border-border-subtle rounded px-3 py-2 pl-9 text-sm text-text-primary focus:outline-none focus:border-accent-intel/50 focus:ring-1 focus:ring-accent-intel/20 transition-all"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#858585]" />
           {loading && (
