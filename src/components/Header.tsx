@@ -72,7 +72,8 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onToggleLeftSidebar}
           id="toggle-left-sidebar-btn"
-          className={`hidden sm:flex p-2 rounded-md transition-all ${isLeftSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
+          aria-label="Toggle Side Bar"
+          className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none ${isLeftSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
           title="Toggle Side Bar (Ctrl+B)"
         >
           <PanelLeft className="w-5 h-5" />
@@ -123,7 +124,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onSaveAll}
             id="header-save-all-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            aria-label="Save All"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none"
             title="Save All"
           >
             <Download className="w-4 h-4 rotate-180" />
@@ -132,7 +134,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowCommandPalette}
             id="header-command-palette-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            aria-label="Command Palette"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none"
             title="Command Palette (Ctrl+K)"
           >
             <Search className="w-4 h-4" />
@@ -141,7 +144,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowGitPanel}
             id="header-git-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            aria-label="Git Operations"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none"
             title="Git Operations"
           >
             <GitBranch className="w-4 h-4" />
@@ -150,7 +154,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onShowSettingsModal}
             id="header-settings-btn"
-            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all"
+            aria-label="Settings"
+            className="p-2 text-text-subtle hover:text-text-primary hover:bg-surface-accent rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none"
             title="Settings"
           >
             <SettingsIcon className="w-4 h-4" />
@@ -159,7 +164,8 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onToggleRightSidebar}
             id="toggle-right-sidebar-btn"
-            className={`hidden sm:flex p-2 rounded-md transition-all ${isRightSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
+            aria-label="Toggle AI Assistant"
+            className={`hidden sm:flex p-2 rounded-md transition-all focus-visible:ring-2 focus-visible:ring-accent-intel/50 outline-none ${isRightSidebarOpen ? 'text-accent-intel bg-surface-base' : 'text-text-subtle hover:text-white'}`}
             title="Toggle AI Assistant"
           >
             <PanelRight className="w-5 h-5" />
