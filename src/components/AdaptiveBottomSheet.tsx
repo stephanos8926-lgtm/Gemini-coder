@@ -29,7 +29,7 @@ export const AdaptiveBottomSheet: React.FC<AdaptiveBottomSheetProps> = ({
           
           <div className="flex items-center justify-between px-6 py-3 border-b border-[#3c3c3c] bg-[#252526]">
             <Drawer.Title className="text-sm font-bold text-[#e5e5e5] uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#007acc] animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-accent-intel animate-pulse" />
               {title}
             </Drawer.Title>
             <button 

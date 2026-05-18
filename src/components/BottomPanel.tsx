@@ -92,7 +92,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
             onClick={() => onTabChange('preview')}
             className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
               activeTab === 'preview'
-                ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+                ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-accent-intel'
                 : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
             }`}
           >
@@ -104,7 +104,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           onClick={() => onTabChange('tree')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
             activeTab === 'tree'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-accent-intel'
               : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
           }`}
         >
@@ -115,7 +115,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           onClick={() => onTabChange('tools')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
             activeTab === 'tools'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-accent-intel'
               : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
           }`}
         >
@@ -126,7 +126,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           onClick={() => onTabChange('debug')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
             activeTab === 'debug'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-accent-intel'
               : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
           }`}
         >
@@ -137,7 +137,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
           onClick={() => onTabChange('terminal')}
           className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
             activeTab === 'terminal'
-              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-[#007acc]'
+              ? 'bg-[#1e1e1e] text-[#d4d4d4] border-t-2 border-accent-intel'
               : 'bg-[#2d2d2d] text-[#858585] hover:bg-[#333333] border-t-2 border-transparent'
           }`}
         >
@@ -159,7 +159,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
         {activeTab === 'preview' && hasPreviewableFiles && (
           <button
             onClick={refreshPreview}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-[#007acc] hover:bg-[#2d2d2d] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm text-accent-intel hover:bg-[#2d2d2d] transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -194,7 +194,7 @@ export function BottomPanel({ files, activeTab, onTabChange, onSelectFile, onDow
         ) : activeTab === 'tools' ? (
           <Suspense fallback={
             <div className="flex items-center justify-center h-full text-[#858585]">
-              <Loader2 className="w-6 h-6 animate-spin text-[#007acc]" />
+              <Loader2 className="w-6 h-6 animate-spin text-accent-intel" />
             </div>
           }>
             <ToolsPanel />

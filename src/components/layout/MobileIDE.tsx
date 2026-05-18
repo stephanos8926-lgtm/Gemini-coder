@@ -33,7 +33,7 @@ function CollapsibleToolOutput({ tool }: { tool: any }) {
           <motion.div animate={{ rotate: isOpen ? 90 : 0 }} transition={{ duration: 0.2 }}>
             <ChevronRight className="w-4 h-4 text-[#858585] flex-shrink-0" />
           </motion.div>
-          <Activity className="w-3.5 h-3.5 text-[#007acc] flex-shrink-0" />
+          <Activity className="w-3.5 h-3.5 text-accent-intel flex-shrink-0" />
           <span className="font-mono text-xs text-[#cccccc] truncate">{tool.name || 'Tool Call'}</span>
           <span className={`text-[10px] uppercase font-bold tracking-widest ${status.color} flex-shrink-0 ml-2`}>
             {status.icon} {" "}{status.text}
@@ -178,7 +178,7 @@ export function MobileIDE({
                  
                  <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative group break-words max-w-[95%] sm:max-w-[85%] overflow-hidden shadow-sm ${
                     isUser 
-                      ? 'bg-[#007acc] text-white border border-[#007acc]/50 rounded-tr-none' 
+                      ? 'bg-accent-intel text-white border border-accent-intel/50 rounded-tr-none'
                       : 'bg-[#252526] text-[#cccccc] border border-[#3c3c3c] rounded-tl-none'
                   }`}>
                     {mainContent && (
@@ -224,13 +224,13 @@ export function MobileIDE({
             }}
             placeholder="Describe what to build..."
             rows={1}
-            className="w-full resize-none rounded-xl border border-[#3c3c3c] bg-[#1e1e1e] text-[#cccccc] px-4 py-3 text-sm min-h-[44px] max-h-[120px] focus:outline-none focus:border-[#007acc] focus:ring-1 focus:ring-[#007acc] custom-scrollbar"
+            className="w-full resize-none rounded-xl border border-[#3c3c3c] bg-[#1e1e1e] text-[#cccccc] px-4 py-3 text-sm min-h-[44px] max-h-[120px] focus:outline-none focus:border-accent-intel focus:ring-1 focus:ring-accent-intel custom-scrollbar"
           />
           
           <div className="flex items-center justify-between gap-2 px-1">
             <div className="flex gap-2">
               <span className="text-[10px] text-[#858585] uppercase tracking-widest font-bold flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-[#007acc]" />
+                <Sparkles className="w-3 h-3 text-accent-intel" />
                 {settings.aiPersona === 'custom' ? 'Custom' : settings.aiPersona}
               </span>
             </div>
@@ -238,7 +238,7 @@ export function MobileIDE({
             <button 
               onClick={handleSend}
               disabled={!input.trim() || isStreaming}
-              className="px-5 py-2 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-lg font-bold text-[11px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] flex items-center justify-center gap-2 shadow-lg shadow-[#007acc]/20 transition-colors"
+              className="px-5 py-2 bg-accent-intel hover:bg-accent-intel/90 text-white rounded-lg font-bold text-[11px] uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] flex items-center justify-center gap-2 shadow-lg shadow-accent-intel/20 transition-colors"
             >
               {isStreaming ? <Loader2 className="w-4 h-4 animate-spin" /> : (
                 <>

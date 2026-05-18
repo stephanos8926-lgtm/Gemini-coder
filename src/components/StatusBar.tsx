@@ -10,14 +10,14 @@ interface StatusBarProps {
 
 export const StatusBar: React.FC<StatusBarProps> = ({ isTerminalVisible, onToggleTerminal, workspace }) => {
   return (
-    <div className="h-6 w-full bg-accent-intel text-white flex items-center justify-between px-3 text-[10px] sm:text-[11px] font-medium select-none z-50">
+    <div className="h-6 w-full bg-surface-card text-text-primary border-t border-border-subtle flex items-center justify-between px-3 text-[10px] sm:text-[11px] font-medium select-none z-50">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 opacity-90">
+        <div className="flex items-center gap-1.5 text-text-subtle">
           <ShieldCheck className="w-3 h-3" />
           <span>v{APP_VERSION}</span>
         </div>
-        <div className="flex items-center gap-1.5 opacity-90">
-          <Cpu className="w-3 h-3" />
+        <div className="flex items-center gap-1.5 text-text-subtle">
+          <Cpu className="w-3 h-3 text-accent-ops" />
           <span>System Healthy</span>
         </div>
       </div>
@@ -25,12 +25,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({ isTerminalVisible, onToggl
       <div className="flex items-center gap-4">
         <button 
           onClick={onToggleTerminal}
-          className={`flex items-center gap-1.5 transition-colors ${isTerminalVisible ? 'text-white' : 'text-white/70 hover:text-white'}`}
+          className={`flex items-center gap-1.5 transition-colors ${isTerminalVisible ? 'text-text-primary' : 'text-text-subtle hover:text-text-primary'}`}
+          aria-label={isTerminalVisible ? "Hide Terminal" : "Show Terminal"}
         >
           <Terminal className="w-3 h-3" />
           <span>Terminal: {isTerminalVisible ? 'Active' : 'Hidden'}</span>
         </button>
-        <div className="opacity-90 uppercase tracking-wider">
+        <div className="text-text-subtle uppercase tracking-wider">
           Workspace: {workspace || 'None'}
         </div>
       </div>

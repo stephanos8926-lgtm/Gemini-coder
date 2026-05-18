@@ -179,7 +179,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <Loader2 className="w-8 h-8 animate-spin text-[#007acc]" />
+        <Loader2 className="w-8 h-8 animate-spin text-accent-intel" />
         <p className="text-sm text-[#858585]">Authenticating Admin...</p>
       </div>
     );
@@ -204,13 +204,13 @@ export default function AdminPage() {
               onChange={(e) => setSecretKey(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && checkAuthorization()}
               placeholder="Admin Secret Key"
-              className="w-full bg-[#252526] border border-[#3c3c3c] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#007acc] transition-all"
+              className="w-full bg-[#252526] border border-[#3c3c3c] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent-intel transition-all"
             />
           </div>
           <button
             onClick={checkAuthorization}
             disabled={loading}
-            className="w-full bg-[#007acc] hover:bg-[#005f9e] text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-accent-intel hover:bg-accent-intel/90 text-white font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -262,7 +262,7 @@ export default function AdminPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-[#007acc]" />
+                <Users className="w-5 h-5 text-accent-intel" />
                 Registered Users ({users.length})
               </h2>
               <button 
@@ -277,18 +277,18 @@ export default function AdminPage() {
               {users.map((user) => (
                 <div key={user.uid} className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-4 flex items-center justify-between group hover:border-[#454545] transition-all">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-[#007acc]/10 border border-[#007acc]/20 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-accent-intel/10 border border-accent-intel/20 flex items-center justify-center">
                       {user.photoURL ? (
                         <img src={user.photoURL} alt="" className="w-full h-full rounded-full object-cover" />
                       ) : (
-                        <Users className="w-5 h-5 text-[#007acc]" />
+                        <Users className="w-5 h-5 text-accent-intel" />
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-white">{user.displayName || 'Anonymous'}</span>
                         {user.role === 'admin' && (
-                          <span className="text-[10px] bg-[#007acc]/20 text-[#007acc] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Admin</span>
+                          <span className="text-[10px] bg-accent-intel/20 text-accent-intel px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">Admin</span>
                         )}
                       </div>
                       <div className="text-xs text-[#858585] font-mono">{user.email}</div>
@@ -302,7 +302,7 @@ export default function AdminPage() {
                         onClick={() => updateUserRole(user.uid, user.role === 'admin' ? 'user' : 'admin')}
                         className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${
                           user.role === 'admin' 
-                            ? 'bg-[#007acc]/20 text-[#007acc] hover:bg-[#007acc]/30' 
+                            ? 'bg-accent-intel/20 text-accent-intel hover:bg-accent-intel/30'
                             : 'bg-[#3c3c3c] text-[#858585] hover:bg-[#454545] hover:text-[#cccccc]'
                         }`}
                       >
@@ -344,7 +344,7 @@ export default function AdminPage() {
         {activeTab === 'mcp' && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-              <Settings className="w-5 h-5 text-[#007acc]" />
+              <Settings className="w-5 h-5 text-accent-intel" />
               MCP Tool Management
             </h2>
             <div className="grid gap-3">
@@ -370,14 +370,14 @@ export default function AdminPage() {
         {activeTab === 'system' && (
           <div className="space-y-6">
             <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-              <Terminal className="w-5 h-5 text-[#007acc]" />
+              <Terminal className="w-5 h-5 text-accent-intel" />
               System Operations
             </h2>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-6 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#007acc]/10 rounded-lg text-[#007acc]">
+                  <div className="p-2 bg-accent-intel/10 rounded-lg text-accent-intel">
                     <GitPullRequest className="w-5 h-5" />
                   </div>
                   <div>
@@ -395,7 +395,7 @@ export default function AdminPage() {
 
               <div className="bg-[#252526] border border-[#3c3c3c] rounded-xl p-6 space-y-4 opacity-50 cursor-not-allowed">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#007acc]/10 rounded-lg text-[#007acc]">
+                  <div className="p-2 bg-accent-intel/10 rounded-lg text-accent-intel">
                     <RefreshCw className="w-5 h-5" />
                   </div>
                   <div>

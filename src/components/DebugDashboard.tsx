@@ -45,7 +45,7 @@ export function DebugDashboard() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${
-                activeTab === tab ? 'bg-[#007acc] text-white' : 'hover:bg-[#2d2d2d] text-[#858585]'
+                activeTab === tab ? 'bg-accent-intel text-white' : 'hover:bg-[#2d2d2d] text-[#858585]'
               }`}
             >
               {tab}

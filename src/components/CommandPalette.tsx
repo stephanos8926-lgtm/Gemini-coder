@@ -50,7 +50,7 @@ export function CommandPalette({
   const items: CommandItem[] = [
     ...files.map((f, i) => ({
       id: `file-${f}-${i}`,
-      icon: <File className="w-4 h-4 text-[#007acc]" />,
+      icon: <File className="w-4 h-4 text-accent-intel" />,
       label: f,
       category: 'Files' as const,
       action: () => onSelectFile(f)

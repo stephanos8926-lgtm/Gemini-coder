@@ -56,7 +56,7 @@ export const ForgeGuardSignals: React.FC = () => {
     <div className="bg-[#2d2d2d] rounded-lg border border-[#3c3c3c] overflow-hidden flex flex-col h-[500px]">
       <div className="px-4 py-3 border-b border-[#3c3c3c] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity size={18} className="text-[#007acc]" />
+          <Activity size={18} className="text-accent-intel" />
           <h2 className="text-sm font-bold tracking-tight text-[#cccccc] uppercase">
             Live ForgeGuard Signals
           </h2>

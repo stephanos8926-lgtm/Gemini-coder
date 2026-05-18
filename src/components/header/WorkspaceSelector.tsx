@@ -17,7 +17,7 @@ export const WorkspaceSelector: React.FC<WorkspaceSelectorProps> = ({
         id="header-workspace-select-btn"
         className="flex items-center gap-2 px-3 py-1.5 bg-[#1e1e1e] hover:bg-[#3c3c3c] border border-[#3c3c3c] rounded-md transition-all group"
       >
-        <FolderOpen className="w-3.5 h-3.5 text-[#007acc] group-hover:scale-110 transition-transform" />
+        <FolderOpen className="w-3.5 h-3.5 text-accent-intel group-hover:scale-110 transition-transform" />
         <span className="text-xs font-medium text-[#cccccc] group-hover:text-white">
           {workspaceName ? workspaceName.split('/').pop() : 'Select Workspace'}
         </span>

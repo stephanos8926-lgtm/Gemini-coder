@@ -67,7 +67,7 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
       >
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#3c3c3c] bg-[#2d2d2d]">
           <div className="flex items-center gap-2">
-            <Folder className="w-4 h-4 sm:w-5 sm:h-5 text-[#007acc]" />
+            <Folder className="w-4 h-4 sm:w-5 sm:h-5 text-accent-intel" />
             <h2 className="text-base sm:text-lg font-semibold text-white">Workspaces</h2>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-[#3c3c3c] rounded-md text-[#858585] hover:text-white transition-colors">
@@ -86,12 +86,12 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
                 onChange={(e) => setNewWorkspace(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                 placeholder="Workspace name..."
-                className="flex-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-3 py-2 text-sm text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+                className="flex-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-3 py-2 text-sm text-[#d4d4d4] focus:outline-none focus:border-accent-intel transition-all"
               />
               <button
                 onClick={handleCreate}
                 disabled={!newWorkspace.trim()}
-                className="px-4 py-2 bg-[#007acc] hover:bg-[#005f9e] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-accent-intel hover:bg-accent-intel/90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Create
@@ -110,7 +110,7 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search..."
-                  className="w-full sm:w-auto bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-3 py-1.5 sm:py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-[#007acc]"
+                  className="w-full sm:w-auto bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-3 py-1.5 sm:py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-accent-intel"
                 />
               </div>
             </div>
@@ -118,7 +118,7 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
             <div className="space-y-1 min-h-[200px]">
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 text-[#858585] gap-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#007acc]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-accent-intel" />
                   <span className="text-sm">Loading workspaces...</span>
                 </div>
               ) : filtered.length === 0 ? (
@@ -137,12 +137,12 @@ export default function WorkspaceModal({ onClose, onSelect, currentWorkspace }: 
                     }}
                     className={`w-full flex items-center justify-between group px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg transition-all ${
                       currentWorkspace === name 
-                        ? 'bg-[#094771] text-white border border-[#007acc]' 
+                        ? 'bg-accent-intel/20 text-white border border-accent-intel'
                         : 'bg-[#2d2d2d] hover:bg-[#37373d] text-[#cccccc] border border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Folder className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentWorkspace === name ? 'text-blue-300' : 'text-[#007acc]'}`} />
+                      <Folder className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentWorkspace === name ? 'text-blue-300' : 'text-accent-intel'}`} />
                       <span className="text-sm font-medium">{name.split('/').pop()}</span>
                     </div>
                     {currentWorkspace === name && (

@@ -58,7 +58,7 @@ export function MobileSidebar({
       {/* Header */}
       <div className="flex items-center justify-between bg-[#252526] border-b border-[#3c3c3c] px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-lg text-[#007acc]">&gt;_</span>
+          <span className="font-bold text-lg text-accent-intel">&gt;_</span>
           <span className="font-bold text-lg text-[#e5e5e5]">GIDE</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-[#3c3c3c] rounded">
@@ -71,11 +71,11 @@ export function MobileSidebar({
         <div className="p-4 border-b border-[#3c3c3c]">
           <div className="text-[10px] font-bold text-[#858585] uppercase tracking-widest mb-2">CURRENT WORKSPACE</div>
           <div className="flex items-center justify-between bg-[#252526] p-3 rounded-lg border border-[#3c3c3c]">
-            <div className="flex items-center gap-2 text-[#007acc]">
+            <div className="flex items-center gap-2 text-accent-intel">
               <FolderOpen className="w-4 h-4" />
               <span className="text-sm truncate">{workspaceName ? workspaceName.split('/').pop() : 'Default'}</span>
             </div>
-            <button onClick={onShowWorkspaceModal} className="text-xs text-[#007acc] hover:underline">Switch</button>
+            <button onClick={onShowWorkspaceModal} className="text-xs text-accent-intel hover:underline">Switch</button>
           </div>
         </div>
 

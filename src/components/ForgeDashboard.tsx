@@ -15,7 +15,7 @@ export function ForgeDashboard() {
         <button
           onClick={() => setActiveTab('security')}
           className={`px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all flex items-center gap-1.5 ${
-            activeTab === 'security' ? 'bg-[#007acc] text-white' : 'hover:bg-[#2d2d2d] text-[#858585]'
+            activeTab === 'security' ? 'bg-accent-intel text-white' : 'hover:bg-[#2d2d2d] text-[#858585]'
           }`}
         >
           <Shield className="w-3 h-3" />

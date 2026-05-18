@@ -47,8 +47,8 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
       >
         <div className="p-8 border-b border-[#3c3c3c] bg-[#1e1e1e]/50">
           <div className="flex items-center gap-4 mb-2">
-            <div className="p-3 bg-[#007acc]/10 rounded-xl">
-              <Sparkles className="w-8 h-8 text-[#007acc]" />
+            <div className="p-3 bg-accent-intel/10 rounded-xl">
+              <Sparkles className="w-8 h-8 text-accent-intel" />
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white tracking-tight">Welcome to RapidForge</h2>
@@ -74,9 +74,9 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                     tabIndex={0}
                     onClick={() => onSelect(profile)}
                     onKeyDown={(e) => e.key === 'Enter' && onSelect(profile)}
-                    className="group relative flex items-center gap-4 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl hover:border-[#007acc] hover:bg-[#2d2d2d] transition-all text-left overflow-hidden cursor-pointer"
+                    className="group relative flex items-center gap-4 p-4 bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl hover:border-accent-intel hover:bg-[#2d2d2d] transition-all text-left overflow-hidden cursor-pointer"
                   >
-                    <div className="w-12 h-12 rounded-lg bg-[#252526] border border-[#3c3c3c] flex items-center justify-center text-[#007acc] shrink-0 overflow-hidden">
+                    <div className="w-12 h-12 rounded-lg bg-[#252526] border border-[#3c3c3c] flex items-center justify-center text-accent-intel shrink-0 overflow-hidden">
                       {profile.avatar ? (
                         <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" />
                       ) : (
@@ -98,14 +98,14 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                       </button>
                     </div>
                     <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <LogIn className="w-4 h-4 text-[#007acc]" />
+                      <LogIn className="w-4 h-4 text-accent-intel" />
                     </div>
                   </div>
                 ))}
                 
                 <button
                   onClick={() => setIsCreating(true)}
-                  className="flex items-center justify-center gap-3 p-4 border-2 border-dashed border-[#3c3c3c] rounded-xl hover:border-[#007acc] hover:bg-[#007acc]/5 transition-all text-[#858585] hover:text-[#007acc]"
+                  className="flex items-center justify-center gap-3 p-4 border-2 border-dashed border-[#3c3c3c] rounded-xl hover:border-accent-intel hover:bg-accent-intel/5 transition-all text-[#858585] hover:text-accent-intel"
                 >
                   <Plus className="w-5 h-5" />
                   <span className="font-bold">New Profile</span>
@@ -130,7 +130,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       placeholder="e.g. Personal, Work, Project X"
-                      className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#007acc] transition-colors"
+                      className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent-intel transition-colors"
                     />
                   </div>
                   <div className="space-y-2">
@@ -143,7 +143,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                         value={newKey}
                         onChange={(e) => setNewKey(e.target.value)}
                         placeholder="Enter your API key"
-                        className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl pl-11 pr-4 py-3 text-white focus:outline-none focus:border-[#007acc] transition-colors"
+                        className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl pl-11 pr-4 py-3 text-white focus:outline-none focus:border-accent-intel transition-colors"
                       />
                     </div>
                   </div>
@@ -154,7 +154,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                       value={newAvatar}
                       onChange={(e) => setNewAvatar(e.target.value)}
                       placeholder="https://..."
-                      className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#007acc] transition-colors"
+                      className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent-intel transition-colors"
                     />
                   </div>
                 </div>
@@ -169,7 +169,7 @@ export function ProfileSelector({ onSelect }: ProfileSelectorProps) {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-6 py-3 bg-[#007acc] text-white rounded-xl font-bold hover:bg-[#0062a3] shadow-lg shadow-[#007acc]/20 transition-colors flex items-center justify-center gap-2"
+                    className="flex-1 px-6 py-3 bg-accent-intel text-white rounded-xl font-bold hover:bg-accent-intel/90 shadow-lg shadow-accent-intel/20 transition-colors flex items-center justify-center gap-2"
                   >
                     <Check className="w-5 h-5" />
                     Create Profile

@@ -9,8 +9,8 @@ const ChatPanel = lazy(() => import('../ChatPanel').then(m => ({ default: m.Chat
 
 const PanelLoader = () => (
   <div className="flex-1 flex flex-col items-center justify-center h-full bg-[#1e1e1e] text-[#858585] gap-3">
-    <div className="p-2 bg-[#007acc]/10 rounded-xl border border-[#007acc]/20 animate-pulse">
-      <div className="w-6 h-6 rounded-full border-2 border-[#007acc] border-t-transparent animate-spin" />
+    <div className="p-2 bg-accent-intel/10 rounded-xl border border-accent-intel/20 animate-pulse">
+      <div className="w-6 h-6 rounded-full border-2 border-accent-intel border-t-transparent animate-spin" />
     </div>
     <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Hydrating Panel</span>
   </div>
@@ -44,7 +44,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           </div>
         </Panel>
         
-        <PanelResizeHandle className="h-[1px] bg-[#3c3c3c] hover:bg-[#007acc] transition-colors z-20" />
+        <PanelResizeHandle className="h-[1px] bg-[#3c3c3c] hover:bg-accent-intel transition-colors z-20" />
         
         <Panel defaultSize={30} minSize={15}>
           <div className="h-full bg-[#252526]">
