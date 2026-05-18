@@ -306,6 +306,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
               onClick={onImportZip}
               className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
               title="Import ZIP"
+              aria-label="Import Project ZIP"
             >
               <Upload className="w-4 h-4" />
             </button>
@@ -314,14 +315,16 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
                 onClick={() => handleCreateFile('/')}
                 className="p-1 text-[#cccccc] hover:text-white hover:bg-[#3c3c3c] rounded transition-colors"
                 title="New File"
+                aria-label="Create New File"
               >
                 <FilePlus className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={onDownloadZip}
-              className="p-1 text-[#007acc] hover:text-[#005f9e] hover:bg-[#3c3c3c] rounded transition-colors"
+              className="p-1 text-accent-intel hover:text-accent-intel/80 hover:bg-[#3c3c3c] rounded transition-colors"
               title="Download ZIP"
+              aria-label="Download Project ZIP"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -331,13 +334,13 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
         {/* Search Input */}
         <div className="px-3 pb-2">
           <div className="relative group">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#858585] group-focus-within:text-[#007acc] transition-colors" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#858585] group-focus-within:text-accent-intel transition-colors" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search files..."
-              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-8 py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md pl-8 pr-8 py-1 text-xs text-[#d4d4d4] focus:outline-none focus:border-accent-intel transition-all"
             />
             {searchQuery && (
               <button
@@ -383,14 +386,14 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
           >
             <button
               onClick={() => { onSelect(contextMenu.path); setContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
             >
               <FileIcon filename={contextMenu.path} className="w-4 h-4" />
               Open
             </button>
             <button
               onClick={() => copyPath(contextMenu.path)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
             >
               <Copy className="w-4 h-4" />
               Copy Path
@@ -399,14 +402,14 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
               <>
                 <button
                   onClick={() => handleCreateFile(contextMenu.path)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
                 >
                   <FilePlus className="w-4 h-4 text-green-400" />
                   New File
                 </button>
                 <button
                   onClick={() => handleCreateFolder(contextMenu.path)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
                 >
                   <FolderPlus className="w-4 h-4 text-blue-400" />
                   New Folder
@@ -417,7 +420,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             {onRename && (
               <button
                 onClick={() => handleRename(contextMenu.path)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
               >
                 <Edit2 className="w-4 h-4" />
                 Rename
@@ -426,7 +429,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             {onDelete && (
               <button
                 onClick={() => { onDelete(contextMenu.path); setContextMenu(null); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-[#094771] hover:text-white transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 hover:bg-accent-intel/20 hover:text-white transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
@@ -435,7 +438,7 @@ export function FileTree({ files, selectedFile, workspaceName, onSelect, onDownl
             <div className="h-px bg-[#454545] my-1" />
             <button
               onClick={() => { onDownload(contextMenu.path); setContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-[#094771] hover:text-white transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-[#cccccc] hover:bg-accent-intel/20 hover:text-white transition-colors"
             >
               <Download className="w-4 h-4" />
               Download

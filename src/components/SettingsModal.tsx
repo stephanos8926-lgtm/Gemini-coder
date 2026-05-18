@@ -402,7 +402,7 @@ export function SettingsModal({ onClose, onSave, initialSettings }: SettingsModa
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-[#007acc] hover:bg-[#005f9e] text-white rounded-md text-xs sm:text-sm font-medium transition-colors shadow-lg shadow-[#007acc]/20"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2 bg-accent-intel hover:bg-accent-intel/90 text-white rounded-md text-xs sm:text-sm font-medium transition-colors shadow-lg shadow-accent-intel/20"
             >
               <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Save Changes

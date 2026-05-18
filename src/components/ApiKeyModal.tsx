@@ -35,7 +35,7 @@ export function ApiKeyModal({ onSave, onClose, initialKey = '', canClose }: ApiK
       >
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2 bg-[#1e1e1e] rounded-lg border border-[#3c3c3c]">
-            <Key className="w-5 h-5 sm:w-6 sm:h-6 text-[#007acc]" />
+            <Key className="w-5 h-5 sm:w-6 sm:h-6 text-accent-intel" />
           </div>
           <h2 className="text-lg sm:text-xl font-semibold text-[#e5e5e5]">API Key Setup</h2>
         </div>
@@ -48,7 +48,7 @@ export function ApiKeyModal({ onSave, onClose, initialKey = '', canClose }: ApiK
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="AIzaSy..."
-            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-sm text-[#d4d4d4] focus:outline-none focus:border-[#007acc] focus:ring-1 focus:ring-[#007acc] mb-6 transition-all shadow-inner"
+            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-xl px-4 py-3 text-sm text-[#d4d4d4] focus:outline-none focus:border-accent-intel focus:ring-1 focus:ring-accent-intel mb-6 transition-all shadow-inner"
             autoFocus
           />
           <div className="flex flex-col sm:flex-row justify-end gap-3">
@@ -64,7 +64,7 @@ export function ApiKeyModal({ onSave, onClose, initialKey = '', canClose }: ApiK
             <button
               type="submit"
               disabled={!apiKey.trim()}
-              className="px-5 py-2.5 text-xs sm:text-sm font-medium bg-[#007acc] text-white rounded-lg hover:bg-[#005f9e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm order-1 sm:order-2"
+              className="px-5 py-2.5 text-xs sm:text-sm font-medium bg-accent-intel text-white rounded-lg hover:bg-accent-intel/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm order-1 sm:order-2"
             >
               Save Key
             </button>

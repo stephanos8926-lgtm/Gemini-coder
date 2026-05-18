@@ -99,7 +99,7 @@ export const McpPanel: React.FC = () => {
                         console.error(e);
                       }
                     }}
-                    className="text-xs px-2 py-1 bg-[#007acc] hover:bg-[#0062a3] text-white rounded transition-colors"
+                    className="text-xs px-2 py-1 bg-accent-intel hover:bg-accent-intel/90 text-white rounded transition-colors"
                   >
                     Connect
                   </button>

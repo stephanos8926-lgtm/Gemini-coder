@@ -1,3 +1,0 @@
-{"type":"info","payload":{"message":"Initializing express app..."},"timestamp":1777982572445,"context":{"moduleName":"server"}}
-{"type":"info","payload":{"message":"Workspace root initialized","meta":{"WORKSPACE_ROOT":"/app/applet/workspaces"}},"timestamp":1777982572547,"context":{"moduleName":"server"}}
-{"type":"info","payload":{"message":"Upload directory initialized","meta":{"UPLOAD_DIR":"/app/applet/uploads"}},"timestamp":1777982572554,"context":{"moduleName":"server"}}

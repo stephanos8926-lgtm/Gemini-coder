@@ -44,8 +44,13 @@ describe('ToolDispatcher', () => {
 
     const result = await dispatcher.dispatch('failingTool', {}, {});
     expect(result).toEqual({
-      error: 'Tool failingTool failed',
-      details: 'Tool execution failed'
+      error: 'Tool failingTool execution failed.',
+      message: 'Tool execution failed',
+      context: {
+        tool: 'failingTool',
+        args: {},
+        hint: 'Check argument format and ensure all required parameters are provided.'
+      }
     });
   });
 });

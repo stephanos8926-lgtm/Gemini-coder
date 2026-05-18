@@ -53,7 +53,7 @@ export function ProjectModal({
       >
         <div className="flex items-center justify-between p-4 border-b border-[#3c3c3c]">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <FolderOpen className="w-5 h-5 text-[#007acc]" />
+            <FolderOpen className="w-5 h-5 text-accent-intel" />
             Projects
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-[#3c3c3c] rounded-md transition-colors text-[#cccccc]">
@@ -68,12 +68,12 @@ export function ProjectModal({
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
               placeholder="New project name..."
-              className="flex-1 bg-[#3c3c3c] border border-[#4d4d4d] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-[#007acc]"
+              className="flex-1 bg-[#3c3c3c] border border-[#4d4d4d] rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-accent-intel"
             />
             <button
               type="submit"
               disabled={!newProjectName.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-[#007acc] text-white rounded-md hover:bg-[#005f9e] transition-colors text-sm font-medium disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-accent-intel text-white rounded-md hover:bg-accent-intel/90 transition-colors text-sm font-medium disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
               Create
@@ -109,7 +109,7 @@ export function ProjectModal({
                 key={project.id}
                 className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
                   project.id === currentProjectId
-                    ? 'bg-[#1e1e1e] border-[#007acc]'
+                    ? 'bg-[#1e1e1e] border-accent-intel'
                     : 'bg-[#2d2d2d] border-[#3c3c3c] hover:border-[#4d4d4d]'
                 }`}
               >
@@ -120,7 +120,7 @@ export function ProjectModal({
                   <div className="font-medium text-[#e5e5e5] flex items-center gap-2">
                     {project.name}
                     {project.id === currentProjectId && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-[#007acc]/20 text-[#007acc] rounded uppercase tracking-wider">Active</span>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-accent-intel/20 text-accent-intel rounded uppercase tracking-wider">Active</span>
                     )}
                   </div>
                   <div className="text-xs text-[#858585] mt-1">

@@ -15,7 +15,7 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
       <button
         onClick={() => setMobileView('chat')}
         id="mobile-view-chat-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'chat' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        className={`p-1.5 rounded transition-all ${mobileView === 'chat' ? 'bg-accent-intel text-white' : 'text-[#858585]'}`}
         title="Chat View"
       >
         <Sparkles className="w-3.5 h-3.5" />
@@ -23,7 +23,7 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
       <button
         onClick={() => setMobileView('editor')}
         id="mobile-view-editor-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'editor' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        className={`p-1.5 rounded transition-all ${mobileView === 'editor' ? 'bg-accent-intel text-white' : 'text-[#858585]'}`}
         title="Editor View"
       >
         <Code2 className="w-3.5 h-3.5" />
@@ -31,7 +31,7 @@ export const MobileViewToggles: React.FC<MobileViewTogglesProps> = ({
       <button
         onClick={() => setMobileView('preview')}
         id="mobile-view-preview-btn"
-        className={`p-1.5 rounded transition-all ${mobileView === 'preview' ? 'bg-[#007acc] text-white' : 'text-[#858585]'}`}
+        className={`p-1.5 rounded transition-all ${mobileView === 'preview' ? 'bg-accent-intel text-white' : 'text-[#858585]'}`}
         title="Preview View"
       >
         <Play className="w-3.5 h-3.5" />

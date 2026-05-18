@@ -54,7 +54,7 @@ export function BuildPanel() {
             placeholder="npm run build"
             className="bg-[#1e1e1e] border border-[#3c3c3c] px-2 py-1 text-xs text-white rounded"
           />
-          <button onClick={() => runTask(input)} className="p-1.5 bg-[#007acc] text-white rounded hover:bg-[#005f9e]">
+          <button onClick={() => runTask(input)} className="p-1.5 bg-accent-intel text-white rounded hover:bg-accent-intel/90">
             <Play className="w-3 h-3" />
           </button>
         </div>
@@ -63,7 +63,7 @@ export function BuildPanel() {
         {tasks.map(task => (
           <div key={task.id} className="bg-[#252526] border border-[#3c3c3c] rounded-lg p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono text-[#007acc]">{task.command}</span>
+              <span className="text-xs font-mono text-accent-intel">{task.command}</span>
               {task.status === 'running' ? (
                 <button onClick={() => stopTask(task.id)}>
                   <Square className="w-3 h-3 text-red-500" />

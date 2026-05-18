@@ -55,11 +55,11 @@ export const DiffStagingPanel: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-[#3c3c3c]">
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="p-1 rounded bg-[#007acc]/10 text-[#007acc]">
+              <div className="p-1 rounded bg-accent-intel/10 text-accent-intel">
                 <AlertCircle size={14} />
               </div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-[#cccccc] truncate">
-                Review AI Suggestion: <span className="text-[#007acc]">{activePath}</span>
+                Review AI Suggestion: <span className="text-accent-intel">{activePath}</span>
               </span>
             </div>
             
@@ -77,7 +77,7 @@ export const DiffStagingPanel: React.FC = () => {
                 id="accept-edit-btn"
                 disabled={isProcessing}
                 onClick={handleAccept}
-                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-white bg-[#007acc] hover:bg-[#1f8ad2] rounded disabled:opacity-50 transition-shadow shadow-sm active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium text-white bg-accent-intel hover:bg-[accent-intel/80] rounded disabled:opacity-50 transition-shadow shadow-sm active:scale-95"
               >
                 {isProcessing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 Accept Changes

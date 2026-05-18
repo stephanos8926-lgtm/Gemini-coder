@@ -163,12 +163,12 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
         <div className="flex justify-between items-center p-6 border-b border-[#3c3c3c]">
           <div className="flex flex-col">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <GitBranch className="w-5 h-5 text-[#007acc]" />
+              <GitBranch className="w-5 h-5 text-accent-intel" />
               Source Control
             </h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs text-[#858585]">Status:</span>
-              <span className={`text-xs font-mono ${isUninitialized ? 'text-amber-400 bg-amber-400/10' : 'text-[#007acc] bg-[#007acc]/10'} px-2 py-0.5 rounded`}>
+              <span className={`text-xs font-mono ${isUninitialized ? 'text-amber-400 bg-amber-400/10' : 'text-accent-intel bg-accent-intel/10'} px-2 py-0.5 rounded`}>
                 {isUninitialized ? 'Uninitialized' : `Branch: ${currentBranch}`}
               </span>
             </div>
@@ -247,7 +247,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               <button 
                 onClick={handleAiSummarize}
                 disabled={isLoading}
-                className="text-[10px] text-[#007acc] hover:text-white flex items-center gap-1 transition-colors disabled:opacity-50"
+                className="text-[10px] text-accent-intel hover:text-white flex items-center gap-1 transition-colors disabled:opacity-50"
                 title="AI Summarize Changes"
               >
                 <Sparkles className="w-3 h-3" />
@@ -258,7 +258,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               value={message} 
               onChange={e => setMessage(e.target.value)} 
               placeholder="Message (Enter to commit, Cmd+Enter to commit & push)"
-              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md p-3 text-sm text-white focus:outline-none focus:border-[#007acc] resize-none h-24"
+              className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-md p-3 text-sm text-white focus:outline-none focus:border-accent-intel resize-none h-24"
             />
             <div className="flex gap-2">
               <button 
@@ -271,7 +271,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               <button 
                 onClick={() => runGitCommand('commit')} 
                 disabled={isLoading || !message}
-                className="flex-1 bg-[#007acc] hover:bg-[#0062a3] text-white py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                className="flex-1 bg-accent-intel hover:bg-accent-intel/90 text-white py-2 rounded-md text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
               >
                 <Check className="w-4 h-4" /> Commit
               </button>
@@ -284,7 +284,7 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
               <h3 className="text-xs font-bold text-[#858585] uppercase tracking-wider">Sync</h3>
               <button 
                 onClick={() => setIsConfiguringRemote(!isConfiguringRemote)}
-                className="text-[10px] text-[#007acc] hover:underline"
+                className="text-[10px] text-accent-intel hover:underline"
               >
                 {remoteUrl ? 'Change Remote' : 'Configure Remote'}
               </button>
@@ -296,14 +296,14 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
                   value={remoteUrl}
                   onChange={e => setRemoteUrl(e.target.value)}
                   placeholder="https://github.com/user/repo.git"
-                  className="flex-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#007acc]"
+                  className="flex-1 bg-[#1e1e1e] border border-[#3c3c3c] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-accent-intel"
                 />
                 <button 
                   onClick={async () => {
                     await runGitCommand('remote-set');
                     setIsConfiguringRemote(false);
                   }}
-                  className="bg-[#007acc] text-white px-3 py-1.5 rounded-md text-xs font-medium"
+                  className="bg-accent-intel text-white px-3 py-1.5 rounded-md text-xs font-medium"
                 >
                   Save
                 </button>
@@ -369,10 +369,10 @@ export const GitPanel: React.FC<GitPanelProps> = ({ onClose, workspace }) => {
                   return (
                     <div key={hash} className="flex items-center gap-3 px-3 py-2 border-b border-[#3c3c3c] last:border-0 hover:bg-[#2d2d2d] group">
                       <div className="flex flex-col items-center">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#007acc]" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-accent-intel" />
                         {i < history.length - 1 && <div className="w-0.5 h-full bg-[#3c3c3c] my-0.5" />}
                       </div>
-                      <span className="text-[10px] text-[#007acc] font-bold w-12">{hash}</span>
+                      <span className="text-[10px] text-accent-intel font-bold w-12">{hash}</span>
                       <span className="text-[11px] text-[#cccccc] truncate">{msg}</span>
                     </div>
                   );

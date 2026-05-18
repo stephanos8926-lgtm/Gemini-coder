@@ -29,8 +29,8 @@ export function DiffViewer({
     >
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-[#252526] border-b border-[#3c3c3c] gap-4 sm:gap-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#007acc]/10 rounded-lg shrink-0">
-            <FileText className="w-5 h-5 text-[#007acc]" />
+          <div className="p-2 bg-accent-intel/10 rounded-lg shrink-0">
+            <FileText className="w-5 h-5 text-accent-intel" />
           </div>
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-white leading-none mb-1 truncate">Review Changes</h2>
@@ -48,7 +48,7 @@ export function DiffViewer({
           </button>
           <button
             onClick={onAccept}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium bg-[#007acc] text-white hover:bg-[#0062a3] rounded-lg shadow-lg shadow-[#007acc]/20 transition-all"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs font-medium bg-accent-intel text-white hover:bg-accent-intel/90 rounded-lg shadow-lg shadow-accent-intel/20 transition-all"
           >
             <Check className="w-4 h-4" />
             <span className="hidden xs:inline">Apply</span>

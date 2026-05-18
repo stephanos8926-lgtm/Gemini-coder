@@ -79,7 +79,7 @@ export function ToolsPanel() {
     <div className="flex flex-col h-full bg-[#1e1e1e] border-t border-[#3c3c3c]">
       <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-[#3c3c3c]">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-[#007acc]" />
+          <Terminal className="w-4 h-4 text-accent-intel" />
           <span className="text-xs font-bold text-[#cccccc] uppercase tracking-wider">Tools & Terminal</span>
         </div>
         <div className="flex items-center gap-2">
@@ -119,8 +119,8 @@ export function ToolsPanel() {
           {results.map((res) => (
             <div key={res.id} className="space-y-2 group">
               <div className="flex items-center gap-2 text-xs">
-                <ChevronRight className="w-3 h-3 text-[#007acc]" />
-                <span className="text-[#007acc] font-bold">$ {res.command}</span>
+                <ChevronRight className="w-3 h-3 text-accent-intel" />
+                <span className="text-accent-intel font-bold">$ {res.command}</span>
                 <span className="text-[#858585] text-[10px] ml-auto">
                   {new Date(res.timestamp).toLocaleTimeString()}
                 </span>
@@ -148,7 +148,7 @@ export function ToolsPanel() {
                     </div>
                     <button
                       onClick={() => analyzeError(res)}
-                      className="flex items-center gap-1.5 px-2 py-0.5 bg-[#007acc]/20 text-[#007acc] hover:bg-[#007acc]/30 rounded text-[10px] font-bold transition-all border border-[#007acc]/30"
+                      className="flex items-center gap-1.5 px-2 py-0.5 bg-accent-intel/20 text-accent-intel hover:bg-accent-intel/30 rounded text-[10px] font-bold transition-all border border-accent-intel/30"
                     >
                       <Sparkles className="w-3 h-3" />
                       AI FIX
@@ -160,7 +160,7 @@ export function ToolsPanel() {
           ))}
 
           {isRunning && (
-            <div className="flex items-center gap-2 text-xs text-[#007acc] animate-pulse">
+            <div className="flex items-center gap-2 text-xs text-accent-intel animate-pulse">
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>Running command...</span>
             </div>
@@ -170,14 +170,14 @@ export function ToolsPanel() {
 
       <div className="p-3 bg-[#252526] border-t border-[#3c3c3c]">
         <div className="relative flex items-center">
-          <span className="absolute left-3 text-[#007acc] font-bold">$</span>
+          <span className="absolute left-3 text-accent-intel font-bold">$</span>
           <input
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && runCommand(command)}
             placeholder="Type a command (e.g. ls, npm test, grep...)"
-            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-lg pl-8 pr-4 py-2 text-sm text-white focus:outline-none focus:border-[#007acc] transition-all font-mono"
+            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded-lg pl-8 pr-4 py-2 text-sm text-white focus:outline-none focus:border-accent-intel transition-all font-mono"
           />
         </div>
       </div>

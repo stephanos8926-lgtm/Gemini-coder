@@ -49,11 +49,11 @@ export function SearchPanel({ onSelectFile }: SearchPanelProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search in workspace..."
-            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded px-3 py-2 pl-9 text-sm text-[#d4d4d4] focus:outline-none focus:border-[#007acc] transition-all"
+            className="w-full bg-[#1e1e1e] border border-[#3c3c3c] rounded px-3 py-2 pl-9 text-sm text-[#d4d4d4] focus:outline-none focus:border-accent-intel transition-all"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#858585]" />
           {loading && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#007acc]" />
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-accent-intel" />
           )}
         </form>
       </div>
@@ -72,7 +72,7 @@ export function SearchPanel({ onSelectFile }: SearchPanelProps) {
               className="flex items-center gap-2 w-full text-left px-2 py-1 hover:bg-[#2d2d2d] rounded transition-colors group"
             >
               <ChevronRight className="w-3.5 h-3.5 text-[#858585] group-hover:text-[#cccccc]" />
-              <FileText className="w-4 h-4 text-[#007acc]" />
+              <FileText className="w-4 h-4 text-accent-intel" />
               <span className="text-sm font-medium text-[#cccccc] truncate">{path}</span>
               <span className="ml-auto text-[10px] bg-[#3c3c3c] text-[#858585] px-1.5 py-0.5 rounded">
                 {fileResults.length}
@@ -85,7 +85,7 @@ export function SearchPanel({ onSelectFile }: SearchPanelProps) {
                   onClick={() => onSelectFile(path, res.line)}
                   className="w-full text-left px-2 py-1 hover:bg-[#2d2d2d] rounded transition-colors text-xs text-[#858585] hover:text-[#cccccc] flex gap-3"
                 >
-                  <span className="text-[#007acc] font-mono w-6 text-right">{res.line}</span>
+                  <span className="text-accent-intel font-mono w-6 text-right">{res.line}</span>
                   <span className="truncate flex-1">{res.content}</span>
                 </button>
               ))}
